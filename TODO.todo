@@ -1,0 +1,10 @@
+UI enhancements:
+  - Better progress bar for the indexer
+  - Reset index
+  - Fix the photo datetime
+  - Rebranding
+  - Rewrite search page to include tags based search and a free-text search. Build a Google like search interface
+  - Center align the page
+
+Auth:
+  - Add Auth for operations

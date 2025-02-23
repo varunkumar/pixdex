@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Photo {
+  id                String    @id @default(uuid())
+  filename          String
+  path              String
+  source            String    // 'local' or 'google_drive'
+  dateTime          DateTime?
+  lastIndexed       DateTime
+  instagramSuggested DateTime?
+  vectorEmbedding   String?   // Store as JSON string
+  width             Int?
+  height            Int?
+  format            String?
+  fileSize          Int?
+  colorSpace        String?
+  hasAlpha          Boolean?
+  channels          Int?
+
+  // Location info (if available)
+  latitude          Float?
+  longitude         Float?
+  locationPlace     String?
+
+  // AI Metadata
+  subjectsJson      String    // Stored as JSON string of String[]
+  environment       String?
+  description       String
+  colorsJson        String    // Stored as JSON string of String[]
+  patternsJson      String    // Stored as JSON string of String[]
+  album             String?   // The name of the folder being indexed
+  season            String?   // New field added
+  tagsJson          String    // Stored as JSON string of String[]
+
+  @@unique([path, source])
+}

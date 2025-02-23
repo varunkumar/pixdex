@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+  chromadb:
+    image: chromadb/chroma
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./data/chromadb:/chroma/chroma
+    environment:
+      - ALLOW_RESET=true
+      - CHROMA_SERVER_AUTH_CREDENTIALS=admin:admin
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=basic
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/api/v1/heartbeat']
+      interval: 30s
+      timeout: 10s
+      retries: 3
