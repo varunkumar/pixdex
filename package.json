@@ -33,7 +33,7 @@
     "framer-motion": "^10.18.0",
     "google-auth-library": "^8.9.0",
     "googleapis": "^129.0.0",
-    "langchain": "^0.1.1",
+    "langchain": "^0.2.19",
     "mime-types": "^2.1.35",
     "multer": "^1.4.5-lts.1",
     "openai": "^4.24.7",
