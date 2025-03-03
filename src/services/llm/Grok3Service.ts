@@ -2,16 +2,60 @@ import axios from 'axios';
 import fs from 'fs';
 import { LLMConfig } from '../../types/config';
 import { PhotoMetadata } from '../../types/photo';
+import { LLMCacheService } from './LLMCacheService';
 import { ImageAnalysisResult, LLMService } from './LLMService';
 
 export class Grok3Service implements LLMService {
   private baseUrl: string;
+  private cacheService: LLMCacheService | null = null;
+  private cacheEnabled = true;
 
-  constructor(private config: LLMConfig) {
+  constructor(private config: LLMConfig, cacheDirPath?: string) {
     this.baseUrl = 'https://api.grok.x.ai/v1'; // Example URL, replace with actual Grok3 API endpoint
+
+    // Initialize cache if directory is provided
+    if (cacheDirPath) {
+      this.cacheService = new LLMCacheService(cacheDirPath);
+    }
+  }
+
+  enableCache(enabled: boolean): void {
+    this.cacheEnabled = enabled;
+  }
+
+  async clearCache(): Promise<void> {
+    if (this.cacheService) {
+      await this.cacheService.clearCache();
+    }
   }
 
   async analyzeImage(imagePath: string): Promise<ImageAnalysisResult> {
+    // Generate a cache key based on file stats and path for image analysis
+    let cacheKey = `${imagePath}`;
+
+    // Check cache first if enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      try {
+        // Use file stats to make a more accurate cache key
+        const fileStats = await fs.promises.stat(imagePath);
+        cacheKey = `${imagePath}_${fileStats.size}_${fileStats.mtimeMs}`;
+
+        const cachedResult =
+          await this.cacheService.getCachedResult<ImageAnalysisResult>(
+            'analyzeImage',
+            cacheKey
+          );
+
+        if (cachedResult) {
+          console.log('Using cached image analysis result');
+          return cachedResult;
+        }
+      } catch (error) {
+        // Continue if cache lookup fails
+        console.log('Cache lookup failed, proceeding with analysis');
+      }
+    }
+
     const imageData = await fs.promises.readFile(imagePath);
     const base64Image = imageData.toString('base64');
 
@@ -31,7 +75,7 @@ export class Grok3Service implements LLMService {
 
     // Transform Grok3's response format to our ImageAnalysisResult format
     const result = response.data;
-    return {
+    const analysisResult: ImageAnalysisResult = {
       subjects: result.detected_animals || [],
       colors: result.dominant_colors || [],
       patterns: result.patterns || [],
@@ -40,9 +84,34 @@ export class Grok3Service implements LLMService {
       description: result.detailed_description,
       tags: result.suggested_tags || [],
     };
+
+    // Cache the result if caching is enabled
+    if (this.cacheEnabled && this.cacheService) {
+      await this.cacheService.setCachedResult(
+        'analyzeImage',
+        cacheKey,
+        analysisResult
+      );
+    }
+
+    return analysisResult;
   }
 
   async generateInstagramCaption(photo: PhotoMetadata): Promise<string> {
+    const cacheKey = `caption_${photo.id}`;
+
+    // Check cache first if enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      const cachedResult = await this.cacheService.getCachedResult<string>(
+        'generateInstagramCaption',
+        cacheKey
+      );
+
+      if (cachedResult) {
+        return cachedResult;
+      }
+    }
+
     const response = await axios.post(
       `${this.baseUrl}/generate/caption`,
       {
@@ -58,10 +127,35 @@ export class Grok3Service implements LLMService {
       }
     );
 
-    return response.data.caption;
+    const caption = response.data.caption;
+
+    // Cache the result if enabled
+    if (this.cacheEnabled && this.cacheService) {
+      await this.cacheService.setCachedResult(
+        'generateInstagramCaption',
+        cacheKey,
+        caption
+      );
+    }
+
+    return caption;
   }
 
   async generateHashtags(photo: PhotoMetadata): Promise<string[]> {
+    const cacheKey = `hashtags_${photo.id}`;
+
+    // Check cache first if enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      const cachedResult = await this.cacheService.getCachedResult<string[]>(
+        'generateHashtags',
+        cacheKey
+      );
+
+      if (cachedResult) {
+        return cachedResult;
+      }
+    }
+
     const response = await axios.post(
       `${this.baseUrl}/generate/hashtags`,
       {
@@ -78,10 +172,37 @@ export class Grok3Service implements LLMService {
       }
     );
 
-    return response.data.hashtags.map((tag: string) => tag.replace('#', ''));
+    const hashtags = response.data.hashtags.map((tag: string) =>
+      tag.replace('#', '')
+    );
+
+    // Cache the result if enabled
+    if (this.cacheEnabled && this.cacheService) {
+      await this.cacheService.setCachedResult(
+        'generateHashtags',
+        cacheKey,
+        hashtags
+      );
+    }
+
+    return hashtags;
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
+    const cacheKey = text;
+
+    // Check cache first if enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      const cachedResult = await this.cacheService.getCachedResult<number[]>(
+        'generateEmbedding',
+        cacheKey
+      );
+
+      if (cachedResult) {
+        return cachedResult;
+      }
+    }
+
     const response = await axios.post(
       `${this.baseUrl}/embeddings`,
       {
@@ -96,6 +217,17 @@ export class Grok3Service implements LLMService {
       }
     );
 
-    return response.data.embedding;
+    const embedding = response.data.embedding;
+
+    // Cache the result if enabled
+    if (this.cacheEnabled && this.cacheService) {
+      await this.cacheService.setCachedResult(
+        'generateEmbedding',
+        cacheKey,
+        embedding
+      );
+    }
+
+    return embedding;
   }
 }

@@ -16,6 +16,8 @@ export interface LLMService {
   generateInstagramCaption(photo: PhotoMetadata): Promise<string>;
   generateHashtags(photo: PhotoMetadata): Promise<string[]>;
   generateEmbedding(text: string): Promise<number[]>;
+  clearCache?(): Promise<void>; // Optional method for clearing cache
+  enableCache(enabled: boolean): void; // Method to toggle caching
 }
 
 export class OpenAIService implements LLMService {
@@ -59,6 +61,10 @@ export class OpenAIService implements LLMService {
     // Implementation using OpenAI's embeddings API
     throw new Error('Not implemented');
   }
+
+  enableCache(enabled: boolean): void {
+    // Default implementation does nothing
+  }
 }
 
 export class Grok3Service implements LLMService {
@@ -101,5 +107,9 @@ export class Grok3Service implements LLMService {
     );
     // Implementation using Grok3 API
     throw new Error('Not implemented');
+  }
+
+  enableCache(enabled: boolean): void {
+    // Default implementation does nothing
   }
 }

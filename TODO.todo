@@ -6,5 +6,12 @@ UI enhancements:
   - Rewrite search page to include tags based search and a free-text search. Build a Google like search interface
   - Center align the page
 
+AI:
+  - Cache the AI results
+  - Add an implementation to run models locally
+
 Auth:
   - Add Auth for operations
+
+Hygience:
+  - Upgrade to latest version

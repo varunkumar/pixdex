@@ -4,10 +4,13 @@ import { config } from 'dotenv';
 import express from 'express';
 import fs from 'fs/promises';
 import multer from 'multer';
+import path from 'path';
 import { PhotoIndexer } from '../services/indexer/PhotoIndexer';
+import { Grok3Service } from '../services/llm/Grok3Service';
+import { LLMService } from '../services/llm/LLMService';
 import { OpenAIService } from '../services/llm/OpenAIService';
 import { ChromaVectorStore } from '../services/vectorstore/VectorStore';
-import { AppConfig } from '../types/config';
+import { AppConfig, LLMConfig } from '../types/config';
 
 config(); // Load environment variables
 
@@ -78,6 +81,18 @@ async function getPhotoStats(): Promise<PhotoStats> {
   };
 }
 
+function createLLMService(config: LLMConfig, cacheDir: string): LLMService {
+  // Create appropriate service based on configured provider
+  switch (config.provider) {
+    case 'openai':
+      return new OpenAIService(config, cacheDir);
+    case 'grok3':
+      return new Grok3Service(config, cacheDir);
+    default:
+      throw new Error(`Unsupported LLM provider: ${config.provider}`);
+  }
+}
+
 // Initialize application
 async function initializeApp() {
   try {
@@ -126,7 +141,13 @@ async function initializeApp() {
       cacheDir: process.env.PHOTOS_CACHE_DIR || './data/cache',
     };
 
-    const llmService = new OpenAIService(appConfig.llm);
+    // Setup LLM cache in its own directory
+    const llmCacheDir = path.join(appConfig.cacheDir, 'llm_cache');
+    await fs.mkdir(llmCacheDir, { recursive: true });
+
+    // Create LLM service with caching
+    const llmService = createLLMService(appConfig.llm, llmCacheDir);
+
     const vectorStore = new ChromaVectorStore(appConfig.chromaDbPath);
     const photoIndexer = new PhotoIndexer(
       llmService,
@@ -257,10 +278,19 @@ async function initializeApp() {
       res.json(safeConfig);
     });
 
-    app.post('/api/config', (_req, res) => {
+    app.post('/api/config', async (req, res) => {
       try {
         // TODO: Validate and save configuration
         // Would typically save to a database or configuration file
+        const newConfig = req.body;
+
+        // Update LLM provider if changed
+        if (newConfig.llm?.provider !== appConfig.llm.provider) {
+          // Create new LLM service with the new provider
+          const newLLMService = createLLMService(newConfig.llm, llmCacheDir);
+          // TODO: Replace the LLM service in photoIndexer
+        }
+
         res.json({ success: true });
       } catch (error) {
         res.status(500).json({ error: (error as Error).message });
@@ -270,6 +300,7 @@ async function initializeApp() {
     app.delete('/api/index/clear/:album', async (req, res) => {
       try {
         const { album } = req.params;
+        // First, delete photos from the database
         await prisma.photo.deleteMany({
           where: {
             album: {
@@ -277,7 +308,10 @@ async function initializeApp() {
             },
           },
         });
-        await vectorStore.deleteCollection(album);
+
+        // Then, delete documents from the vector store
+        await vectorStore.deleteDocumentsByAlbum(album);
+
         res.json({ success: true });
       } catch (error) {
         console.error('Error clearing album index:', error);
@@ -293,6 +327,47 @@ async function initializeApp() {
       } catch (error) {
         console.error('Error clearing all indices:', error);
         res.status(500).json({ error: 'Failed to clear all indices' });
+      }
+    });
+
+    // Add endpoint to clear the LLM cache
+    app.delete('/api/cache/clear', async (_req, res) => {
+      try {
+        if (
+          'clearCache' in llmService &&
+          typeof llmService.clearCache === 'function'
+        ) {
+          await llmService.clearCache();
+          res.json({
+            success: true,
+            message: 'LLM cache cleared successfully',
+          });
+        } else {
+          res.status(400).json({
+            error: 'Current LLM service does not support cache clearing',
+          });
+        }
+      } catch (error) {
+        console.error('Error clearing LLM cache:', error);
+        res.status(500).json({ error: 'Failed to clear LLM cache' });
+      }
+    });
+
+    // Add endpoint to toggle cache usage
+    app.post('/api/cache/toggle', async (req, res) => {
+      try {
+        const { enabled } = req.body;
+        if (typeof enabled !== 'boolean') {
+          return res
+            .status(400)
+            .json({ error: 'Missing or invalid "enabled" parameter' });
+        }
+
+        llmService.enableCache(enabled);
+        res.json({ success: true, cacheEnabled: enabled });
+      } catch (error) {
+        console.error('Error toggling cache:', error);
+        res.status(500).json({ error: 'Failed to toggle cache' });
       }
     });
 

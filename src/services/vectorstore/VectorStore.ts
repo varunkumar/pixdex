@@ -135,7 +135,19 @@ export class ChromaVectorStore implements VectorStore {
 
   async deleteCollection(album: string): Promise<void> {
     await this.retryWithDelay(async () => {
-      await this.client.deleteCollection({ name: album });
+      // Check if the collection exists before trying to delete it
+      const collections = await this.client.listCollections();
+      const collectionExists = collections.some((collection) => {
+        const name =
+          typeof collection === 'string' ? collection : collection.name;
+        return name === album;
+      });
+
+      if (collectionExists) {
+        await this.client.deleteCollection({ name: album });
+      } else {
+        console.log(`Collection "${album}" does not exist, skipping deletion`);
+      }
     });
   }
 
@@ -149,6 +161,41 @@ export class ChromaVectorStore implements VectorStore {
         if (name) {
           await this.client.deleteCollection({ name });
         }
+      }
+    });
+  }
+
+  // Add a method to delete documents by album
+  async deleteDocumentsByAlbum(album: string): Promise<void> {
+    await this.retryWithDelay(async () => {
+      await this.initialize();
+      const collection = await this.ensureCollection();
+
+      // Get all documents in the collection
+      const allDocuments = await collection.get();
+
+      // Find IDs of documents that belong to the specified album
+      const idsToDelete: string[] = [];
+
+      if (allDocuments.ids && allDocuments.metadatas) {
+        allDocuments.ids.forEach((id, index) => {
+          const metadata = allDocuments.metadatas?.[index];
+          if (metadata && metadata.album === album) {
+            idsToDelete.push(id as string);
+          }
+        });
+      }
+
+      // Delete the documents if any are found
+      if (idsToDelete.length > 0) {
+        console.log(
+          `Deleting ${idsToDelete.length} documents for album "${album}"`
+        );
+        await collection.delete({
+          ids: idsToDelete,
+        });
+      } else {
+        console.log(`No documents found for album "${album}"`);
       }
     });
   }

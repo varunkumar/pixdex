@@ -4,6 +4,7 @@ import path from 'path';
 import sharp from 'sharp';
 import { LLMConfig } from '../../types/config';
 import { PhotoMetadata } from '../../types/photo';
+import { LLMCacheService } from './LLMCacheService';
 import { ImageAnalysisResult, LLMService } from './LLMService';
 
 export class OpenAIService implements LLMService {
@@ -14,10 +15,27 @@ export class OpenAIService implements LLMService {
   private readonly MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
   private readonly MAX_DIMENSION = 2048;
   private readonly MIN_DIMENSION = 512;
+  private cacheService: LLMCacheService | null = null;
+  private cacheEnabled = true;
 
-  constructor(private config: LLMConfig) {
+  constructor(private config: LLMConfig, cacheDirPath?: string) {
     const { apiKey } = this.config;
     this.client = new OpenAI({ apiKey });
+
+    // Initialize cache if directory is provided
+    if (cacheDirPath) {
+      this.cacheService = new LLMCacheService(cacheDirPath);
+    }
+  }
+
+  enableCache(enabled: boolean): void {
+    this.cacheEnabled = enabled;
+  }
+
+  async clearCache(): Promise<void> {
+    if (this.cacheService) {
+      await this.cacheService.clearCache();
+    }
   }
 
   private debugLog(message: string, metadata?: Record<string, unknown>) {
@@ -163,150 +181,254 @@ export class OpenAIService implements LLMService {
   }
 
   async analyzeImage(imagePath: string): Promise<ImageAnalysisResult> {
+    // Generate a cache key based on file stats and path for image analysis
+    let cacheKey = `${imagePath}`;
+
+    // Check cache first if it's enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      try {
+        // Use file stats to make a more accurate cache key
+        const fileStats = await fs.stat(imagePath);
+        cacheKey = `${imagePath}_${fileStats.size}_${fileStats.mtimeMs}`;
+
+        const cachedResult =
+          await this.cacheService.getCachedResult<ImageAnalysisResult>(
+            'analyzeImage',
+            cacheKey
+          );
+
+        if (cachedResult) {
+          this.debugLog('Using cached image analysis result');
+          return cachedResult;
+        }
+      } catch (error) {
+        // Continue if cache lookup fails
+        this.debugLog('Cache lookup failed, proceeding with analysis');
+      }
+    }
+
     let processedImagePath: string | null = null;
 
-    return this.retryWithDelay(async () => {
-      try {
-        processedImagePath = await this.preprocessImage(imagePath);
-        const imageData = await fs.readFile(processedImagePath);
-        const base64Image = imageData.toString('base64');
+    try {
+      processedImagePath = await this.preprocessImage(imagePath);
+      const imageData = await fs.readFile(processedImagePath);
+      const base64Image = imageData.toString('base64');
 
-        this.debugLog('Sending request to OpenAI Vision API...');
-        const response = await this.client.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are a wildlife photography expert tasked with analyzing photos (mostly from India). Provide detailed, accurate information about the wildlife, environment, and photographic elements in each image.',
-            },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `Analyze this wildlife photo and provide the following information in a structured format:
-                1. SUBJECTS: List all animals/wildlife subjects visible in the image
-                2. COLORS: List dominant colors in the image
-                3. PATTERNS: Describe any notable patterns or textures
-                4. SEASON: If apparent from the environment or context. Indian seasons.
-                5. ENVIRONMENT: Detailed description of the habitat/setting
-                6. TAGS: Relevant keywords for searching (max 10)
-                7. DESCRIPTION: A detailed, professional description of the photo
+      this.debugLog('Sending request to OpenAI Vision API...');
+      const response = await this.client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a wildlife photography expert tasked with analyzing photos (mostly from India). Provide detailed, accurate information about the wildlife, environment, and photographic elements in each image.',
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Analyze this wildlife photo and provide the following information in a structured format:
+              1. SUBJECTS: List all animals/wildlife subjects visible in the image
+              2. COLORS: List dominant colors in the image
+              3. PATTERNS: Describe any notable patterns or textures
+              4. SEASON: If apparent from the environment or context. Indian seasons.
+              5. ENVIRONMENT: Detailed description of the habitat/setting
+              6. TAGS: Relevant keywords for searching (max 10)
+              7. DESCRIPTION: A detailed, professional description of the photo
 
-                Format each section clearly with headings.`,
+              Format each section clearly with headings.`,
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Image}`,
                 },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64Image}`,
-                  },
-                },
-              ],
-            },
-          ],
-          max_tokens: 1000,
-        });
+              },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      });
 
-        this.debugLog('Received response from OpenAI');
-        const content = response.choices[0].message.content;
-        if (!content) throw new Error('No analysis received from OpenAI');
+      this.debugLog('Received response from OpenAI');
+      const content = response.choices[0].message.content;
+      if (!content) throw new Error('No analysis received from OpenAI');
 
-        return this.parseAnalysisResponse(content);
-      } catch (error) {
-        console.error('Error in OpenAI Vision API analysis:', error);
-        throw error;
-      } finally {
-        // Clean up processed image
-        if (processedImagePath) {
-          await fs.unlink(processedImagePath).catch(() => {});
-        }
+      const result = this.parseAnalysisResponse(content);
+
+      // Cache the result if caching is enabled
+      if (this.cacheEnabled && this.cacheService) {
+        await this.cacheService.setCachedResult(
+          'analyzeImage',
+          cacheKey,
+          result
+        );
       }
-    });
+
+      return result;
+    } catch (error) {
+      console.error('Error in OpenAI Vision API analysis:', error);
+      throw error;
+    } finally {
+      // Clean up processed image
+      if (processedImagePath) {
+        await fs.unlink(processedImagePath).catch(() => {});
+      }
+    }
   }
 
   async generateInstagramCaption(photo: PhotoMetadata): Promise<string> {
-    return this.retryWithDelay(async () => {
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are a wildlife photography expert creating engaging Instagram captions. Write captions that are informative, engaging, and conservation-minded.',
-          },
-          {
-            role: 'user',
-            content: `Generate an engaging Instagram caption for this wildlife photo using these details:
-            Subject: ${photo.aiMetadata.subjects.join(', ')}
-            Environment: ${photo.aiMetadata.environment}
-            Description: ${photo.aiMetadata.description}
-            Season: ${photo.aiMetadata.season || 'Not specified'}
+    const cacheKey = `caption_${photo.id}`;
 
-            Make it:
-            1. Engaging and informative
-            2. Include interesting facts about the subject
-            3. End with a thought-provoking question
-            4. Keep it under 200 characters`,
-          },
-        ],
-        max_tokens: 200,
-      });
+    // Check cache first if enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      const cachedResult = await this.cacheService.getCachedResult<string>(
+        'generateInstagramCaption',
+        cacheKey
+      );
 
-      return response.choices[0].message.content || '';
+      if (cachedResult) {
+        return cachedResult;
+      }
+    }
+
+    const response = await this.client.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a wildlife photography expert creating engaging Instagram captions. Write captions that are informative, engaging, and conservation-minded.',
+        },
+        {
+          role: 'user',
+          content: `Generate an engaging Instagram caption for this wildlife photo using these details:
+          Subject: ${photo.aiMetadata.subjects.join(', ')}
+          Environment: ${photo.aiMetadata.environment}
+          Description: ${photo.aiMetadata.description}
+          Season: ${photo.aiMetadata.season || 'Not specified'}
+
+          Make it:
+          1. Engaging and informative
+          2. Include interesting facts about the subject
+          3. End with a thought-provoking question
+          4. Keep it under 200 characters`,
+        },
+      ],
+      max_tokens: 200,
     });
+
+    const caption = response.choices[0].message.content || '';
+
+    // Cache the result if enabled
+    if (this.cacheEnabled && this.cacheService) {
+      await this.cacheService.setCachedResult(
+        'generateInstagramCaption',
+        cacheKey,
+        caption
+      );
+    }
+
+    return caption;
   }
 
   async generateHashtags(photo: PhotoMetadata): Promise<string[]> {
-    return this.retryWithDelay(async () => {
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are a wildlife photography expert creating relevant hashtags for Instagram. Focus on wildlife, nature, and photography communities.',
-          },
-          {
-            role: 'user',
-            content: `Generate relevant Instagram hashtags for this wildlife photo:
-            Subjects: ${photo.aiMetadata.subjects.join(', ')}
-            Environment: ${photo.aiMetadata.environment}
-            Colors: ${photo.aiMetadata.colors.join(', ')}
-            Season: ${photo.aiMetadata.season || 'Not specified'}
+    const cacheKey = `hashtags_${photo.id}`;
 
-            Rules:
-            1. Include mix of popular and niche hashtags
-            2. Focus on wildlife photography and nature
-            3. Include location/habitat relevant tags
-            4. Maximum 15 hashtags
-            5. No spaces in hashtags
-            6. No special characters except underscores
-            7. Return as simple comma-separated list without # symbol`,
-          },
-        ],
-        max_tokens: 100,
-      });
+    // Check cache first if enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      const cachedResult = await this.cacheService.getCachedResult<string[]>(
+        'generateHashtags',
+        cacheKey
+      );
 
-      const content = response.choices[0].message.content || '';
-      return content
-        .split(/[,\n]/)
-        .map((tag) => tag.trim())
-        .filter((tag) => tag.length > 0)
-        .map((tag) => tag.replace(/[^a-zA-Z0-9_]/g, ''))
-        .filter((tag) => tag.length > 0 && tag.length <= 30); // Instagram hashtag length limit
+      if (cachedResult) {
+        return cachedResult;
+      }
+    }
+
+    const response = await this.client.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a wildlife photography expert creating relevant hashtags for Instagram. Focus on wildlife, nature, and photography communities.',
+        },
+        {
+          role: 'user',
+          content: `Generate relevant Instagram hashtags for this wildlife photo:
+          Subjects: ${photo.aiMetadata.subjects.join(', ')}
+          Environment: ${photo.aiMetadata.environment}
+          Colors: ${photo.aiMetadata.colors.join(', ')}
+          Season: ${photo.aiMetadata.season || 'Not specified'}
+
+          Rules:
+          1. Include mix of popular and niche hashtags
+          2. Focus on wildlife photography and nature
+          3. Include location/habitat relevant tags
+          4. Maximum 15 hashtags
+          5. No spaces in hashtags
+          6. No special characters except underscores
+          7. Return as simple comma-separated list without # symbol`,
+        },
+      ],
+      max_tokens: 100,
     });
+
+    const content = response.choices[0].message.content || '';
+    const hashtags = content
+      .split(/[,\n]/)
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0)
+      .map((tag) => tag.replace(/[^a-zA-Z0-9_]/g, ''))
+      .filter((tag) => tag.length > 0 && tag.length <= 30); // Instagram hashtag length limit
+
+    // Cache the result if enabled
+    if (this.cacheEnabled && this.cacheService) {
+      await this.cacheService.setCachedResult(
+        'generateHashtags',
+        cacheKey,
+        hashtags
+      );
+    }
+
+    return hashtags;
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
-    return this.retryWithDelay(async () => {
-      const response = await this.client.embeddings.create({
-        input: text,
-        model: 'text-embedding-ada-002',
-      });
+    const cacheKey = text;
 
-      return response.data[0].embedding;
+    // Check cache first if enabled and available
+    if (this.cacheEnabled && this.cacheService) {
+      const cachedResult = await this.cacheService.getCachedResult<number[]>(
+        'generateEmbedding',
+        cacheKey
+      );
+
+      if (cachedResult) {
+        return cachedResult;
+      }
+    }
+
+    const response = await this.client.embeddings.create({
+      input: text,
+      model: 'text-embedding-ada-002',
     });
+
+    const embedding = response.data[0].embedding;
+
+    // Cache the result if enabled
+    if (this.cacheEnabled && this.cacheService) {
+      await this.cacheService.setCachedResult(
+        'generateEmbedding',
+        cacheKey,
+        embedding
+      );
+    }
+
+    return embedding;
   }
 
   private parseAnalysisResponse(content: string): ImageAnalysisResult {

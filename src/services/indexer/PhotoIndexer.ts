@@ -44,6 +44,12 @@ export class PhotoIndexer {
   }
 
   private isImageFile(filename: string): boolean {
+    // Skip macOS metadata/resource files that start with "._"
+    const basename = path.basename(filename);
+    if (basename.startsWith('._')) {
+      return false;
+    }
+
     const mimeType = mime.lookup(filename);
     return mimeType ? mimeType.startsWith('image/') : false;
   }

@@ -95,6 +95,35 @@ class ApiClient {
       throw new Error('Failed to clear all indices');
     }
   }
+
+  // New methods for cache management
+
+  async clearLLMCache(): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/cache/clear`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to clear LLM cache');
+    }
+  }
+
+  async toggleLLMCache(
+    enabled: boolean
+  ): Promise<{ success: boolean; cacheEnabled: boolean }> {
+    const response = await fetch(`${this.baseUrl}/cache/toggle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ enabled }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to toggle LLM cache');
+    }
+
+    return await response.json();
+  }
 }
 
 export const apiClient = new ApiClient();

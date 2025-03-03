@@ -27,10 +27,21 @@ build/
 .env.test.local
 .env.production.local
 
+# Database files
+prisma/dev.db
+prisma/dev.db-journal
+*.sqlite
+*.sqlite3
+*.db
+
 # Data directories
 data/chromadb/
 data/cache/
+data/llm_cache/
 credentials/
+
+# LLM cache files
+llm_cache_*.json
 
 # Editor directories and files
 .vscode/*
@@ -46,3 +57,16 @@ credentials/
 # System files
 .DS_Store
 Thumbs.db
+
+# Temporary files
+*.tmp
+*~
+.cache/
+
+# OS generated files
+.directory
+.fuse_hidden*
+.Trash-*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
