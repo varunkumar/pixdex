@@ -77,11 +77,7 @@ const DailySuggestion = () => {
           ) : suggestion ? (
             <VStack spacing={4} align="stretch">
               <Image
-                src={
-                  suggestion.photo.path.startsWith('gdrive://')
-                    ? `http://localhost:3001/api/photos/${suggestion.photo.id}/content`
-                    : suggestion.photo.path
-                }
+                src={`http://localhost:3001/api/photos/${suggestion.photo.id}/content`}
                 alt={suggestion.photo.aiMetadata.description}
                 borderRadius="lg"
                 objectFit="cover"

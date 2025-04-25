@@ -663,6 +663,11 @@ export class PhotoIndexer {
   async getDailySuggestion(): Promise<InstagramSuggestion> {
     // Get all photos that haven't been suggested recently
     const allPhotos = await this.getAllPhotos();
+
+    if (allPhotos.length === 0) {
+      throw new Error('No photos available for daily suggestion');
+    }
+
     const eligiblePhotos = allPhotos.filter((photo) => {
       if (!photo.instagramSuggested) return true;
 
@@ -674,20 +679,20 @@ export class PhotoIndexer {
       return daysSinceLastSuggestion > 90;
     });
 
-    if (eligiblePhotos.length === 0) {
-      throw new Error('No eligible photos for daily suggestion');
-    }
+    // If no photos are eligible, use all photos instead of throwing an error
+    const photosToProcess =
+      eligiblePhotos.length > 0 ? eligiblePhotos : allPhotos;
 
     // Score photos based on various criteria
     const scoredPhotos = await Promise.all(
-      eligiblePhotos.map(async (photo) => {
+      photosToProcess.map(async (photo) => {
         let score = 0;
 
         // Prefer photos with more subjects
-        score += photo.aiMetadata.subjects.length * 2;
+        score += (photo.aiMetadata.subjects?.length || 0) * 2;
 
         // Prefer photos with more detailed descriptions
-        score += photo.aiMetadata.description.split(' ').length * 0.1;
+        score += (photo.aiMetadata.description?.split(' ').length || 0) * 0.1;
 
         // Prefer seasonal photos
         const currentMonth = new Date().getMonth();
@@ -702,7 +707,7 @@ export class PhotoIndexer {
             seasons[
               photo.aiMetadata.season.toLowerCase() as keyof typeof seasons
             ];
-          if (seasonMonths.includes(currentMonth)) {
+          if (seasonMonths?.includes(currentMonth)) {
             score += 5;
           }
         }
@@ -727,19 +732,23 @@ export class PhotoIndexer {
     const hashtags = await this.llmService.generateHashtags(selectedPhoto);
 
     // Generate reason for selection
-    const reason = `This photo was selected because it features ${selectedPhoto.aiMetadata.subjects.join(
-      ', '
-    )} 
-      in a beautiful ${selectedPhoto.aiMetadata.environment} setting${
-      selectedPhoto.aiMetadata.season
-        ? ` during ${selectedPhoto.aiMetadata.season}`
-        : ''
-    }. The image showcases ${selectedPhoto.aiMetadata.colors
-      .slice(0, 2)
-      .join(' and ')} colors 
+    const subjects = selectedPhoto.aiMetadata.subjects || [];
+    const environment = selectedPhoto.aiMetadata.environment || 'natural';
+    const season = selectedPhoto.aiMetadata.season;
+    const colors = selectedPhoto.aiMetadata.colors || [];
+    const patterns = selectedPhoto.aiMetadata.patterns || [];
+
+    const reason = `This photo was selected because it features ${
+      subjects.length > 0 ? subjects.join(', ') : 'interesting subjects'
+    }
+      in a beautiful ${environment} setting${
+      season ? ` during ${season}` : ''
+    }. The image showcases ${
+      colors.length > 1 ? colors.slice(0, 2).join(' and ') : 'beautiful'
+    } colors
     and ${
-      selectedPhoto.aiMetadata.patterns.length > 0
-        ? selectedPhoto.aiMetadata.patterns.join(', ') + ' patterns'
+      patterns.length > 0
+        ? patterns.join(', ') + ' patterns'
         : 'interesting patterns'
     }.`;
 
