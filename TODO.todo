@@ -7,7 +7,6 @@ UI enhancements:
   - Center align the page
 
 AI:
-  - Cache the AI results
   - Add an implementation to run models locally
 
 Auth:

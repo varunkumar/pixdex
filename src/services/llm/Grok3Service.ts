@@ -10,12 +10,11 @@ export class Grok3Service implements LLMService {
   private cacheService: LLMCacheService | null = null;
   private cacheEnabled = true;
 
-  constructor(private config: LLMConfig, cacheDirPath?: string) {
+  constructor(private config: LLMConfig, cacheService?: LLMCacheService) {
     this.baseUrl = 'https://api.grok.x.ai/v1'; // Example URL, replace with actual Grok3 API endpoint
 
-    // Initialize cache if directory is provided
-    if (cacheDirPath) {
-      this.cacheService = new LLMCacheService(cacheDirPath);
+    if (cacheService) {
+      this.cacheService = cacheService;
     }
   }
 

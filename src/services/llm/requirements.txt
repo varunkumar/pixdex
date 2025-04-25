@@ -1,0 +1,13 @@
+# Core dependencies
+pillow>=7.1.0,<11.0.0  # Compatible with streamlit
+transformers>=4.35.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+sentencepiece  # Required for many transformer models
+einops  # Required for vision-language models
+packaging  # Required for huggingface_hub
+
+# For Apple Silicon (M1/M2/M3) with MPS acceleration
+torch
+torchvision
+--extra-index-url https://download.pytorch.org/whl/nightly/cpu

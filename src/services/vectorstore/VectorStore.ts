@@ -138,9 +138,7 @@ export class ChromaVectorStore implements VectorStore {
       // Check if the collection exists before trying to delete it
       const collections = await this.client.listCollections();
       const collectionExists = collections.some((collection) => {
-        const name =
-          typeof collection === 'string' ? collection : collection.name;
-        return name === album;
+        return this.getCollectionName(collection) === album;
       });
 
       if (collectionExists) {
@@ -153,16 +151,18 @@ export class ChromaVectorStore implements VectorStore {
 
   async deleteAllCollections(): Promise<void> {
     await this.retryWithDelay(async () => {
-      const collections: Array<{ name: string } | string> =
-        await this.client.listCollections();
+      const collections = await this.client.listCollections();
       for (const collection of collections) {
-        const name =
-          typeof collection === 'string' ? collection : collection.name;
+        const name = this.getCollectionName(collection);
         if (name) {
           await this.client.deleteCollection({ name });
         }
       }
     });
+  }
+
+  private getCollectionName(collection: string | { name: string }): string {
+    return typeof collection === 'string' ? collection : collection.name;
   }
 
   // Add a method to delete documents by album

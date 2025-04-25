@@ -44,6 +44,9 @@ model Photo {
   album             String?   // The name of the folder being indexed
   season            String?   // New field added
   tagsJson          String    // Stored as JSON string of String[]
+  modelName         String?   // Model name used for analysis
+  modelVersion      String?   // Model version
+  modelType         String?   // 'local' or 'api'
 
   @@unique([path, source])
 }

@@ -34,6 +34,11 @@ export class PhotoIndexer {
   ) {
     this.prisma = new PrismaClient();
     this.progressEmitter = new EventEmitter();
+
+    // Bind methods to preserve 'this' context
+    this.validateAndParseDate = this.validateAndParseDate.bind(this);
+    this.validateAndGetCurrentDate = this.validateAndGetCurrentDate.bind(this);
+
     if (config.googleDrive.enabled) {
       const auth = new google.auth.GoogleAuth({
         keyFile: config.googleDrive.credentialsPath,
@@ -751,7 +756,8 @@ export class PhotoIndexer {
 
   private async getAllPhotos(): Promise<PhotoMetadata[]> {
     const dbPhotos = await this.prisma.photo.findMany();
-    return dbPhotos.map(this.dbPhotoToPhotoMetadata);
+    // Use arrow function to preserve 'this' context
+    return dbPhotos.map((photo) => this.dbPhotoToPhotoMetadata(photo));
   }
 
   private async updatePhotoInstagramDate(photoId: string): Promise<void> {
@@ -801,6 +807,9 @@ export class PhotoIndexer {
         tagsJson: JSON.stringify(aiMetadata.tags),
         album: aiMetadata.album,
         season: aiMetadata.season,
+        modelName: aiMetadata.modelInfo?.name,
+        modelVersion: aiMetadata.modelInfo?.version,
+        modelType: aiMetadata.modelInfo?.type,
       };
 
       await this.prisma.photo.create({
@@ -832,7 +841,7 @@ export class PhotoIndexer {
         this.validateAndGetCurrentDate(),
       instagramSuggested: this.validateAndParseDate(dbPhoto.instagramSuggested),
       vectorEmbedding: dbPhoto.vectorEmbedding
-        ? new Float32Array(JSON.parse(dbPhoto.vectorEmbedding))
+        ? Array.from(new Float32Array(JSON.parse(dbPhoto.vectorEmbedding)))
         : undefined,
       technicalInfo: {
         dimensions: {
@@ -861,8 +870,29 @@ export class PhotoIndexer {
         patterns: JSON.parse(dbPhoto.patternsJson),
         album: dbPhoto.album ?? undefined,
         tags: JSON.parse(dbPhoto.tagsJson),
-        timeOfDay: undefined,
+        season: dbPhoto.season ?? undefined,
+        modelInfo: dbPhoto.modelName
+          ? {
+              name: dbPhoto.modelName,
+              version: dbPhoto.modelVersion ?? undefined,
+              type: dbPhoto.modelType as 'local' | 'api',
+            }
+          : undefined,
       },
     };
+  }
+
+  /**
+   * Update the LLM service
+   */
+  updateLLMService(newService: LLMService): void {
+    this.llmService = newService;
+  }
+
+  /**
+   * Update the vector store
+   */
+  updateVectorStore(newStore: ChromaVectorStore): void {
+    this.vectorStore = newStore;
   }
 }

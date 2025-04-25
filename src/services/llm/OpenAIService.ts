@@ -9,8 +9,6 @@ import { ImageAnalysisResult, LLMService } from './LLMService';
 
 export class OpenAIService implements LLMService {
   private client: OpenAI;
-  private maxRetries = 0;
-  private retryDelay = 1000;
   private readonly SUPPORTED_FORMATS = ['jpeg', 'jpg', 'png', 'webp', 'gif'];
   private readonly MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
   private readonly MAX_DIMENSION = 2048;
@@ -18,13 +16,12 @@ export class OpenAIService implements LLMService {
   private cacheService: LLMCacheService | null = null;
   private cacheEnabled = true;
 
-  constructor(private config: LLMConfig, cacheDirPath?: string) {
+  constructor(private config: LLMConfig, cacheService?: LLMCacheService) {
     const { apiKey } = this.config;
     this.client = new OpenAI({ apiKey });
 
-    // Initialize cache if directory is provided
-    if (cacheDirPath) {
-      this.cacheService = new LLMCacheService(cacheDirPath);
+    if (cacheService) {
+      this.cacheService = cacheService;
     }
   }
 
@@ -45,33 +42,6 @@ export class OpenAIService implements LLMService {
       if (metadata) {
         console.debug(JSON.stringify(metadata, null, 2));
       }
-    }
-  }
-
-  private async retryWithDelay<T>(
-    operation: () => Promise<T>,
-    attempt: number = 1
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error: any) {
-      if (attempt >= this.maxRetries) {
-        throw new Error(
-          `Failed after ${this.maxRetries} attempts: ${error.message}`
-        );
-      }
-
-      // Handle rate limiting
-      if (error.status === 429) {
-        const delay = (error.response?.headers?.['retry-after'] || 1) * 1000;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.retryWithDelay(operation, attempt);
-      }
-
-      // General retry with exponential backoff
-      const delay = this.retryDelay * Math.pow(2, attempt - 1);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      return this.retryWithDelay(operation, attempt + 1);
     }
   }
 

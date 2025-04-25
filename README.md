@@ -1,16 +1,13 @@
-# Pixdex - AI-Powered Wildlife Photo Indexer
+# PixDex
 
-An intelligent photo indexing application that helps organize and search wildlife photos using AI-powered metadata extraction and semantic search capabilities.
+A photo indexing and search application using AI for image analysis.
 
 ## Features
 
-- Multi-source photo indexing (Local drives, Google Drive)
-- AI-powered metadata extraction (animals, colors, patterns, etc.)
-- Advanced search capabilities (location, date, semantic search)
-- Daily Instagram suggestion feature
-- Configurable LLM backend (OpenAI, Grok3)
-- Vector store-based semantic search
-- Modern React UI with responsive design
+- Index photos from local directories and Google Drive
+- AI-powered image analysis for content, subjects, and context
+- Search photos by text queries, subjects, and semantic similarity
+- Generate captions and hashtags for social media sharing
 
 ## Prerequisites
 
@@ -151,7 +148,84 @@ Supported LLMs:
 
 - OpenAI GPT-4 Vision
 - Grok3
+- DeepSeek AI
 - (Add more by implementing the LLMProvider interface)
+
+## Local DeepSeek Model Setup
+
+To use the local DeepSeek image analysis model:
+
+1. Install Python dependencies:
+
+```bash
+pip install torch torchvision transformers pillow
+```
+
+2. Update your application configuration:
+
+```json
+{
+  "llm": {
+    "provider": "deepseek",
+    "modelName": "deepseek-ai/deepseek-vl-7b-chat",
+    "temperature": 0.7
+  }
+}
+```
+
+Available DeepSeek vision-language models:
+
+- `deepseek-ai/deepseek-vl-7b-chat` - Recommended balance of quality and performance
+- `deepseek-ai/deepseek-vl-1.3b-chat` - Lightweight model for systems with limited resources
+- `deepseek-ai/janus-pro-35b-chat-complete` - High quality but requires significantly more GPU memory
+
+For text generation and embeddings, lightweight models are used automatically:
+
+- Text generation: `deepseek-ai/deepseek-coder-1.3b-instruct`
+- Embeddings: `sentence-transformers/all-MiniLM-L6-v2`
+
+### Hardware Requirements
+
+- CPU-only: Will work but be slow for image analysis
+- GPU: CUDA-compatible GPU with at least 8GB VRAM recommended (16GB+ for larger models)
+- Memory: At least 8GB RAM (16GB+ recommended)
+
+## Getting Started
+
+1. Clone this repository
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Set up environment variables:
+
+```
+OPENAI_API_KEY=your_openai_api_key
+LOCAL_PHOTO_PATHS=/path/to/photos,/another/path
+CHROMA_DB_PATH=./data/chromadb
+PHOTOS_CACHE_DIR=./data/cache
+PORT=3001
+```
+
+4. Start ChromaDB:
+
+```bash
+npm run chroma:up
+```
+
+5. Start the server:
+
+```bash
+npm run server
+```
+
+6. Start the frontend:
+
+```bash
+npm run dev
+```
 
 ## Contributing
 

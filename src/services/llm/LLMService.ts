@@ -63,6 +63,7 @@ export class OpenAIService implements LLMService {
   }
 
   enableCache(enabled: boolean): void {
+    console.log('Cache enabled:', enabled);
     // Default implementation does nothing
   }
 }
@@ -110,6 +111,7 @@ export class Grok3Service implements LLMService {
   }
 
   enableCache(enabled: boolean): void {
+    console.log('Cache enabled:', enabled);
     // Default implementation does nothing
   }
 }

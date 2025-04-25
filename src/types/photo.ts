@@ -19,6 +19,11 @@ export interface PhotoMetadata {
     season?: string;
     tags: string[];
     description: string;
+    modelInfo?: {
+      name: string;
+      version?: string;
+      type: 'local' | 'api';
+    };
   };
   technicalInfo: {
     dimensions: {
@@ -30,7 +35,6 @@ export interface PhotoMetadata {
     space?: string;
     hasAlpha?: boolean;
     channels?: number;
-    // Camera info
     camera?: string;
     lens?: string;
     aperture?: string;

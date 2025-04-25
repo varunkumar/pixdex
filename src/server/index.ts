@@ -6,7 +6,9 @@ import fs from 'fs/promises';
 import multer from 'multer';
 import path from 'path';
 import { PhotoIndexer } from '../services/indexer/PhotoIndexer';
+import { DeepSeekService } from '../services/llm/DeepSeekService';
 import { Grok3Service } from '../services/llm/Grok3Service';
+import { LLMCacheService } from '../services/llm/LLMCacheService';
 import { LLMService } from '../services/llm/LLMService';
 import { OpenAIService } from '../services/llm/OpenAIService';
 import { ChromaVectorStore } from '../services/vectorstore/VectorStore';
@@ -82,12 +84,17 @@ async function getPhotoStats(): Promise<PhotoStats> {
 }
 
 function createLLMService(config: LLMConfig, cacheDir: string): LLMService {
+  // Create cache service instance
+  const cacheService = new LLMCacheService(cacheDir);
+
   // Create appropriate service based on configured provider
   switch (config.provider) {
     case 'openai':
-      return new OpenAIService(config, cacheDir);
+      return new OpenAIService(config, cacheService);
     case 'grok3':
-      return new Grok3Service(config, cacheDir);
+      return new Grok3Service(config, cacheService);
+    case 'deepseek':
+      return new DeepSeekService(config, cacheService);
     default:
       throw new Error(`Unsupported LLM provider: ${config.provider}`);
   }
@@ -125,8 +132,14 @@ async function initializeApp() {
     // Initialize services
     const appConfig: AppConfig = {
       llm: {
-        provider: 'openai',
+        provider:
+          (process.env.LLM_PROVIDER as 'openai' | 'grok3' | 'deepseek') ||
+          'openai',
         apiKey: process.env.OPENAI_API_KEY || '',
+        modelName: process.env.LLM_MODEL_NAME,
+        temperature: process.env.LLM_TEMPERATURE
+          ? parseFloat(process.env.LLM_TEMPERATURE)
+          : undefined,
       },
       storage: {
         localPaths: (process.env.LOCAL_PHOTO_PATHS || '')
@@ -280,19 +293,60 @@ async function initializeApp() {
 
     app.post('/api/config', async (req, res) => {
       try {
-        // TODO: Validate and save configuration
-        // Would typically save to a database or configuration file
-        const newConfig = req.body;
+        const newConfig = req.body as AppConfig;
 
-        // Update LLM provider if changed
-        if (newConfig.llm?.provider !== appConfig.llm.provider) {
-          // Create new LLM service with the new provider
-          const newLLMService = createLLMService(newConfig.llm, llmCacheDir);
-          // TODO: Replace the LLM service in photoIndexer
+        // Validate new configuration
+        if (
+          !newConfig.llm?.provider ||
+          !newConfig.storage ||
+          !newConfig.chromaDbPath ||
+          !newConfig.cacheDir
+        ) {
+          return res
+            .status(400)
+            .json({ error: 'Invalid configuration format' });
         }
 
-        res.json({ success: true });
+        // Update environment variables with new configuration
+        process.env.LLM_PROVIDER = newConfig.llm.provider;
+        process.env.OPENAI_API_KEY = newConfig.llm.apiKey;
+        process.env.LLM_MODEL_NAME = newConfig.llm.modelName;
+        process.env.LLM_TEMPERATURE = newConfig.llm.temperature?.toString();
+        process.env.LOCAL_PHOTO_PATHS = newConfig.storage.localPaths.join(',');
+        process.env.ENABLE_GOOGLE_DRIVE =
+          newConfig.storage.googleDrive.enabled.toString();
+        process.env.GOOGLE_APPLICATION_CREDENTIALS =
+          newConfig.storage.googleDrive.credentialsPath;
+        process.env.CHROMA_DB_PATH = newConfig.chromaDbPath;
+        process.env.PHOTOS_CACHE_DIR = newConfig.cacheDir;
+
+        // Create new LLM service if provider changed
+        if (newConfig.llm.provider !== appConfig.llm.provider) {
+          const newLLMService = createLLMService(newConfig.llm, llmCacheDir);
+          // Update the photoIndexer with the new LLM service
+          photoIndexer.updateLLMService(newLLMService);
+        } else if (
+          newConfig.llm.apiKey !== appConfig.llm.apiKey ||
+          newConfig.llm.modelName !== appConfig.llm.modelName ||
+          newConfig.llm.temperature !== appConfig.llm.temperature
+        ) {
+          // If other LLM settings changed but not the provider
+          const newLLMService = createLLMService(newConfig.llm, llmCacheDir);
+          photoIndexer.updateLLMService(newLLMService);
+        }
+
+        // Update vector store if path changed
+        if (newConfig.chromaDbPath !== appConfig.chromaDbPath) {
+          const newVectorStore = new ChromaVectorStore(newConfig.chromaDbPath);
+          photoIndexer.updateVectorStore(newVectorStore);
+        }
+
+        // Update the global config
+        Object.assign(appConfig, newConfig);
+
+        res.json({ success: true, config: appConfig });
       } catch (error) {
+        console.error('Error updating configuration:', error);
         res.status(500).json({ error: (error as Error).message });
       }
     });

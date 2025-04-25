@@ -1,4 +1,4 @@
-export type LLMProvider = 'openai' | 'grok3';
+export type LLMProvider = 'openai' | 'grok3' | 'deepseek';
 
 export interface LLMConfig {
   provider: LLMProvider;

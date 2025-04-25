@@ -15,6 +15,11 @@ import {
   FormLabel,
   Heading,
   Input,
+  NumberDecrementStepper,
+  NumberIncrementStepper,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
   Select,
   Switch,
   Text,
@@ -27,21 +32,23 @@ import { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../services/api/ApiClient';
 import { AppConfig, LLMProvider } from '../types/config';
 
-// Helper function to format bytes to human-readable size
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
-
-interface CacheStats {
-  count: number;
-  sizeBytes: number;
-}
+const DEEPSEEK_MODELS = [
+  {
+    value: 'deepseek-ai/deepseek-janus-7b-chat-pro',
+    label: 'Janus Pro 7B (Recommended)',
+    gpuMemory: '8GB',
+  },
+  {
+    value: 'deepseek-ai/deepseek-vl-1.3b-chat',
+    label: 'Vision Language 1.3B (Lightweight)',
+    gpuMemory: '4GB',
+  },
+  {
+    value: 'deepseek-ai/janus-pro-35b-chat-complete',
+    label: 'Janus Pro 35B (High Quality)',
+    gpuMemory: '24GB',
+  },
+] as const;
 
 const Settings = () => {
   const [config, setConfig] = useState<AppConfig>({
@@ -163,6 +170,10 @@ const Settings = () => {
     return <Box>Loading...</Box>;
   }
 
+  const selectedModel =
+    DEEPSEEK_MODELS.find((model) => model.value === config.llm.modelName) ||
+    DEEPSEEK_MODELS[0];
+
   return (
     <Box w="100%" maxW="container.xl" mx="auto">
       <VStack spacing={6} align="stretch">
@@ -178,9 +189,10 @@ const Settings = () => {
                 </Heading>
                 <VStack spacing={4}>
                   <FormControl id="llm-provider">
-                    <FormLabel>LLM Provider</FormLabel>
+                    <FormLabel id="llm-provider-label">LLM Provider</FormLabel>
                     <Select
                       aria-label="Select LLM Provider"
+                      aria-labelledby="llm-provider-label"
                       name="llm-provider"
                       value={config.llm.provider}
                       onChange={(e) =>
@@ -195,22 +207,100 @@ const Settings = () => {
                     >
                       <option value="openai">OpenAI</option>
                       <option value="grok3">Grok3</option>
+                      <option value="deepseek">DeepSeek (Local)</option>
                     </Select>
                   </FormControl>
-                  <FormControl>
-                    <FormLabel htmlFor="api-key">API Key</FormLabel>
-                    <Input
-                      id="api-key"
-                      type="password"
-                      value={config.llm.apiKey}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          llm: { ...config.llm, apiKey: e.target.value },
-                        })
-                      }
-                    />
-                  </FormControl>
+
+                  {config.llm.provider === 'deepseek' ? (
+                    <>
+                      <FormControl>
+                        <FormLabel id="model-select-label">Model</FormLabel>
+                        <Select
+                          aria-label="Select DeepSeek Model"
+                          aria-labelledby="model-select-label"
+                          value={
+                            config.llm.modelName || DEEPSEEK_MODELS[0].value
+                          }
+                          onChange={(e) =>
+                            setConfig({
+                              ...config,
+                              llm: { ...config.llm, modelName: e.target.value },
+                            })
+                          }
+                        >
+                          {DEEPSEEK_MODELS.map((model) => (
+                            <option key={model.value} value={model.value}>
+                              {model.label} (GPU: {model.gpuMemory})
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <FormControl>
+                        <FormLabel htmlFor="temperature">
+                          Temperature (0.0 - 1.0)
+                        </FormLabel>
+                        <NumberInput
+                          id="temperature"
+                          min={0}
+                          max={1}
+                          step={0.1}
+                          value={config.llm.temperature || 0.7}
+                          onChange={(valueString) =>
+                            setConfig({
+                              ...config,
+                              llm: {
+                                ...config.llm,
+                                temperature: parseFloat(valueString),
+                              },
+                            })
+                          }
+                        >
+                          <NumberInputField />
+                          <NumberInputStepper>
+                            <NumberIncrementStepper />
+                            <NumberDecrementStepper />
+                          </NumberInputStepper>
+                        </NumberInput>
+                      </FormControl>
+                      <Box>
+                        <Text fontSize="sm" color="gray.600" mb={2}>
+                          DeepSeek models run locally on your machine. Required
+                          dependencies:
+                        </Text>
+                        <Text
+                          as="code"
+                          display="block"
+                          p={2}
+                          bg="gray.50"
+                          borderRadius="md"
+                          fontSize="sm"
+                          mb={2}
+                        >
+                          pip install torch torchvision transformers pillow
+                        </Text>
+                        <Text fontSize="sm" color="gray.600">
+                          Current model ({selectedModel.label}) requires{' '}
+                          {selectedModel.gpuMemory} GPU memory. Models can run
+                          on CPU but will be significantly slower.
+                        </Text>
+                      </Box>
+                    </>
+                  ) : (
+                    <FormControl>
+                      <FormLabel htmlFor="api-key">API Key</FormLabel>
+                      <Input
+                        id="api-key"
+                        type="password"
+                        value={config.llm.apiKey}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            llm: { ...config.llm, apiKey: e.target.value },
+                          })
+                        }
+                      />
+                    </FormControl>
+                  )}
                 </VStack>
               </Box>
 
