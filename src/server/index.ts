@@ -425,6 +425,48 @@ async function initializeApp() {
       }
     });
 
+    // Add endpoint to serve photo content
+    app.get('/api/photos/:id/content', async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        try {
+          // Use the new PhotoIndexer method to get the photo content stream
+          const { stream, contentType } =
+            await photoIndexer.getPhotoContentStream(id);
+
+          // Set content type header
+          res.setHeader('Content-Type', contentType);
+
+          // Pipe the stream to the response
+          stream.pipe(res);
+
+          // Handle stream errors
+          stream.on('error', (error: Error) => {
+            console.error(`Error streaming photo ${id}:`, error);
+            // Only send error if headers haven't been sent yet
+            if (!res.headersSent) {
+              res.status(500).json({ error: 'Error streaming file' });
+            }
+          });
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          if (
+            errorMessage === 'Photo not found' ||
+            errorMessage === 'File not found on disk'
+          ) {
+            res.status(404).json({ error: errorMessage });
+          } else {
+            res.status(500).json({ error: errorMessage });
+          }
+        }
+      } catch (error) {
+        console.error('Error serving photo content:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Start server
     app.listen(port, () => {
       console.log(`Server running at http://localhost:${port}`);

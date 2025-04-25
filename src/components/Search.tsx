@@ -122,11 +122,7 @@ const Search = () => {
             overflow="hidden"
           >
             <Image
-              src={
-                photo.path.startsWith('gdrive://')
-                  ? `http://localhost:3001/api/photos/${photo.id}/content`
-                  : photo.path
-              }
+              src={`http://localhost:3001/api/photos/${photo.id}/content`}
               alt={photo.aiMetadata.description}
               objectFit="cover"
               height="200px"

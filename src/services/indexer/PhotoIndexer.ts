@@ -895,4 +895,74 @@ export class PhotoIndexer {
   updateVectorStore(newStore: ChromaVectorStore): void {
     this.vectorStore = newStore;
   }
+
+  /**
+   * Get a readable stream of photo content
+   * This method can be used to stream photo content from various sources
+   */
+  async getPhotoContentStream(photoId: string): Promise<{
+    stream: NodeJS.ReadableStream;
+    contentType: string;
+  }> {
+    const photo = await this.prisma.photo.findUnique({
+      where: { id: photoId },
+    });
+
+    if (!photo) {
+      throw new Error('Photo not found');
+    }
+
+    // Handle Google Drive photos
+    if (photo.source === 'google_drive' && photo.path.startsWith('gdrive://')) {
+      const fileId = photo.path.replace('gdrive://', '');
+
+      if (!this.drive) {
+        throw new Error('Google Drive not configured');
+      }
+
+      const response = await this.drive.files.get(
+        { fileId, alt: 'media' },
+        { responseType: 'stream' }
+      );
+
+      return {
+        stream: response.data,
+        contentType: response.headers['content-type'] || 'image/jpeg',
+      };
+    }
+
+    // Handle local files
+    if (photo.source === 'local') {
+      const filePath = photo.path;
+
+      // Check if file exists
+      try {
+        await fs.access(filePath);
+      } catch {
+        throw new Error('File not found on disk');
+      }
+
+      // Determine content type based on file extension
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType =
+        {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp',
+          '.heic': 'image/heic',
+        }[ext] || 'application/octet-stream';
+
+      // Import the standard fs module for createReadStream
+      const { createReadStream } = await import('fs');
+
+      return {
+        stream: createReadStream(filePath),
+        contentType,
+      };
+    }
+
+    throw new Error('Unsupported photo source');
+  }
 }
