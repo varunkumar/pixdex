@@ -1,0 +1,37 @@
+import { env, SELF } from 'cloudflare:test';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+async function seed(id: string, subjects: string[], description: string, instagramSuggested: string | null) {
+  await env.DB.prepare(
+    `INSERT INTO photos (id, content_hash, source, filename, subjects, description, suggested_caption, suggested_hashtags, model_provider, model_name, search_text, last_indexed, instagram_suggested)
+     VALUES (?,?,'local',?,?,?, 'caption', '[]', 'ollama', 'qwen3.5:27b-mlx', '', '2026-09-18T00:00:00.000Z', ?)`
+  )
+    .bind(id, `hash-${id}`, `${id}.jpg`, JSON.stringify(subjects), description, instagramSuggested)
+    .run();
+}
+
+describe('GET /daily-pick', () => {
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM photos').run();
+  });
+
+  it('picks the photo with more subjects and a longer description over a never-suggested sparse one', async () => {
+    await seed('sparse', ['leopard'], 'A leopard.', null);
+    await seed('rich', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets over the forest.', null);
+
+    const response = await SELF.fetch('https://example.com/daily-pick');
+    const body = await response.json();
+    expect(body.photo.id).toBe('rich');
+    expect(body.suggestedCaption).toBe('caption');
+  });
+
+  it('skips a photo suggested within the last 90 days if another is eligible', async () => {
+    const recentlySuggested = new Date().toISOString();
+    await seed('recent', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets.', recentlySuggested);
+    await seed('eligible', ['leopard'], 'A leopard.', null);
+
+    const response = await SELF.fetch('https://example.com/daily-pick');
+    const body = await response.json();
+    expect(body.photo.id).toBe('eligible');
+  });
+});

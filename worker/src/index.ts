@@ -5,6 +5,7 @@ import { ingestPhotoRoute } from './routes/ingest-photo';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { getAlbumsRoute, getPhotoRoute } from './routes/photos';
 import { searchRoute } from './routes/search';
+import { dailyPickRoute } from './routes/daily-pick';
 import type { Env } from './types';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -22,5 +23,7 @@ app.get('/search', searchRoute);
 
 app.get('/photos/:id', getPhotoRoute);
 app.get('/albums', getAlbumsRoute);
+
+app.get('/daily-pick', dailyPickRoute);
 
 export default app;
