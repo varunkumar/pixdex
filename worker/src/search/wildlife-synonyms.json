@@ -1,0 +1,7 @@
+{
+  "big cat": ["leopard", "tiger", "lion", "jaguar", "cheetah", "panther"],
+  "raptor": ["eagle", "hawk", "osprey", "falcon", "kite"],
+  "waterfowl": ["duck", "goose", "heron", "egret", "stork"],
+  "primate": ["monkey", "langur", "macaque", "gibbon"],
+  "reptile": ["monitor lizard", "crocodile", "snake", "turtle"]
+}
