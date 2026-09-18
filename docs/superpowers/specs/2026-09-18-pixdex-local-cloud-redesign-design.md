@@ -131,7 +131,18 @@ agent/Ollama at browse time — daily-pick works even when your Mac is off.
 | `season`, `environment`, `album` | text |
 | `description` | free text (LLM-generated prose) |
 | `suggested_caption`, `suggested_hashtags` | pre-generated at index time |
+| `model_provider`, `model_name` | which LLM produced this row's analysis, e.g. `ollama` / `qwen3.5:27b-mlx` |
 | `last_indexed`, `instagram_suggested` | timestamps |
+
+`model_provider`/`model_name` carry forward the `modelInfo` concept already
+present in today's schema (`dbPhoto.modelName`/`modelVersion`/`modelType`).
+Recording them per-row means a future model upgrade doesn't require guessing
+which photos are stale: the local agent can query
+`/photos?model_name!=<new model>` (or similar) to find everything indexed by
+an older model and selectively re-run analysis on just those, without
+touching photos already analyzed by the current model. This is also what
+makes swapping `OllamaService`'s model, or adding a second `LLMService`
+implementation later, low-cost — the data itself records its provenance.
 
 Plus an FTS5 virtual table (`photos_fts`) indexing `subjects`,
 `description`, `tags`, `environment`, `album` for search — see §5.
