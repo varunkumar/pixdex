@@ -47,4 +47,15 @@ describe('runCli', () => {
     expect(code).toBe(0);
     expect(runIndexDriveMock).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
   });
+
+  it('catches errors from runIndexDrive, logs a clean error, and returns 1', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    runIndexDriveMock.mockReset().mockRejectedValue(new Error('Token refresh failed'));
+
+    const code = await runCli(['index-drive']);
+
+    expect(code).toBe(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error: Token refresh failed');
+    consoleErrorSpy.mockRestore();
+  });
 });

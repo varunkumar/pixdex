@@ -13,6 +13,9 @@ export async function runCli(argv: string[]): Promise<number> {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
       return await runIndexDrive(config, { prompt: (question) => rl.question(question) });
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
     } finally {
       rl.close();
     }
