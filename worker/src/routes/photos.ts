@@ -1,27 +1,6 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
-
-interface PhotoRow {
-  subjects: string;
-  colors: string;
-  patterns: string;
-  tags: string;
-  suggested_hashtags: string;
-  content_hash: string;
-  [key: string]: unknown;
-}
-
-function parseRow(row: PhotoRow) {
-  return {
-    ...row,
-    subjects: JSON.parse(row.subjects),
-    colors: JSON.parse(row.colors),
-    patterns: JSON.parse(row.patterns),
-    tags: JSON.parse(row.tags),
-    suggestedHashtags: JSON.parse(row.suggested_hashtags),
-    thumbnailUrl: `/thumbnails/${row.content_hash}`,
-  };
-}
+import { serializePhoto, type PhotoRow } from '../db/photos';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
@@ -29,7 +8,7 @@ export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
   if (!row) {
     return c.text('Not Found', 404);
   }
-  return c.json(parseRow(row));
+  return c.json(serializePhoto(row));
 }
 
 export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {

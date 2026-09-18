@@ -24,7 +24,7 @@ describe('photos schema', () => {
       `SELECT photos.id FROM photos
        JOIN photos_fts ON photos.rowid = photos_fts.rowid
        WHERE photos_fts MATCH 'leopard'`
-    ).all();
+    ).all<{ id: string }>();
     expect(match.results.map((r) => r.id)).toEqual(['photo-1']);
   });
 });

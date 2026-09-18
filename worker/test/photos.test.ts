@@ -13,7 +13,7 @@ describe('GET /photos/:id and GET /albums', () => {
   it('GET /photos/:id returns the photo', async () => {
     const response = await SELF.fetch('https://example.com/photos/photo-1');
     expect(response.status).toBe(200);
-    expect((await response.json()).filename).toBe('a.jpg');
+    expect(((await response.json()) as any).filename).toBe('a.jpg');
   });
 
   it('GET /photos/:id returns 404 for an unknown id', async () => {

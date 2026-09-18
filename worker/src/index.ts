@@ -10,6 +10,11 @@ import type { Env } from './types';
 
 const app = new Hono<{ Bindings: Env }>();
 
+app.onError((err, c) => {
+  console.error(err);
+  return c.json({ error: 'Internal Server Error' }, 500);
+});
+
 app.get('/health', (c) => c.text('ok'));
 
 app.use('/ingest/*', requireIngestToken);

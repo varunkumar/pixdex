@@ -28,6 +28,111 @@ export const ingestPhotoSchema = z.object({
 
 export type IngestPhotoInput = z.infer<typeof ingestPhotoSchema>;
 
+export interface PhotoRow {
+  id: string;
+  content_hash?: string;
+  source?: string;
+  path?: string | null;
+  drive_file_id?: string | null;
+  filename?: string;
+  date_time?: string | null;
+  width?: number | null;
+  height?: number | null;
+  format?: string | null;
+  file_size?: number | null;
+  subjects?: string;
+  colors?: string;
+  patterns?: string;
+  tags?: string;
+  season?: string | null;
+  environment?: string | null;
+  album?: string | null;
+  description?: string;
+  suggested_caption?: string;
+  suggested_hashtags?: string;
+  model_provider?: string;
+  model_name?: string;
+  search_text?: string;
+  last_indexed?: string;
+  instagram_suggested?: string | null;
+  [key: string]: unknown;
+}
+
+export interface SerializedPhoto {
+  id: string;
+  contentHash?: string;
+  source?: string;
+  path: string | null;
+  driveFileId: string | null;
+  filename?: string;
+  dateTime: string | null;
+  width: number | null;
+  height: number | null;
+  format: string | null;
+  fileSize: number | null;
+  subjects: unknown[];
+  colors: unknown[];
+  patterns: unknown[];
+  tags: unknown[];
+  season: string | null;
+  environment: string | null;
+  album: string | null;
+  description?: string;
+  suggestedCaption?: string;
+  suggestedHashtags: unknown[];
+  modelProvider?: string;
+  modelName?: string;
+  lastIndexed?: string;
+  instagramSuggested: string | null;
+  thumbnailUrl?: string;
+}
+
+function parseJsonArray(value: string | undefined | null): unknown[] {
+  if (!value) return [];
+  try {
+    return JSON.parse(value);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Turns a raw D1 photos row (snake_case columns, JSON-encoded array columns
+ * stored as text) into the one clean camelCase shape every route returns.
+ * Tolerates partial rows (e.g. a SELECT that only projects a subset of
+ * columns for cost reasons) by defaulting missing array columns to [].
+ */
+export function serializePhoto(row: PhotoRow): SerializedPhoto {
+  return {
+    id: row.id,
+    contentHash: row.content_hash,
+    source: row.source,
+    path: row.path ?? null,
+    driveFileId: row.drive_file_id ?? null,
+    filename: row.filename,
+    dateTime: row.date_time ?? null,
+    width: row.width ?? null,
+    height: row.height ?? null,
+    format: row.format ?? null,
+    fileSize: row.file_size ?? null,
+    subjects: parseJsonArray(row.subjects),
+    colors: parseJsonArray(row.colors),
+    patterns: parseJsonArray(row.patterns),
+    tags: parseJsonArray(row.tags),
+    season: row.season ?? null,
+    environment: row.environment ?? null,
+    album: row.album ?? null,
+    description: row.description,
+    suggestedCaption: row.suggested_caption,
+    suggestedHashtags: parseJsonArray(row.suggested_hashtags),
+    modelProvider: row.model_provider,
+    modelName: row.model_name,
+    lastIndexed: row.last_indexed,
+    instagramSuggested: row.instagram_suggested ?? null,
+    thumbnailUrl: row.content_hash ? `/thumbnails/${row.content_hash}` : undefined,
+  };
+}
+
 export function buildSearchText(input: {
   subjects: string[];
   tags: string[];

@@ -27,4 +27,33 @@ describe('POST /ingest/check-hashes', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ known: ['known-hash'] });
   });
+
+  it('handles more than 100 hashes in one request by chunking the D1 query', async () => {
+    const knownHashes = Array.from({ length: 120 }, (_, i) => `known-${i}`);
+    for (const hash of knownHashes) {
+      await seedPhoto(hash);
+    }
+    const unknownHashes = Array.from({ length: 30 }, (_, i) => `unknown-${i}`);
+
+    const response = await SELF.fetch('https://example.com/ingest/check-hashes', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hashes: [...knownHashes, ...unknownHashes] }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as any;
+    expect(body.known.sort()).toEqual(knownHashes.sort());
+  });
+
+  it('returns 400 (not 500) for a malformed JSON body', async () => {
+    const response = await SELF.fetch('https://example.com/ingest/check-hashes', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' },
+      body: '{not valid json',
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as any;
+    expect(body.error).toBe('Invalid JSON body');
+  });
 });
