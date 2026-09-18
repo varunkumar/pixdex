@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const loadConfigMock = vi.fn();
 const indexLocalFolderMock = vi.fn();
+const runIndexDriveMock = vi.fn();
 
 vi.mock('../src/config', () => ({ loadConfig: loadConfigMock }));
 vi.mock('../src/indexLocalFolder', () => ({ indexLocalFolder: indexLocalFolderMock }));
 vi.mock('../src/cloudflareClient', () => ({ CloudflareClient: vi.fn() }));
 vi.mock('../src/ollama/client', () => ({ OllamaClient: vi.fn() }));
+vi.mock('../src/driveCli', () => ({ runIndexDrive: runIndexDriveMock }));
 
 const { runCli } = await import('../src/cli');
 
@@ -37,5 +39,12 @@ describe('runCli', () => {
     const code = await runCli(['bogus-command', '/tmp/photos']);
     expect(code).toBe(1);
     expect(indexLocalFolderMock).not.toHaveBeenCalled();
+  });
+
+  it('delegates "index-drive" to runIndexDrive', async () => {
+    runIndexDriveMock.mockReset().mockResolvedValue(0);
+    const code = await runCli(['index-drive']);
+    expect(code).toBe(0);
+    expect(runIndexDriveMock).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
   });
 });
