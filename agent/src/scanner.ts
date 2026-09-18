@@ -15,7 +15,12 @@ export async function scanDirectory(dir: string): Promise<string[]> {
   const files: string[] = [];
 
   async function walk(currentDir: string) {
-    const entries = await fs.readdir(currentDir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await fs.readdir(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const entry of entries) {
       const fullPath = path.join(currentDir, entry.name);
       if (entry.isDirectory()) {

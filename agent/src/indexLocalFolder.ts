@@ -32,22 +32,54 @@ export async function indexLocalFolder(
 
   const allFiles = await scanDirectory(folder);
   const imageFiles = allFiles.filter(isImageFile);
-  const hashes = await Promise.all(imageFiles.map((file) => sha256ContentHash(file)));
-  const knownHashes = await cloudflareClient.checkHashes(hashes);
 
   let indexed = 0;
   let skipped = 0;
   let failed = 0;
 
+  // Hash each file independently: a single unreadable/dangling file must not
+  // abort the whole run. Files whose hash computation fails are counted as
+  // failed immediately and excluded from the rest of the pipeline.
+  const hashResults = await Promise.allSettled(imageFiles.map((file) => sha256ContentHash(file)));
+
+  const hashedFiles: string[] = [];
+  const hashedValues: string[] = [];
   for (let i = 0; i < imageFiles.length; i++) {
-    const file = imageFiles[i];
-    const contentHash = hashes[i];
+    const result = hashResults[i];
+    if (result.status === 'fulfilled') {
+      hashedFiles.push(imageFiles[i]);
+      hashedValues.push(result.value);
+    } else {
+      failed++;
+      const reason = result.reason;
+      onProgress?.(
+        `Failed: ${imageFiles[i]} (${reason instanceof Error ? reason.message : String(reason)})`
+      );
+    }
+  }
+
+  const knownHashes = await cloudflareClient.checkHashes(hashedValues);
+
+  // Track content hashes already handled in this run so byte-identical
+  // duplicates within the same folder don't get expensively re-analyzed.
+  const processedHashes = new Set<string>();
+
+  for (let i = 0; i < hashedFiles.length; i++) {
+    const file = hashedFiles[i];
+    const contentHash = hashedValues[i];
 
     if (knownHashes.has(contentHash)) {
       skipped++;
       onProgress?.(`Skipping already-indexed: ${file}`);
       continue;
     }
+
+    if (processedHashes.has(contentHash)) {
+      skipped++;
+      onProgress?.(`Skipping duplicate content in this run: ${file}`);
+      continue;
+    }
+    processedHashes.add(contentHash);
 
     try {
       const exif = await extractExifData(file);
@@ -80,8 +112,12 @@ export async function indexLocalFolder(
         modelName: config.OLLAMA_MODEL,
       };
 
-      await cloudflareClient.ingestPhoto(payload);
+      // Upload the thumbnail before creating the D1 row: the thumbnail PUT is
+      // safe to retry/duplicate (keyed by content hash), but once ingestPhoto
+      // succeeds, future runs' dedup check will skip this file forever, so we
+      // must not create the metadata row until we know the thumbnail landed.
       await cloudflareClient.uploadThumbnail(contentHash, thumbnail);
+      await cloudflareClient.ingestPhoto(payload);
       indexed++;
       onProgress?.(`Indexed: ${file}`);
     } catch (error) {

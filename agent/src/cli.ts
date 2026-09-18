@@ -15,17 +15,22 @@ export async function runCli(argv: string[]): Promise<number> {
   const cloudflareClient = new CloudflareClient(config);
   const ollamaClient = new OllamaClient(config);
 
-  const result = await indexLocalFolder(folder, {
-    cloudflareClient,
-    ollamaClient,
-    config,
-    onProgress: (message) => console.log(message),
-  });
+  try {
+    const result = await indexLocalFolder(folder, {
+      cloudflareClient,
+      ollamaClient,
+      config,
+      onProgress: (message) => console.log(message),
+    });
 
-  console.log(
-    `Done. Total: ${result.total}, Indexed: ${result.indexed}, Skipped: ${result.skipped}, Failed: ${result.failed}`
-  );
-  return 0;
+    console.log(
+      `Done. Total: ${result.total}, Indexed: ${result.indexed}, Skipped: ${result.skipped}, Failed: ${result.failed}`
+    );
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
 }
 
 const isMainModule = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
