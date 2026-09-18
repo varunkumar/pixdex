@@ -1,4 +1,6 @@
+import { createWriteStream } from 'node:fs';
 import type { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 export interface DriveFilesClient {
   list(params: {
@@ -68,4 +70,13 @@ export async function listImagesInDriveFolder(
   } while (pageToken);
 
   return images;
+}
+
+export async function downloadDriveFile(
+  client: DriveFilesClient,
+  fileId: string,
+  destPath: string
+): Promise<void> {
+  const response = await client.get({ fileId, alt: 'media' }, { responseType: 'stream' });
+  await pipeline(response.data, createWriteStream(destPath));
 }

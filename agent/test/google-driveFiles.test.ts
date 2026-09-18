@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-import { listDriveFolders, listImagesInDriveFolder, type DriveFilesClient } from '../src/google/driveFiles';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { downloadDriveFile, listDriveFolders, listImagesInDriveFolder, type DriveFilesClient } from '../src/google/driveFiles';
 
 describe('listDriveFolders', () => {
   it('searches by name and returns id/name pairs, escaping quotes in the query', async () => {
@@ -40,5 +44,28 @@ describe('listImagesInDriveFolder', () => {
     expect(list.mock.calls[1][0].pageToken).toBe('page2');
     expect(list.mock.calls[0][0].q).toContain("'folder-1' in parents");
     expect(list.mock.calls[0][0].q).toContain("mimeType contains 'image/'");
+  });
+});
+
+describe('downloadDriveFile', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'pixdex-drive-download-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('streams the file body to destPath', async () => {
+    const get = vi.fn().mockResolvedValue({ data: Readable.from([Buffer.from('fake jpeg bytes')]) });
+    const client: DriveFilesClient = { list: vi.fn(), get };
+    const destPath = path.join(dir, 'downloaded.jpg');
+
+    await downloadDriveFile(client, 'file-1', destPath);
+
+    expect(get).toHaveBeenCalledWith({ fileId: 'file-1', alt: 'media' }, { responseType: 'stream' });
+    expect((await readFile(destPath)).toString()).toBe('fake jpeg bytes');
   });
 });
