@@ -24,6 +24,16 @@ export interface IndexGoogleDriveFolderDeps {
   tempDir?: string;
 }
 
+// A throwing `onProgress` callback must not abort the folder-indexing loop
+// any more than a failed download/process/cleanup should. Swallow it.
+function reportProgress(onProgress: ((message: string) => void) | undefined, message: string): void {
+  try {
+    onProgress?.(message);
+  } catch {
+    // ignore: progress reporting is best-effort
+  }
+}
+
 export async function indexGoogleDriveFolder(
   driveClient: DriveFilesClient,
   folderId: string,
@@ -39,7 +49,11 @@ export async function indexGoogleDriveFolder(
   let failed = 0;
 
   for (const image of images) {
-    const tempPath = path.join(tempDir, `pixdex-drive-${randomUUID()}-${image.name}`);
+    // Use only a random UUID (plus the original extension, for format
+    // detection) in the temp filename. `image.name` is untrusted input from
+    // Drive and may contain path-meaningful characters (e.g. "../"), so it
+    // must never be interpolated directly into a filesystem path.
+    const tempPath = path.join(tempDir, `pixdex-drive-${randomUUID()}${path.extname(image.name)}`);
 
     try {
       await downloadDriveFile(driveClient, image.id, tempPath);
@@ -48,7 +62,7 @@ export async function indexGoogleDriveFolder(
 
       if (knownHashes.has(contentHash)) {
         skipped++;
-        onProgress?.(`Skipping already-indexed: ${image.name}`);
+        reportProgress(onProgress, `Skipping already-indexed: ${image.name}`);
         continue;
       }
 
@@ -64,12 +78,28 @@ export async function indexGoogleDriveFolder(
         { cloudflareClient, ollamaClient, config }
       );
       indexed++;
-      onProgress?.(`Indexed: ${image.name}`);
+      reportProgress(onProgress, `Indexed: ${image.name}`);
     } catch (error) {
       failed++;
-      onProgress?.(`Failed: ${image.name} (${error instanceof Error ? error.message : String(error)})`);
+      reportProgress(
+        onProgress,
+        `Failed: ${image.name} (${error instanceof Error ? error.message : String(error)})`
+      );
     } finally {
-      await rm(tempPath, { force: true });
+      // Best-effort cleanup: a locked file, AV scanner, or read-only temp
+      // dir can make `rm` reject even with `force: true` (which only
+      // suppresses ENOENT). A cleanup failure must never abort the rest of
+      // the folder, so it is swallowed here rather than propagated.
+      try {
+        await rm(tempPath, { force: true });
+      } catch (cleanupError) {
+        reportProgress(
+          onProgress,
+          `Cleanup failed for ${image.name} (${
+            cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+          })`
+        );
+      }
     }
   }
 
