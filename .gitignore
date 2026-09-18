@@ -72,3 +72,7 @@ Thumbs.db
 ehthumbs.db
 
 .zero/
+
+# Google Drive OAuth token (defense-in-depth; agent/.gitignore already
+# covers its normal location at agent/.google-token.json)
+.google-token.json
