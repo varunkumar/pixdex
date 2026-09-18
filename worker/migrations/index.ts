@@ -1,4 +1,7 @@
-CREATE TABLE IF NOT EXISTS photos (
+// Migration SQL statements exported for both CLI and test usage
+// Single source of truth to avoid duplication
+
+export const PHOTOS_MIGRATION_SQL = `CREATE TABLE IF NOT EXISTS photos (
   id TEXT PRIMARY KEY,
   content_hash TEXT NOT NULL UNIQUE,
   source TEXT NOT NULL,
@@ -48,4 +51,32 @@ END;
 CREATE TRIGGER IF NOT EXISTS photos_au AFTER UPDATE ON photos BEGIN
   INSERT INTO photos_fts(photos_fts, rowid, search_text) VALUES ('delete', old.rowid, old.search_text);
   INSERT INTO photos_fts(rowid, search_text) VALUES (new.rowid, new.search_text);
-END;
+END;`;
+
+// Split statements for test execution - each statement terminated with ;
+// Handle CREATE TRIGGER statements which span multiple lines with internal semicolons
+export const PHOTOS_MIGRATION_STATEMENTS = (() => {
+  const statements: string[] = [];
+  let current = '';
+  let inTrigger = false;
+
+  const lines = PHOTOS_MIGRATION_SQL.split('\n');
+  for (const line of lines) {
+    if (line.trim().startsWith('CREATE TRIGGER')) {
+      inTrigger = true;
+    }
+
+    current += line + '\n';
+
+    if (inTrigger && line.trim() === 'END;') {
+      statements.push(current.trim());
+      current = '';
+      inTrigger = false;
+    } else if (!inTrigger && line.trim().endsWith(';') && line.trim() !== '') {
+      statements.push(current.trim());
+      current = '';
+    }
+  }
+
+  return statements.filter((stmt) => stmt.length > 0);
+})();
