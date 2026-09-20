@@ -1,13 +1,28 @@
+import { createInterface } from 'node:readline/promises';
 import { loadConfig } from './config';
 import { CloudflareClient } from './cloudflareClient';
 import { OllamaClient } from './ollama/client';
 import { indexLocalFolder } from './indexLocalFolder';
+import { runIndexDrive } from './driveCli';
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, folder] = argv;
 
+  if (command === 'index-drive') {
+    const config = loadConfig();
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      return await runIndexDrive(config, { prompt: (question) => rl.question(question) });
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    } finally {
+      rl.close();
+    }
+  }
+
   if (command !== 'index-local' || !folder) {
-    console.error('Usage: pixdex-agent index-local <folder>');
+    console.error('Usage: pixdex-agent index-local <folder>\n       pixdex-agent index-drive');
     return 1;
   }
 

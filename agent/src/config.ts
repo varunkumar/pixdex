@@ -5,6 +5,8 @@ const configSchema = z.object({
   INGEST_TOKEN: z.string().min(1),
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
   OLLAMA_MODEL: z.string().min(1).default('qwen3.5:27b-mlx'),
+  GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
 });
 
 export type AgentConfig = z.infer<typeof configSchema>;
