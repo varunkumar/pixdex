@@ -17,14 +17,13 @@ import {
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { apiClient } from '../services/api/ApiClient';
-import { SearchCriteria } from '../types/photo';
+import { useSearchParams } from 'react-router-dom';
+import { workerApiClient } from '../services/api/WorkerApiClient';
 
 const Search = () => {
-  const [criteria, setCriteria] = useState<SearchCriteria>({
-    query: '',
-    album: '',
-  });
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState('');
+  const [album, setAlbum] = useState(searchParams.get('album') ?? '');
   const toast = useToast();
 
   const {
@@ -33,15 +32,14 @@ const Search = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['search', criteria],
-    queryFn: () => apiClient.searchPhotos(criteria),
+    queryKey: ['search', query, album],
+    queryFn: () => workerApiClient.search({ q: query, album }),
     enabled: false,
   });
 
-  // Add query for albums
   const { data: albums = [] } = useQuery({
     queryKey: ['albums'],
-    queryFn: () => apiClient.getAlbums(),
+    queryFn: () => workerApiClient.getAlbums(),
   });
 
   const handleSearch = () => {
@@ -60,24 +58,19 @@ const Search = () => {
       <Card mb={8}>
         <CardBody>
           <Stack spacing={4}>
-            <Grid
-              templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }}
-              gap={4}
-            >
+            <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
               <FormControl id="album-select">
                 <FormLabel>Album</FormLabel>
                 <Select
                   aria-label="Select photo album"
                   name="album"
                   placeholder="Select Album"
-                  value={criteria.album || ''}
-                  onChange={(e) =>
-                    setCriteria({ ...criteria, album: e.target.value })
-                  }
+                  value={album}
+                  onChange={(e) => setAlbum(e.target.value)}
                 >
-                  {albums.map((album) => (
-                    <option key={album} value={album}>
-                      {album}
+                  {albums.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
                     </option>
                   ))}
                 </Select>
@@ -86,19 +79,18 @@ const Search = () => {
                 <FormLabel>Search</FormLabel>
                 <ChakraInput
                   placeholder="Search photos..."
-                  value={criteria.query || ''}
-                  onChange={(e) =>
-                    setCriteria({ ...criteria, query: e.target.value })
-                  }
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearch();
+                    }
+                  }}
                 />
               </FormControl>
               <Box pt={{ base: 0, md: 8 }}>
-                <Button
-                  w="100%"
-                  colorScheme="teal"
-                  onClick={handleSearch}
-                  isLoading={isLoading}
-                >
+                <Button w="100%" colorScheme="teal" onClick={handleSearch} isLoading={isLoading}>
                   Search
                 </Button>
               </Box>
@@ -108,32 +100,25 @@ const Search = () => {
       </Card>
 
       {error && (
-        <Text color="red.500">
-          {error instanceof Error ? error.message : 'An error occurred'}
-        </Text>
+        <Text color="red.500">{error instanceof Error ? error.message : 'An error occurred'}</Text>
       )}
 
       <SimpleGrid columns={[1, 2, 3]} spacing={4}>
         {results.map((photo) => (
-          <Box
-            key={photo.id}
-            borderWidth={1}
-            borderRadius="lg"
-            overflow="hidden"
-          >
+          <Box key={photo.id} borderWidth={1} borderRadius="lg" overflow="hidden">
             <Image
-              src={`http://localhost:3001/api/photos/${photo.id}/content`}
-              alt={photo.aiMetadata.description}
+              src={workerApiClient.thumbnailUrl(photo)}
+              alt={photo.description ?? photo.filename ?? photo.id}
               objectFit="cover"
               height="200px"
               width="100%"
             />
             <Box p={4}>
               <Text fontSize="sm" mb={2}>
-                {photo.aiMetadata.description}
+                {photo.description}
               </Text>
               <Stack direction="row" flexWrap="wrap" gap={2}>
-                {photo.aiMetadata.tags.map((tag) => (
+                {photo.tags.map((tag) => (
                   <Tag key={tag} size="sm">
                     {tag}
                   </Tag>

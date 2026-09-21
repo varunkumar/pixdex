@@ -15,7 +15,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../services/api/ApiClient';
+import { workerApiClient } from '../services/api/WorkerApiClient';
 
 const DailySuggestion = () => {
   const toast = useToast();
@@ -25,31 +25,22 @@ const DailySuggestion = () => {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['dailySuggestion'],
-    queryFn: () => apiClient.getDailySuggestion(),
+    queryKey: ['dailyPick'],
+    queryFn: () => workerApiClient.getDailyPick(),
   });
 
   const handleCopyToClipboard = () => {
     if (!suggestion) return;
 
-    const content = `${
-      suggestion.suggestedCaption
-    }\n\n${suggestion.suggestedHashtags.map((tag) => `#${tag}`).join(' ')}`;
+    const content = `${suggestion.suggestedCaption}\n\n${suggestion.suggestedHashtags
+      .map((tag) => `#${tag}`)
+      .join(' ')}`;
     navigator.clipboard.writeText(content).then(
       () => {
-        toast({
-          title: 'Copied to clipboard',
-          status: 'success',
-          duration: 2000,
-        });
+        toast({ title: 'Copied to clipboard', status: 'success', duration: 2000 });
       },
       (err) => {
-        toast({
-          title: 'Failed to copy',
-          description: err.message,
-          status: 'error',
-          duration: 3000,
-        });
+        toast({ title: 'Failed to copy', description: err.message, status: 'error', duration: 3000 });
       }
     );
   };
@@ -70,15 +61,13 @@ const DailySuggestion = () => {
             </VStack>
           ) : error ? (
             <Text color="red.500">
-              {error instanceof Error
-                ? error.message
-                : 'An error occurred while loading the suggestion'}
+              {error instanceof Error ? error.message : 'An error occurred while loading the suggestion'}
             </Text>
           ) : suggestion ? (
             <VStack spacing={4} align="stretch">
               <Image
-                src={`http://localhost:3001/api/photos/${suggestion.photo.id}/content`}
-                alt={suggestion.photo.aiMetadata.description}
+                src={workerApiClient.thumbnailUrl(suggestion.photo)}
+                alt={suggestion.photo.description ?? suggestion.photo.filename ?? suggestion.photo.id}
                 borderRadius="lg"
                 objectFit="cover"
                 maxH="500px"
@@ -88,11 +77,7 @@ const DailySuggestion = () => {
               <Text>{suggestion.reason}</Text>
 
               <Text fontWeight="bold">Suggested Caption</Text>
-              <Textarea
-                value={suggestion.suggestedCaption}
-                isReadOnly
-                rows={4}
-              />
+              <Textarea value={suggestion.suggestedCaption} isReadOnly rows={4} />
 
               <Text fontWeight="bold">Suggested Hashtags</Text>
               <Flex gap={2} flexWrap="wrap">

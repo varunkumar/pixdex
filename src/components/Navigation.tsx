@@ -1,5 +1,5 @@
 import { Box, Flex, Icon, Link } from '@chakra-ui/react';
-import { MdAlbum, MdHome, MdPhoto, MdSearch, MdSettings } from 'react-icons/md';
+import { MdAlbum, MdHome, MdPhoto, MdSearch } from 'react-icons/md';
 import { Link as RouterLink } from 'react-router-dom';
 
 const Navigation = () => {
@@ -53,15 +53,6 @@ const Navigation = () => {
               alignItems="center"
             >
               <Icon as={MdPhoto} mr={2} /> Daily Pick
-            </Link>
-            <Link
-              as={RouterLink}
-              to="/settings"
-              color="white"
-              display="flex"
-              alignItems="center"
-            >
-              <Icon as={MdSettings} mr={2} /> Settings
             </Link>
           </Flex>
         </Flex>
