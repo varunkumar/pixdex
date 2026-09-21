@@ -51,6 +51,10 @@ export class WorkerApiClient {
   }
 }
 
+if (!import.meta.env.VITE_WORKER_API_BASE_URL) {
+  console.error('VITE_WORKER_API_BASE_URL is not set — API requests will fail.');
+}
+
 export const workerApiClient = new WorkerApiClient(
   import.meta.env.VITE_WORKER_API_BASE_URL ?? ''
 );
