@@ -57,5 +57,9 @@ export async function runCli(argv: string[]): Promise<number> {
 
 const isMainModule = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 if (isMainModule) {
-  runCli(process.argv.slice(2)).then((code) => process.exit(code));
+  runCli(process.argv.slice(2)).then((code) => {
+    if (code !== 0) {
+      process.exit(code);
+    }
+  });
 }

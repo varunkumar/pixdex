@@ -9,6 +9,7 @@ const config: AgentConfig = {
   OLLAMA_MODEL: 'qwen3.5:27b-mlx',
   GOOGLE_OAUTH_CLIENT_ID: 'client-id',
   GOOGLE_OAUTH_CLIENT_SECRET: 'client-secret',
+  ORIGINALS_PORT: 8787,
 };
 
 describe('runIndexDrive', () => {
