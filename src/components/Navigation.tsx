@@ -1,5 +1,5 @@
 import { Box, Flex, Icon, Link } from '@chakra-ui/react';
-import { MdAlbum, MdHome, MdPhoto, MdSearch } from 'react-icons/md';
+import { MdAlbum, MdHome, MdLogout, MdPhoto, MdSearch } from 'react-icons/md';
 import { Link as RouterLink } from 'react-router-dom';
 
 const Navigation = () => {
@@ -56,6 +56,15 @@ const Navigation = () => {
             </Link>
           </Flex>
         </Flex>
+
+        <Link
+          href="/cdn-cgi/access/logout"
+          color="white"
+          display="flex"
+          alignItems="center"
+        >
+          <Icon as={MdLogout} mr={2} /> Log out
+        </Link>
       </Flex>
     </Box>
   );
