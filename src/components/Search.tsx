@@ -17,11 +17,13 @@ import {
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 
 const Search = () => {
+  const [searchParams] = useSearchParams();
   const [query, setQuery] = useState('');
-  const [album, setAlbum] = useState('');
+  const [album, setAlbum] = useState(searchParams.get('album') ?? '');
   const toast = useToast();
 
   const {
