@@ -1,12 +1,12 @@
 name = "pixdex-worker"
 main = "src/index.ts"
-compatibility_date = "2026-09-18"
+compatibility_date = "2026-08-22"
 compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
 database_name = "pixdex"
-database_id = "REPLACE_AFTER_RUNNING_wrangler_d1_create"
+database_id = "f332865b-556c-4149-b4e4-a594ebc9334e"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
