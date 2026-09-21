@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DailySuggestion from '../DailySuggestion';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
+import type { SerializedPhoto } from '../../types/api';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: { getDailyPick: vi.fn(), thumbnailUrl: vi.fn(() => 'https://example.workers.dev/thumbnails/h1') },
@@ -21,7 +22,26 @@ function renderWithProviders(ui: React.ReactElement) {
 describe('DailySuggestion', () => {
   beforeEach(() => {
     vi.mocked(workerApiClient.getDailyPick).mockResolvedValue({
-      photo: { id: 'p1', thumbnailUrl: '/thumbnails/h1' } as any,
+      photo: {
+        id: 'p1',
+        path: null,
+        driveFileId: null,
+        dateTime: null,
+        width: null,
+        height: null,
+        format: null,
+        fileSize: null,
+        subjects: [],
+        colors: [],
+        patterns: [],
+        tags: [],
+        season: null,
+        environment: null,
+        album: null,
+        suggestedHashtags: [],
+        instagramSuggested: null,
+        thumbnailUrl: '/thumbnails/h1',
+      } satisfies SerializedPhoto,
       reason: 'It features a leopard in a forest setting.',
       suggestedCaption: 'Golden hour, golden coat.',
       suggestedHashtags: ['leopard', 'wildlife'],
