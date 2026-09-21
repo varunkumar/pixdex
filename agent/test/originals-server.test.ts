@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
@@ -66,6 +66,39 @@ describe('originals server', () => {
     });
     const response = await fetch(`${baseUrl}/originals/photo-1?token=originals-secret`);
     expect(response.status).toBe(404);
+  });
+
+  it('does not crash the server when the file errors while streaming after headers are already committed', async () => {
+    // access()/stat() only check existence, not readability, so a file that loses its read
+    // permission after being stat-ed (but before the read stream actually opens it) reproduces
+    // the same class of failure as a mid-request delete: the stream's 'error' event fires after
+    // res.writeHead(200, ...) has already run. This test is skipped when running as root, since
+    // root bypasses file permission checks and the read would then unexpectedly succeed.
+    if (process.getuid && process.getuid() === 0) {
+      return;
+    }
+
+    const restrictedPath = path.join(dir, 'restricted.jpg');
+    await writeFile(restrictedPath, 'fake jpeg bytes');
+    await chmod(restrictedPath, 0o000);
+
+    await start({
+      fetchIndexedPhoto: vi
+        .fn()
+        .mockResolvedValueOnce({ source: 'local', path: restrictedPath })
+        .mockResolvedValueOnce({ source: 'local', path: filePath }),
+    });
+
+    // The first request's stream errors before any bytes are flushed, so the connection is
+    // destroyed and the fetch itself rejects rather than resolving with a body.
+    await expect(fetch(`${baseUrl}/originals/photo-1?token=originals-secret`)).rejects.toBeTruthy();
+
+    // Crucially, the server process must still be alive and able to serve further requests.
+    const response = await fetch(`${baseUrl}/originals/photo-2?token=originals-secret`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('fake jpeg bytes');
+
+    await chmod(restrictedPath, 0o600);
   });
 
   it('returns 404 for an unrecognized path shape', async () => {

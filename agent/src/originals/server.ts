@@ -49,7 +49,15 @@ export function createOriginalsServer(
       const contentType = mime.lookup(photo.path) || 'application/octet-stream';
 
       res.writeHead(200, { 'Content-Type': contentType, 'Content-Length': stats.size });
-      createReadStream(photo.path).pipe(res);
+      const stream = createReadStream(photo.path);
+      stream.on('error', () => {
+        if (!res.headersSent) {
+          res.writeHead(404).end('Not Found');
+        } else {
+          res.destroy();
+        }
+      });
+      stream.pipe(res);
     } catch {
       res.writeHead(404).end('Not Found');
     }
