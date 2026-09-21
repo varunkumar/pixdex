@@ -7,6 +7,7 @@ import {
   Flex,
   Heading,
   Image,
+  Link,
   Skeleton,
   Tag,
   Text,
@@ -16,6 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { getOriginalUrl, originalsConfig } from '../services/originals';
 
 const DailySuggestion = () => {
   const toast = useToast();
@@ -91,6 +93,17 @@ const DailySuggestion = () => {
               <Button colorScheme="teal" onClick={handleCopyToClipboard}>
                 Copy to Clipboard
               </Button>
+
+              {(() => {
+                const originalUrl = getOriginalUrl(suggestion.photo, originalsConfig);
+                return (
+                  originalUrl && (
+                    <Link href={originalUrl} isExternal color="teal.500">
+                      View Original
+                    </Link>
+                  )
+                );
+              })()}
             </VStack>
           ) : (
             <Text>No suggestion available</Text>

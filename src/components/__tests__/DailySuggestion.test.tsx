@@ -10,6 +10,11 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: { getDailyPick: vi.fn(), thumbnailUrl: vi.fn(() => 'https://example.workers.dev/thumbnails/h1') },
 }));
 
+vi.mock('../../services/originals', () => ({
+  getOriginalUrl: vi.fn(() => 'https://pixdex-originals.example.com/originals/p1?token=shh'),
+  originalsConfig: {},
+}));
+
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient();
   return render(
@@ -55,5 +60,13 @@ describe('DailySuggestion', () => {
     expect(screen.getByText('#leopard')).toBeInTheDocument();
     expect(screen.getByText('It features a leopard in a forest setting.')).toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAttribute('src', 'https://example.workers.dev/thumbnails/h1');
+  });
+
+  it('shows a "View Original" link when getOriginalUrl resolves one', async () => {
+    renderWithProviders(<DailySuggestion />);
+
+    const link = await screen.findByRole('link', { name: /view original/i });
+    expect(link).toHaveAttribute('href', 'https://pixdex-originals.example.com/originals/p1?token=shh');
+    expect(link).toHaveAttribute('target', '_blank');
   });
 });
