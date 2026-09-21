@@ -45,6 +45,14 @@ run any backend of its own.
    npm run dev
    ```
 
+## Originals (optional)
+
+Search results and the daily pick show thumbnails only by default. To enable
+"View Original" for local-disk photos (Drive-sourced photos always deep-link
+to Drive, no setup needed), follow `agent/cloudflared/README.md` once, then
+set `VITE_ORIGINALS_BASE_URL` and `VITE_ORIGINALS_TOKEN` in this app's `.env`
+to match.
+
 ## Testing
 
 ```bash
