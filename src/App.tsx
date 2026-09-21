@@ -6,7 +6,6 @@ import DailySuggestion from './components/DailySuggestion';
 import Dashboard from './components/Dashboard';
 import Navigation from './components/Navigation';
 import Search from './components/Search';
-import Settings from './components/Settings';
 
 const queryClient = new QueryClient();
 
@@ -24,7 +23,6 @@ function App() {
                   <Route path="/albums" element={<Albums />} />
                   <Route path="/search" element={<Search />} />
                   <Route path="/daily" element={<DailySuggestion />} />
-                  <Route path="/settings" element={<Settings />} />
                 </Routes>
               </Container>
             </Box>
