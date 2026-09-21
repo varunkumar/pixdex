@@ -1,0 +1,9 @@
+# Fill in <TUNNEL_ID> after running `cloudflared tunnel create pixdex-originals`
+# (see README.md in this directory for the full one-time setup).
+tunnel: <TUNNEL_ID>
+credentials-file: ~/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  - hostname: pixdex-originals.<your-domain>
+    service: http://localhost:8787
+  - service: http_status:404
