@@ -7,10 +7,10 @@ describe('WorkerApiClient', () => {
 
   beforeEach(() => {
     fetchMock = vi.fn();
-    client = new WorkerApiClient('https://example.workers.dev', fetchMock as unknown as typeof fetch);
+    client = new WorkerApiClient('https://example.workers.dev', 'the-read-token', fetchMock as unknown as typeof fetch);
   });
 
-  it('search() builds the query string and returns results', async () => {
+  it('search() builds the query string, sends the read token, and returns results', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ results: [{ id: 'p1', thumbnailUrl: '/thumbnails/h1' }] }), { status: 200 })
     );
@@ -18,8 +18,9 @@ describe('WorkerApiClient', () => {
     const results = await client.search({ q: 'big cat', album: 'Kanha' });
 
     expect(results).toEqual([{ id: 'p1', thumbnailUrl: '/thumbnails/h1' }]);
-    const [url] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://example.workers.dev/search?q=big+cat&album=Kanha');
+    expect(init).toEqual({ headers: { Authorization: 'Bearer the-read-token' } });
   });
 
   it('getAlbums() returns the albums array', async () => {
@@ -41,9 +42,13 @@ describe('WorkerApiClient', () => {
     expect(await client.getDailyPick()).toEqual(payload);
   });
 
-  it('thumbnailUrl() joins the base URL with the relative path', () => {
+  it('thumbnailUrl() joins the base URL with the relative path and appends the read token', () => {
     expect(client.thumbnailUrl({ thumbnailUrl: '/thumbnails/h1' })).toBe(
-      'https://example.workers.dev/thumbnails/h1'
+      'https://example.workers.dev/thumbnails/h1?token=the-read-token'
     );
+  });
+
+  it('thumbnailUrl() returns an empty string when there is no thumbnail', () => {
+    expect(client.thumbnailUrl({ thumbnailUrl: undefined })).toBe('');
   });
 });

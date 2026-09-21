@@ -13,6 +13,7 @@ const config: AgentConfig = {
   OLLAMA_MODEL: 'qwen3.5:27b-mlx',
   ORIGINALS_PORT: 8787,
   ORIGINALS_TOKEN: 'originals-secret',
+  READ_TOKEN: 'the-read-token',
 };
 
 describe('originals server', () => {

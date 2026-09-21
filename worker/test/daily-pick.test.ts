@@ -19,7 +19,7 @@ describe('GET /daily-pick', () => {
     await seed('sparse', ['leopard'], 'A leopard.', null);
     await seed('rich', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets over the forest.', null);
 
-    const response = await SELF.fetch('https://example.com/daily-pick');
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('rich');
     expect(body.suggestedCaption).toBe('caption');
@@ -32,7 +32,7 @@ describe('GET /daily-pick', () => {
     await seed('recent', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets.', recentlySuggested);
     await seed('eligible', ['leopard'], 'A leopard.', null);
 
-    const response = await SELF.fetch('https://example.com/daily-pick');
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('eligible');
   });
@@ -41,9 +41,9 @@ describe('GET /daily-pick', () => {
     await seed('sparse', ['leopard'], 'A leopard.', null);
     await seed('rich', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets over the forest.', null);
 
-    const first = (await (await SELF.fetch('https://example.com/daily-pick')).json()) as any;
-    const second = (await (await SELF.fetch('https://example.com/daily-pick')).json()) as any;
-    const third = (await (await SELF.fetch('https://example.com/daily-pick')).json()) as any;
+    const first = (await (await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } })).json()) as any;
+    const second = (await (await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } })).json()) as any;
+    const third = (await (await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } })).json()) as any;
 
     expect(first.photo.id).toBe('rich');
     expect(second.photo.id).toBe('rich');
@@ -60,7 +60,7 @@ describe('GET /daily-pick', () => {
   it('returns the clean camelCase photo shape including thumbnailUrl', async () => {
     await seed('rich', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets over the forest.', null);
 
-    const response = await SELF.fetch('https://example.com/daily-pick');
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
     const body = (await response.json()) as any;
     expect(body.photo.thumbnailUrl).toBe('/thumbnails/hash-rich');
     expect(body.photo.subjects).toEqual(['leopard', 'tree', 'sunset']);

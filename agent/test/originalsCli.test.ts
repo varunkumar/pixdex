@@ -9,6 +9,7 @@ const baseConfig: AgentConfig = {
   OLLAMA_MODEL: 'qwen3.5:27b-mlx',
   ORIGINALS_PORT: 8787,
   ORIGINALS_TOKEN: 'originals-secret',
+  READ_TOKEN: 'the-read-token',
 };
 
 describe('runServeOriginals', () => {
@@ -26,6 +27,14 @@ describe('runServeOriginals', () => {
   it('returns 1 without starting a server when ORIGINALS_TOKEN is unset', () => {
     const createServer = vi.fn();
     const code = runServeOriginals({ ...baseConfig, ORIGINALS_TOKEN: undefined }, { createServer });
+
+    expect(code).toBe(1);
+    expect(createServer).not.toHaveBeenCalled();
+  });
+
+  it('returns 1 without starting a server when READ_TOKEN is unset', () => {
+    const createServer = vi.fn();
+    const code = runServeOriginals({ ...baseConfig, READ_TOKEN: undefined }, { createServer });
 
     expect(code).toBe(1);
     expect(createServer).not.toHaveBeenCalled();

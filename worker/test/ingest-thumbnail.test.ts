@@ -14,7 +14,7 @@ describe('thumbnail upload + retrieval', () => {
     });
     expect(put.status).toBe(201);
 
-    const get = await SELF.fetch(`https://example.com/thumbnails/${VALID_HASH}`);
+    const get = await SELF.fetch(`https://example.com/thumbnails/${VALID_HASH}?token=${env.READ_TOKEN}`);
     expect(get.status).toBe(200);
     expect(get.headers.get('Content-Type')).toBe('image/jpeg');
     expect(get.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
@@ -22,7 +22,7 @@ describe('thumbnail upload + retrieval', () => {
   });
 
   it('returns 404 for a missing thumbnail', async () => {
-    const get = await SELF.fetch('https://example.com/thumbnails/does-not-exist');
+    const get = await SELF.fetch(`https://example.com/thumbnails/does-not-exist?token=${env.READ_TOKEN}`);
     expect(get.status).toBe(404);
   });
 

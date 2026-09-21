@@ -18,7 +18,9 @@ describe('GET /search', () => {
   });
 
   it('finds a synonym-expanded match via "big cat"', async () => {
-    const response = await SELF.fetch('https://example.com/search?q=big%20cat');
+    const response = await SELF.fetch('https://example.com/search?q=big%20cat', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
     const body = (await response.json()) as any;
     expect(response.status).toBe(200);
     expect(body.results.map((r: { id: string }) => r.id)).toEqual(['photo-leopard']);
@@ -27,13 +29,17 @@ describe('GET /search', () => {
   });
 
   it('filters by album', async () => {
-    const response = await SELF.fetch('https://example.com/search?album=Kaziranga');
+    const response = await SELF.fetch('https://example.com/search?album=Kaziranga', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
     const body = (await response.json()) as any;
     expect(body.results.map((r: { id: string }) => r.id)).toEqual(['photo-elephant']);
   });
 
   it('clamps a negative limit instead of returning the whole table', async () => {
-    const response = await SELF.fetch('https://example.com/search?limit=-1');
+    const response = await SELF.fetch('https://example.com/search?limit=-1', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
     const body = (await response.json()) as any;
     expect(response.status).toBe(200);
     // A negative/garbage limit must not turn into SQLite's "LIMIT -1" (unlimited).
@@ -42,7 +48,9 @@ describe('GET /search', () => {
   });
 
   it('clamps a negative offset to zero', async () => {
-    const response = await SELF.fetch('https://example.com/search?offset=-5');
+    const response = await SELF.fetch('https://example.com/search?offset=-5', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
     expect(response.status).toBe(200);
     const body = (await response.json()) as any;
     expect(body.results.length).toBe(2);

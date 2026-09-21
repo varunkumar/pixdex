@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireIngestToken } from './auth';
+import { requireIngestToken, requireReadToken } from './auth';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
@@ -22,13 +22,19 @@ app.post('/ingest/check-hashes', checkHashesRoute);
 app.post('/ingest/photo', ingestPhotoRoute);
 app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);
 
+app.use('/thumbnails/*', requireReadToken);
 app.get('/thumbnails/:contentHash', getThumbnailRoute);
 
+app.use('/search', requireReadToken);
 app.get('/search', searchRoute);
 
+app.use('/photos/*', requireReadToken);
 app.get('/photos/:id', getPhotoRoute);
+
+app.use('/albums', requireReadToken);
 app.get('/albums', getAlbumsRoute);
 
+app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);
 
 export default app;

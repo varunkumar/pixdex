@@ -33,10 +33,14 @@ run any backend of its own.
 2. Configure environment variables:
 
    Copy `.env.example` to `.env` and set `VITE_WORKER_API_BASE_URL` to your
-   deployed worker's URL:
+   deployed worker's URL, and `VITE_WORKER_READ_TOKEN` to the same value as
+   the worker's `READ_TOKEN` secret (every read endpoint — search, albums,
+   a photo, the daily pick, thumbnails — requires this token; there is no
+   anonymous read access):
 
    ```
    VITE_WORKER_API_BASE_URL=https://pixdex-worker.<your-subdomain>.workers.dev
+   VITE_WORKER_READ_TOKEN=<same value as the worker's READ_TOKEN secret>
    ```
 
 3. Start the development server:

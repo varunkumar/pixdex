@@ -6,9 +6,12 @@ export interface IndexedPhotoLookup {
 export async function fetchIndexedPhoto(
   baseUrl: string,
   id: string,
+  readToken: string,
   fetchFn: typeof fetch = fetch
 ): Promise<IndexedPhotoLookup | null> {
-  const response = await fetchFn(`${baseUrl}/photos/${id}`);
+  const response = await fetchFn(`${baseUrl}/photos/${id}`, {
+    headers: { Authorization: `Bearer ${readToken}` },
+  });
 
   if (response.status === 404) {
     return null;

@@ -11,6 +11,11 @@ export function runServeOriginals(config: AgentConfig, deps: RunServeOriginalsDe
     return 1;
   }
 
+  if (!config.READ_TOKEN) {
+    console.error('READ_TOKEN must be set to run serve-originals');
+    return 1;
+  }
+
   const { createServer = createOriginalsServer } = deps;
   const server = createServer(config);
 

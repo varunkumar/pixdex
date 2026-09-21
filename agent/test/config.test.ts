@@ -45,4 +45,19 @@ describe('loadConfig', () => {
     expect(config.ORIGINALS_PORT).toBe(9000);
     expect(config.ORIGINALS_TOKEN).toBe('originals-secret');
   });
+
+  it('leaves READ_TOKEN unset by default and respects an explicit override', () => {
+    const withoutToken = loadConfig({
+      CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
+      INGEST_TOKEN: 'secret-token',
+    });
+    expect(withoutToken.READ_TOKEN).toBeUndefined();
+
+    const withToken = loadConfig({
+      CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
+      INGEST_TOKEN: 'secret-token',
+      READ_TOKEN: 'read-secret',
+    });
+    expect(withToken.READ_TOKEN).toBe('read-secret');
+  });
 });
