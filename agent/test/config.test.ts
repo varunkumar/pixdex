@@ -25,4 +25,24 @@ describe('loadConfig', () => {
     });
     expect(config.OLLAMA_MODEL).toBe('some-other-model');
   });
+
+  it('defaults ORIGINALS_PORT to 8787 and leaves ORIGINALS_TOKEN unset', () => {
+    const config = loadConfig({
+      CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
+      INGEST_TOKEN: 'secret-token',
+    });
+    expect(config.ORIGINALS_PORT).toBe(8787);
+    expect(config.ORIGINALS_TOKEN).toBeUndefined();
+  });
+
+  it('respects explicit ORIGINALS_PORT and ORIGINALS_TOKEN overrides', () => {
+    const config = loadConfig({
+      CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
+      INGEST_TOKEN: 'secret-token',
+      ORIGINALS_PORT: '9000',
+      ORIGINALS_TOKEN: 'originals-secret',
+    });
+    expect(config.ORIGINALS_PORT).toBe(9000);
+    expect(config.ORIGINALS_TOKEN).toBe('originals-secret');
+  });
 });

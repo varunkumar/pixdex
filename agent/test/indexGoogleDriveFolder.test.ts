@@ -13,6 +13,7 @@ const config: AgentConfig = {
   INGEST_TOKEN: 'secret-token',
   OLLAMA_BASE_URL: 'http://localhost:11434',
   OLLAMA_MODEL: 'qwen3.5:27b-mlx',
+  ORIGINALS_PORT: 8787,
 };
 
 const SAMPLE_RESPONSE = `SUBJECTS: leopard

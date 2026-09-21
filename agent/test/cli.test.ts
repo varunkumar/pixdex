@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const loadConfigMock = vi.fn();
 const indexLocalFolderMock = vi.fn();
 const runIndexDriveMock = vi.fn();
+const runServeOriginalsMock = vi.fn();
 
 vi.mock('../src/config', () => ({ loadConfig: loadConfigMock }));
 vi.mock('../src/indexLocalFolder', () => ({ indexLocalFolder: indexLocalFolderMock }));
 vi.mock('../src/cloudflareClient', () => ({ CloudflareClient: vi.fn() }));
 vi.mock('../src/ollama/client', () => ({ OllamaClient: vi.fn() }));
 vi.mock('../src/driveCli', () => ({ runIndexDrive: runIndexDriveMock }));
+vi.mock('../src/originalsCli', () => ({ runServeOriginals: runServeOriginalsMock }));
 
 const { runCli } = await import('../src/cli');
 
@@ -57,5 +59,12 @@ describe('runCli', () => {
     expect(code).toBe(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith('Error: Token refresh failed');
     consoleErrorSpy.mockRestore();
+  });
+
+  it('delegates "serve-originals" to runServeOriginals', async () => {
+    runServeOriginalsMock.mockReset().mockReturnValue(0);
+    const code = await runCli(['serve-originals']);
+    expect(code).toBe(0);
+    expect(runServeOriginalsMock).toHaveBeenCalledWith(expect.any(Object));
   });
 });

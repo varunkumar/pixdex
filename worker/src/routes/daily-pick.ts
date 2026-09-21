@@ -12,7 +12,7 @@ const SEASON_MONTHS: Record<string, number[]> = {
 // Only the columns the route actually reads, to keep D1 row-read cost down
 // (this endpoint is unauthenticated and can be called by anyone).
 const SELECT_COLUMNS =
-  'id, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested';
+  'id, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested, source, drive_file_id';
 
 function isEligible(row: PhotoRow): boolean {
   if (!row.instagram_suggested) return true;

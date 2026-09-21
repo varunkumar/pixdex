@@ -7,6 +7,8 @@ const configSchema = z.object({
   OLLAMA_MODEL: z.string().min(1).default('qwen3.5:27b-mlx'),
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+  ORIGINALS_PORT: z.coerce.number().int().positive().default(8787),
+  ORIGINALS_TOKEN: z.string().min(1).optional(),
 });
 
 export type AgentConfig = z.infer<typeof configSchema>;

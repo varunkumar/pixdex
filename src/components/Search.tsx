@@ -8,6 +8,7 @@ import {
   FormLabel,
   Grid,
   Image,
+  Link,
   Select,
   SimpleGrid,
   Stack,
@@ -19,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { getOriginalUrl, originalsConfig } from '../services/originals';
 
 const Search = () => {
   const [searchParams] = useSearchParams();
@@ -124,6 +126,16 @@ const Search = () => {
                   </Tag>
                 ))}
               </Stack>
+              {(() => {
+                const originalUrl = getOriginalUrl(photo, originalsConfig);
+                return (
+                  originalUrl && (
+                    <Link href={originalUrl} isExternal fontSize="sm" color="teal.500" mt={2} display="inline-block">
+                      View Original
+                    </Link>
+                  )
+                );
+              })()}
             </Box>
           </Box>
         ))}

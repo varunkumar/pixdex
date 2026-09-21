@@ -18,6 +18,11 @@ vi.mock('../../services/api/WorkerApiClient', async () => {
   };
 });
 
+vi.mock('../../services/originals', () => ({
+  getOriginalUrl: vi.fn(() => 'https://pixdex-originals.example.com/originals/p1?token=shh'),
+  originalsConfig: {},
+}));
+
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient();
   return render(
@@ -73,5 +78,14 @@ describe('Search', () => {
       'src',
       'https://example.workers.dev/thumbnails/h1'
     );
+  });
+
+  it('shows a "View Original" link when getOriginalUrl resolves one', async () => {
+    renderWithProviders(<Search />);
+    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+
+    const link = await screen.findByRole('link', { name: /view original/i });
+    expect(link).toHaveAttribute('href', 'https://pixdex-originals.example.com/originals/p1?token=shh');
+    expect(link).toHaveAttribute('target', '_blank');
   });
 });
