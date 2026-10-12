@@ -1,0 +1,9 @@
+ALTER TABLE photos ADD COLUMN camera_make TEXT;
+ALTER TABLE photos ADD COLUMN camera_model TEXT;
+ALTER TABLE photos ADD COLUMN lens_model TEXT;
+ALTER TABLE photos ADD COLUMN focal_length REAL;
+ALTER TABLE photos ADD COLUMN f_number REAL;
+ALTER TABLE photos ADD COLUMN exposure_time REAL;
+ALTER TABLE photos ADD COLUMN iso INTEGER;
+ALTER TABLE photos ADD COLUMN latitude REAL;
+ALTER TABLE photos ADD COLUMN longitude REAL;

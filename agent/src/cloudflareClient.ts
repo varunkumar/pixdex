@@ -1,4 +1,5 @@
 import type { AgentConfig } from './config';
+import type { CameraExif } from './exif';
 
 const CHECK_HASHES_BATCH_SIZE = 500;
 
@@ -26,6 +27,15 @@ export interface IngestPhotoPayload {
   suggestedHashtags: string[];
   modelProvider: string;
   modelName: string;
+  cameraMake?: string;
+  cameraModel?: string;
+  lensModel?: string;
+  focalLength?: number;
+  fNumber?: number;
+  exposureTime?: number;
+  iso?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export class CloudflareClient {
@@ -70,6 +80,20 @@ export class CloudflareClient {
     if (!response.ok) {
       throw new Error(`ingest/photo failed: ${response.status}`);
     }
+  }
+
+  /** Sets camera/EXIF columns on an already-indexed photo; false if the hash is unknown. */
+  async updateExif(contentHash: string, camera: CameraExif): Promise<boolean> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/exif`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ contentHash, ...camera }),
+    });
+    if (response.status === 404) return false;
+    if (!response.ok) {
+      throw new Error(`ingest/exif failed: ${response.status}`);
+    }
+    return true;
   }
 
   async uploadThumbnail(contentHash: string, bytes: Buffer): Promise<void> {

@@ -18,6 +18,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { getOriginalUrl } from '../services/originals';
+import PhotoMeta from './PhotoMeta';
 
 const DailySuggestion = () => {
   const toast = useToast();
@@ -76,6 +77,7 @@ const DailySuggestion = () => {
                 maxH="500px"
                 w="100%"
               />
+              <PhotoMeta photo={suggestion.photo} />
 
               <Text fontWeight="bold">Why this photo?</Text>
               <Text>{suggestion.reason}</Text>

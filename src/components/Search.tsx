@@ -21,6 +21,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { getOriginalUrl } from '../services/originals';
+import PhotoMeta from './PhotoMeta';
 
 const Search = () => {
   const [searchParams] = useSearchParams();
@@ -120,6 +121,7 @@ const Search = () => {
               <Text fontSize="sm" mb={2}>
                 {photo.description}
               </Text>
+              <PhotoMeta photo={photo} />
               <Stack direction="row" flexWrap="wrap" gap={2}>
                 {photo.tags.map((tag) => (
                   <Tag key={tag} size="sm">

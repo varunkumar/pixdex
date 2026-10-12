@@ -51,6 +51,17 @@ run any backend of its own.
    npm run dev
    ```
 
+## Camera details
+
+Indexing also stores camera make/model, lens, focal length, aperture, shutter
+speed, ISO and GPS (when the file has it) as columns, and shows them on result
+cards. To fill these in for photos that were indexed earlier, without another
+vision pass:
+
+```bash
+cd agent && npm run dev -- backfill-exif "/path/to/folder"
+```
+
 ## Originals (optional)
 
 Search results and the daily pick show thumbnails only by default. To enable

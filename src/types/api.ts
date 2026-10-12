@@ -25,6 +25,15 @@ export interface SerializedPhoto {
   lastIndexed?: string;
   instagramSuggested: string | null;
   thumbnailUrl?: string;
+  cameraMake?: string | null;
+  cameraModel?: string | null;
+  lensModel?: string | null;
+  focalLength?: number | null;
+  fNumber?: number | null;
+  exposureTime?: number | null;
+  iso?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface SearchResponse {

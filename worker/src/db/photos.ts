@@ -1,5 +1,20 @@
 import { z } from 'zod';
 
+// Standard camera/EXIF details, stored as first-class columns.
+export const exifFieldsSchema = z.object({
+  cameraMake: z.string().optional(),
+  cameraModel: z.string().optional(),
+  lensModel: z.string().optional(),
+  focalLength: z.number().optional(),
+  fNumber: z.number().optional(),
+  exposureTime: z.number().optional(),
+  iso: z.number().int().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+});
+
+export type ExifFields = z.infer<typeof exifFieldsSchema>;
+
 export const ingestPhotoSchema = z.object({
   id: z.string().uuid(),
   contentHash: z.string().min(1),
@@ -24,7 +39,7 @@ export const ingestPhotoSchema = z.object({
   suggestedHashtags: z.array(z.string()).default([]),
   modelProvider: z.string().min(1),
   modelName: z.string().min(1),
-});
+}).merge(exifFieldsSchema);
 
 export type IngestPhotoInput = z.infer<typeof ingestPhotoSchema>;
 
@@ -55,6 +70,15 @@ export interface PhotoRow {
   search_text?: string;
   last_indexed?: string;
   instagram_suggested?: string | null;
+  camera_make?: string | null;
+  camera_model?: string | null;
+  lens_model?: string | null;
+  focal_length?: number | null;
+  f_number?: number | null;
+  exposure_time?: number | null;
+  iso?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
   [key: string]: unknown;
 }
 
@@ -85,6 +109,15 @@ export interface SerializedPhoto {
   lastIndexed?: string;
   instagramSuggested: string | null;
   thumbnailUrl?: string;
+  cameraMake: string | null;
+  cameraModel: string | null;
+  lensModel: string | null;
+  focalLength: number | null;
+  fNumber: number | null;
+  exposureTime: number | null;
+  iso: number | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 function parseJsonArray(value: string | undefined | null): unknown[] {
@@ -130,6 +163,15 @@ export function serializePhoto(row: PhotoRow): SerializedPhoto {
     lastIndexed: row.last_indexed,
     instagramSuggested: row.instagram_suggested ?? null,
     thumbnailUrl: row.content_hash ? `/thumbnails/${row.content_hash}` : undefined,
+    cameraMake: row.camera_make ?? null,
+    cameraModel: row.camera_model ?? null,
+    lensModel: row.lens_model ?? null,
+    focalLength: row.focal_length ?? null,
+    fNumber: row.f_number ?? null,
+    exposureTime: row.exposure_time ?? null,
+    iso: row.iso ?? null,
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
   };
 }
 
@@ -139,6 +181,8 @@ export function buildSearchText(input: {
   description: string;
   environment?: string;
   album?: string;
+  cameraModel?: string;
+  lensModel?: string;
 }): string {
   return [
     ...input.subjects,
@@ -146,6 +190,8 @@ export function buildSearchText(input: {
     input.description,
     input.environment ?? '',
     input.album ?? '',
+    input.cameraModel ?? '',
+    input.lensModel ?? '',
   ]
     .filter(Boolean)
     .join(' ');

@@ -24,8 +24,10 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          id, content_hash, source, path, drive_file_id, filename, date_time,
          width, height, format, file_size, subjects, colors, patterns, tags,
          season, environment, album, description, suggested_caption,
-         suggested_hashtags, model_provider, model_name, search_text, last_indexed
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         suggested_hashtags, model_provider, model_name, search_text, last_indexed,
+         camera_make, camera_model, lens_model, focal_length, f_number,
+         exposure_time, iso, latitude, longitude
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          content_hash = excluded.content_hash,
          source = excluded.source,
@@ -50,7 +52,16 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          model_provider = excluded.model_provider,
          model_name = excluded.model_name,
          search_text = excluded.search_text,
-         last_indexed = excluded.last_indexed`
+         last_indexed = excluded.last_indexed,
+         camera_make = excluded.camera_make,
+         camera_model = excluded.camera_model,
+         lens_model = excluded.lens_model,
+         focal_length = excluded.focal_length,
+         f_number = excluded.f_number,
+         exposure_time = excluded.exposure_time,
+         iso = excluded.iso,
+         latitude = excluded.latitude,
+         longitude = excluded.longitude`
     )
       .bind(
         p.id, p.contentHash, p.source, p.path ?? null, p.driveFileId ?? null, p.filename,
@@ -58,7 +69,10 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
         JSON.stringify(p.subjects), JSON.stringify(p.colors), JSON.stringify(p.patterns), JSON.stringify(p.tags),
         p.season ?? null, p.environment ?? null, p.album ?? null, p.description,
         p.suggestedCaption, JSON.stringify(p.suggestedHashtags), p.modelProvider, p.modelName,
-        searchText, now
+        searchText, now,
+        p.cameraMake ?? null, p.cameraModel ?? null, p.lensModel ?? null,
+        p.focalLength ?? null, p.fNumber ?? null, p.exposureTime ?? null,
+        p.iso ?? null, p.latitude ?? null, p.longitude ?? null
       )
       .run();
   } catch (err) {

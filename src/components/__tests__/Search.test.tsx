@@ -57,6 +57,12 @@ describe('Search', () => {
         suggestedHashtags: [],
         instagramSuggested: null,
         thumbnailUrl: '/thumbnails/h1',
+        cameraModel: 'NIKON Z 8',
+        lensModel: 'VR 200-500mm f/5.6E',
+        focalLength: 500,
+        fNumber: 5.6,
+        exposureTime: 0.004,
+        iso: 2500,
       },
     ]);
   });
@@ -77,6 +83,15 @@ describe('Search', () => {
       'src',
       'https://example.workers.dev/thumbnails/h1'
     );
+  });
+
+  it('shows camera, lens and exposure details on each result', async () => {
+    renderWithProviders(<Search />);
+    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+
+    expect(
+      await screen.findByText('NIKON Z 8 · VR 200-500mm f/5.6E · 500mm · f/5.6 · 1/250s · ISO 2500')
+    ).toBeInTheDocument();
   });
 
   it('shows a "View Original" link when getOriginalUrl resolves one', async () => {

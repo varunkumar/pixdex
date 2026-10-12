@@ -29,4 +29,31 @@ describe('extractExifData', () => {
     expect(result.format).toBe('jpeg');
     expect(result.dateTime).toBeUndefined();
   });
+
+  it('reads camera make, model and lens from EXIF', async () => {
+    const withExif = path.join(dir, 'camera.jpg');
+    await sharp({ create: { width: 100, height: 100, channels: 3, background: { r: 1, g: 2, b: 3 } } })
+      .withExif({ IFD0: { Make: 'NIKON CORPORATION', Model: 'NIKON Z 8' } })
+      .jpeg()
+      .toFile(withExif);
+
+    const result = await extractExifData(withExif);
+    expect(result.camera.cameraMake).toBe('NIKON CORPORATION');
+    expect(result.camera.cameraModel).toBe('NIKON Z 8');
+  });
+
+  it('leaves camera fields undefined when the file has none', async () => {
+    const result = await extractExifData(filePath);
+    expect(result.camera).toEqual({
+      cameraMake: undefined,
+      cameraModel: undefined,
+      lensModel: undefined,
+      focalLength: undefined,
+      fNumber: undefined,
+      exposureTime: undefined,
+      iso: undefined,
+      latitude: undefined,
+      longitude: undefined,
+    });
+  });
 });

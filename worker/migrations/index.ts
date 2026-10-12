@@ -55,7 +55,7 @@ END;`;
 
 // Split statements for test execution - each statement terminated with ;
 // Handle CREATE TRIGGER statements which span multiple lines with internal semicolons
-export const PHOTOS_MIGRATION_STATEMENTS = (() => {
+const BASE_MIGRATION_STATEMENTS = (() => {
   const statements: string[] = [];
   let current = '';
   let inTrigger = false;
@@ -80,3 +80,18 @@ export const PHOTOS_MIGRATION_STATEMENTS = (() => {
 
   return statements.filter((stmt) => stmt.length > 0);
 })();
+
+// Mirrors 0002_exif_fields.sql (same single-source-for-tests rationale as above).
+export const EXIF_MIGRATION_STATEMENTS = [
+  'ALTER TABLE photos ADD COLUMN camera_make TEXT;',
+  'ALTER TABLE photos ADD COLUMN camera_model TEXT;',
+  'ALTER TABLE photos ADD COLUMN lens_model TEXT;',
+  'ALTER TABLE photos ADD COLUMN focal_length REAL;',
+  'ALTER TABLE photos ADD COLUMN f_number REAL;',
+  'ALTER TABLE photos ADD COLUMN exposure_time REAL;',
+  'ALTER TABLE photos ADD COLUMN iso INTEGER;',
+  'ALTER TABLE photos ADD COLUMN latitude REAL;',
+  'ALTER TABLE photos ADD COLUMN longitude REAL;',
+];
+
+export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

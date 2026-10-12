@@ -56,6 +56,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     suggestedHashtags: parseHashtagList(hashtags),
     modelProvider: 'ollama',
     modelName: config.OLLAMA_MODEL,
+    ...exif.camera,
   };
 
   // Upload the thumbnail before creating the D1 row: the thumbnail PUT is

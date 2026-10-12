@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { requireIngestToken, requireReadToken } from './auth';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
+import { ingestExifRoute } from './routes/ingest-exif';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { getAlbumsRoute, getPhotoRoute } from './routes/photos';
@@ -20,6 +21,7 @@ app.get('/health', (c) => c.text('ok'));
 app.use('/ingest/*', requireIngestToken);
 app.post('/ingest/check-hashes', checkHashesRoute);
 app.post('/ingest/photo', ingestPhotoRoute);
+app.post('/ingest/exif', ingestExifRoute);
 app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);
 
 app.use('/thumbnails/*', requireReadToken);
