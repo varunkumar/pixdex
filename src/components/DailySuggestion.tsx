@@ -71,8 +71,10 @@ const DailySuggestion = () => {
                 src={workerApiClient.thumbnailUrl(suggestion.photo)}
                 alt={suggestion.photo.description ?? suggestion.photo.filename ?? suggestion.photo.id}
                 borderRadius="lg"
-                objectFit="cover"
+                objectFit="contain"
+                bg="blackAlpha.100"
                 maxH="500px"
+                w="100%"
               />
 
               <Text fontWeight="bold">Why this photo?</Text>

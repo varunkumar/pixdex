@@ -67,7 +67,8 @@ const Dashboard = () => {
                     src={workerApiClient.thumbnailUrl(photo)}
                     alt={photo.description ?? photo.filename ?? 'Photo'}
                     borderRadius="md"
-                    objectFit="cover"
+                    objectFit="contain"
+                    bg="blackAlpha.100"
                     w="100%"
                     h="120px"
                   />

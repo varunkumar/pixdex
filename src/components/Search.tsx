@@ -111,8 +111,9 @@ const Search = () => {
             <Image
               src={workerApiClient.thumbnailUrl(photo)}
               alt={photo.description ?? photo.filename ?? photo.id}
-              objectFit="cover"
-              height="200px"
+              objectFit="contain"
+              bg="blackAlpha.100"
+              height="260px"
               width="100%"
             />
             <Box p={4}>
