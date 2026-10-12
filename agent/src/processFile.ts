@@ -27,7 +27,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
   const { cloudflareClient, ollamaClient, config } = deps;
 
   const exif = await extractExifData(input.localPath);
-  const analysis = await analyzeImage(input.localPath, ollamaClient);
+  const analysis = await analyzeImage(input.localPath, ollamaClient, { album: input.album });
   const caption = await generateText(buildCaptionPrompt(analysis), ollamaClient);
   const hashtags = await generateText(buildHashtagPrompt(analysis), ollamaClient);
   const thumbnail = await generateThumbnail(input.localPath);

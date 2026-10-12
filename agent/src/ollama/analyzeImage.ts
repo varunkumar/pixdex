@@ -11,7 +11,7 @@ export interface ImageAnalysisResult {
   tags: string[];
 }
 
-const ANALYSIS_PROMPT = `Analyze this photo (mostly wildlife from India, but it may also show people, places or other subjects) and describe it using these fields:
+const ANALYSIS_PROMPT = `Analyze this photo (mostly wildlife, but it may also show people, places or other subjects) and describe it using these fields:
 - subjects: the main subjects visible. For wildlife, include both the specific species and its broader category (e.g. "leopard" and "big cat"; "osprey" and "raptor"; "monitor lizard" and "reptile") so both specific and general terms are searchable. For people or other subjects, name what is shown (e.g. "child", "portrait", "jeep").
 - colors: dominant colors
 - patterns: notable patterns or textures
@@ -19,6 +19,8 @@ const ANALYSIS_PROMPT = `Analyze this photo (mostly wildlife from India, but it 
 - environment: detailed description of the habitat or setting
 - tags: relevant search keywords (max 15), including both specific and broader-category terms
 - description: a detailed, professional description of the photo
+
+Do not guess where the photo was taken: never name a specific park, reserve, city or country unless it is given to you below or is legible in the image (e.g. a sign). Describe the habitat instead (e.g. "dry deciduous forest", "rocky outcrop").
 
 Reply with only a JSON object with exactly these keys (subjects, colors, patterns, tags are arrays of strings; season, environment, description are strings). No markdown, no commentary.`;
 
@@ -28,7 +30,21 @@ Reply with only a JSON object with exactly these keys (subjects, colors, pattern
 const ANALYSIS_MAX_DIMENSION = 1536;
 const ANALYSIS_JPEG_QUALITY = 85;
 
-export async function analyzeImage(imagePath: string, client: OllamaClient): Promise<ImageAnalysisResult> {
+export interface AnalyzeImageContext {
+  /** Album or folder name: the only trustworthy source of where the photo was taken. */
+  album?: string;
+}
+
+export function buildAnalysisPrompt(context: AnalyzeImageContext = {}): string {
+  if (!context.album) return ANALYSIS_PROMPT;
+  return `${ANALYSIS_PROMPT}\n\nKnown context: this photo belongs to the album "${context.album}". Treat the place named there as the location; do not name any other place.`;
+}
+
+export async function analyzeImage(
+  imagePath: string,
+  client: OllamaClient,
+  context: AnalyzeImageContext = {}
+): Promise<ImageAnalysisResult> {
   const bytes = await sharp(imagePath)
     .rotate()
     .resize(ANALYSIS_MAX_DIMENSION, ANALYSIS_MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
@@ -40,9 +56,9 @@ export async function analyzeImage(imagePath: string, client: OllamaClient): Pro
     {
       role: 'system',
       content:
-        'You are a wildlife photography expert tasked with analyzing photos (mostly from India). Provide detailed, accurate information about the wildlife, environment, and photographic elements in each image.',
+        'You are a wildlife photography expert tasked with analyzing photos. Provide detailed, accurate information about the wildlife, environment, and photographic elements in each image, and state only what is visible or given to you.',
     },
-    { role: 'user', content: ANALYSIS_PROMPT, images: [base64Image] },
+    { role: 'user', content: buildAnalysisPrompt(context), images: [base64Image] },
   ]);
 
   return parseJsonAnalysis(content) ?? parseAnalysisResponse(content);

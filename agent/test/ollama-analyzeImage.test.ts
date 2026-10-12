@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { analyzeImage, parseAnalysisResponse, parseJsonAnalysis } from '../src/ollama/analyzeImage';
+import { analyzeImage, buildAnalysisPrompt, parseAnalysisResponse, parseJsonAnalysis } from '../src/ollama/analyzeImage';
 import { OllamaClient } from '../src/ollama/client';
 
 const SAMPLE_RESPONSE = `SUBJECTS: leopard, big cat
@@ -33,6 +33,19 @@ describe('parseAnalysisResponse', () => {
     const result = parseAnalysisResponse('DESCRIPTION: just a photo.');
     expect(result.subjects).toEqual(['Unknown']);
     expect(result.colors).toEqual(['Not specified']);
+  });
+});
+
+describe('buildAnalysisPrompt', () => {
+  it('forbids guessing a location and does not assume India', () => {
+    const prompt = buildAnalysisPrompt();
+    expect(prompt).toMatch(/do not guess where the photo was taken/i);
+    expect(prompt).not.toMatch(/from India/i);
+    expect(prompt).not.toMatch(/Known context/);
+  });
+
+  it('passes the album as the only known location', () => {
+    expect(buildAnalysisPrompt({ album: 'Bandipur' })).toMatch(/album "Bandipur"/);
   });
 });
 
