@@ -95,3 +95,13 @@ export const EXIF_MIGRATION_STATEMENTS = [
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];
+
+// Mirrors 0003_search_text_fields.sql. Exported so a test can run it against seeded rows;
+// it is deliberately not part of PHOTOS_MIGRATION_STATEMENTS (the test DB starts empty).
+export const SEARCH_TEXT_BACKFILL_SQL = `UPDATE photos SET search_text = trim(
+  search_text
+  || ' ' || COALESCE((SELECT group_concat(value, ' ') FROM json_each(photos.colors)), '')
+  || ' ' || COALESCE((SELECT group_concat(value, ' ') FROM json_each(photos.patterns)), '')
+  || ' ' || COALESCE(season, '')
+  || ' ' || COALESCE(camera_make, '')
+)`;

@@ -109,4 +109,20 @@ describe('POST /ingest/photo', () => {
     const body = (await response.json()) as any;
     expect(body.error).toBe('Invalid JSON body');
   });
+
+  it('makes colors, patterns and season searchable on ingest', async () => {
+    const response = await SELF.fetch('https://example.com/ingest/photo', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, description: 'An animal.', colors: ['vermilion'], patterns: ['rosettes'], season: 'monsoon' }),
+    });
+    expect(response.status).toBe(201);
+
+    for (const term of ['vermilion', 'rosettes', 'monsoon']) {
+      const search = await SELF.fetch(`https://example.com/search?q=${term}`, {
+        headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      });
+      expect(((await search.json()) as any).results.map((r: { id: string }) => r.id)).toEqual([payload.id]);
+    }
+  });
 });

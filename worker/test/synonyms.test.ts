@@ -22,4 +22,26 @@ describe('expandQuery', () => {
   it('returns an empty string for an empty query', () => {
     expect(expandQuery('   ', dict)).toBe('');
   });
+
+  it('requires every meaningful word by default and drops field-hint filler', () => {
+    expect(expandQuery('red leopard', dict)).toBe('"red" AND "leopard"');
+    expect(expandQuery('red pattern', dict)).toBe('"red"');
+    expect(expandQuery('red colors', dict)).toBe('"red"');
+    expect(expandQuery('photos of the red kite', dict)).toBe('"red" AND "kite"');
+  });
+
+  it('keeps a multi-word synonym key as one group alongside other words', () => {
+    const result = expandQuery('red big cat', dict);
+    expect(result).toContain('("big cat" OR "leopard"');
+    expect(result).toContain('"red"');
+    expect(result).toContain(' AND ');
+  });
+
+  it('can loosen to any word', () => {
+    expect(expandQuery('red leopard', dict, 'any')).toBe('"red" OR "leopard"');
+  });
+
+  it('falls back to the typed query when only filler words are given', () => {
+    expect(expandQuery('colors', dict)).toBe('"colors"');
+  });
 });

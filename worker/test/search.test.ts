@@ -1,13 +1,38 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { SEARCH_TEXT_BACKFILL_SQL } from '../migrations/index';
 
-async function seed(id: string, contentHash: string, subjects: string[], searchText: string, album: string) {
+async function seed(
+  id: string,
+  contentHash: string,
+  subjects: string[],
+  searchText: string,
+  album: string,
+  extra: { colors?: string[]; patterns?: string[]; season?: string } = {}
+) {
   await env.DB.prepare(
-    `INSERT INTO photos (id, content_hash, source, filename, subjects, album, model_provider, model_name, search_text, last_indexed)
-     VALUES (?,?,'local',?,?,?, 'ollama', 'qwen3.5:27b-mlx', ?, '2026-09-18T00:00:00.000Z')`
+    `INSERT INTO photos (id, content_hash, source, filename, subjects, album, colors, patterns, season, model_provider, model_name, search_text, last_indexed)
+     VALUES (?,?,'local',?,?,?,?,?,?, 'ollama', 'qwen3.5:27b-mlx', ?, '2026-09-18T00:00:00.000Z')`
   )
-    .bind(id, contentHash, `${id}.jpg`, JSON.stringify(subjects), album, searchText)
+    .bind(
+      id,
+      contentHash,
+      `${id}.jpg`,
+      JSON.stringify(subjects),
+      album,
+      JSON.stringify(extra.colors ?? []),
+      JSON.stringify(extra.patterns ?? []),
+      extra.season ?? null,
+      searchText
+    )
     .run();
+}
+
+async function ids(query: string): Promise<string[]> {
+  const response = await SELF.fetch(`https://example.com/search?q=${encodeURIComponent(query)}`, {
+    headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+  });
+  return ((await response.json()) as any).results.map((r: { id: string }) => r.id);
 }
 
 describe('GET /search', () => {
@@ -68,5 +93,49 @@ describe('GET /search', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as any;
     expect(body.results.length).toBe(2);
+  });
+
+  describe('multi-word and field searches', () => {
+    beforeEach(async () => {
+      await seed('photo-red-bird', 'hash-red-bird', ['kite'], 'kite bird red kite', 'Kanha', {
+        colors: ['red', 'brown'],
+        patterns: ['barred wings'],
+      });
+      await seed('photo-green-bird', 'hash-green-bird', ['parakeet'], 'parakeet bird green', 'Kanha', {
+        colors: ['green'],
+      });
+    });
+
+    it('treats "red pattern" and "red colors" as a search for red', async () => {
+      expect(await ids('red pattern')).toEqual(['photo-red-bird']);
+      expect(await ids('red colors')).toEqual(['photo-red-bird']);
+    });
+
+    it('requires every word, so "red parakeet" does not return the green parakeet first', async () => {
+      // No photo is both red and a parakeet, so it loosens to any word.
+      const result = await ids('red parakeet');
+      expect(result.sort()).toEqual(['photo-green-bird', 'photo-red-bird']);
+    });
+
+    it('matches words that are not adjacent in the text', async () => {
+      expect(await ids('red bird')).toEqual(['photo-red-bird']);
+    });
+
+    it('finds photos by color once the search text backfill has run', async () => {
+      await env.DB.prepare('DELETE FROM photos').run();
+      // An older row: colors/patterns exist as columns but not in search_text.
+      await seed('photo-old', 'hash-old', ['heron'], 'heron wading bird', 'Kanha', {
+        colors: ['crimson'],
+        patterns: ['mottled'],
+        season: 'monsoon',
+      });
+      expect(await ids('crimson')).toEqual([]);
+
+      await env.DB.prepare(SEARCH_TEXT_BACKFILL_SQL).run();
+
+      expect(await ids('crimson')).toEqual(['photo-old']);
+      expect(await ids('mottled')).toEqual(['photo-old']);
+      expect(await ids('monsoon')).toEqual(['photo-old']);
+    });
   });
 });

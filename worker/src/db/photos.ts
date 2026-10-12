@@ -181,15 +181,23 @@ export function buildSearchText(input: {
   description: string;
   environment?: string;
   album?: string;
+  cameraMake?: string;
   cameraModel?: string;
   lensModel?: string;
+  colors?: string[];
+  patterns?: string[];
+  season?: string;
 }): string {
   return [
     ...input.subjects,
     ...input.tags,
+    ...(input.colors ?? []),
+    ...(input.patterns ?? []),
+    input.season ?? '',
     input.description,
     input.environment ?? '',
     input.album ?? '',
+    input.cameraMake ?? '',
     input.cameraModel ?? '',
     input.lensModel ?? '',
   ]
