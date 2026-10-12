@@ -10,17 +10,22 @@ function formatShutter(seconds: number): string {
   return `1/${Math.round(1 / seconds)}s`;
 }
 
-/** Camera body, lens and exposure settings as short display strings, skipping what is missing. */
-export function exifSummary(photo: ExifPhoto): string[] {
+/** Focal length, aperture, shutter speed and ISO as short display strings, skipping what is missing. */
+export function exposureSummary(photo: ExifPhoto): string[] {
   const parts: (string | null)[] = [
-    photo.cameraModel ?? null,
-    photo.lensModel ?? null,
     photo.focalLength != null ? `${Math.round(photo.focalLength)}mm` : null,
     photo.fNumber != null ? `f/${Number(photo.fNumber.toFixed(1))}` : null,
     photo.exposureTime != null && photo.exposureTime > 0 ? formatShutter(photo.exposureTime) : null,
     photo.iso != null ? `ISO ${photo.iso}` : null,
   ];
   return parts.filter((part): part is string => part !== null);
+}
+
+/** Camera body, lens and exposure settings as short display strings, skipping what is missing. */
+export function exifSummary(photo: ExifPhoto): string[] {
+  return [photo.cameraModel, photo.lensModel, ...exposureSummary(photo)].filter(
+    (part): part is string => typeof part === 'string' && part !== ''
+  );
 }
 
 export function formatPhotoDate(dateTime: string | null | undefined): string | null {

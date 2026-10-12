@@ -16,6 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { shortDescription } from '../services/text';
 
 const RECENT_COUNT = 12;
 
@@ -62,10 +63,10 @@ const Dashboard = () => {
           <CardBody>
             <SimpleGrid columns={{ base: 2, md: 4, lg: 6 }} spacing={3}>
               {recent.results.map((photo) => (
-                <Link key={photo.id} as={RouterLink} to="/search">
+                <Link key={photo.id} as={RouterLink} to={`/photos/${photo.id}`}>
                   <Image
                     src={workerApiClient.thumbnailUrl(photo)}
-                    alt={photo.description ?? photo.filename ?? 'Photo'}
+                    alt={shortDescription(photo.description, 80) || photo.filename || 'Photo'}
                     borderRadius="md"
                     objectFit="contain"
                     bg="blackAlpha.100"

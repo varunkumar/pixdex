@@ -18,10 +18,13 @@ import {
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
+import { shortDescription } from '../services/text';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { getOriginalUrl } from '../services/originals';
 import PhotoMeta from './PhotoMeta';
+
+const MAX_LISTING_TAGS = 5;
 
 const Search = () => {
   const [searchParams] = useSearchParams();
@@ -109,25 +112,34 @@ const Search = () => {
       <SimpleGrid columns={[1, 2, 3]} spacing={4}>
         {results.map((photo) => (
           <Box key={photo.id} borderWidth={1} borderRadius="lg" overflow="hidden">
-            <Image
-              src={workerApiClient.thumbnailUrl(photo)}
-              alt={photo.description ?? photo.filename ?? photo.id}
-              objectFit="contain"
-              bg="blackAlpha.100"
-              height="260px"
-              width="100%"
-            />
+            <Link as={RouterLink} to={`/photos/${photo.id}`} _hover={{ textDecoration: 'none' }} display="block">
+              <Image
+                src={workerApiClient.thumbnailUrl(photo)}
+                alt={shortDescription(photo.description, 80) || photo.filename || photo.id}
+                objectFit="contain"
+                bg="blackAlpha.100"
+                height="260px"
+                width="100%"
+              />
+            </Link>
             <Box p={4}>
-              <Text fontSize="sm" mb={2}>
-                {photo.description}
-              </Text>
-              <PhotoMeta photo={photo} />
+              <Link as={RouterLink} to={`/photos/${photo.id}`} color="inherit" _hover={{ textDecoration: 'none' }}>
+                <Text fontSize="sm" mb={2}>
+                  {shortDescription(photo.description)}
+                </Text>
+              </Link>
+              <PhotoMeta photo={photo} compact />
               <Stack direction="row" flexWrap="wrap" gap={2}>
-                {photo.tags.map((tag) => (
+                {photo.tags.slice(0, MAX_LISTING_TAGS).map((tag) => (
                   <Tag key={tag} size="sm">
                     {tag}
                   </Tag>
                 ))}
+                {photo.tags.length > MAX_LISTING_TAGS && (
+                  <Tag size="sm" variant="outline">
+                    +{photo.tags.length - MAX_LISTING_TAGS}
+                  </Tag>
+                )}
               </Stack>
               {(() => {
                 const originalUrl = getOriginalUrl(photo);

@@ -85,13 +85,30 @@ describe('Search', () => {
     );
   });
 
-  it('shows camera, lens and exposure details on each result', async () => {
+  it('shows only the camera body in listings; lens and exposure live on the detail page', async () => {
     renderWithProviders(<Search />);
     fireEvent.click(screen.getByRole('button', { name: /search/i }));
 
-    expect(
-      await screen.findByText('NIKON Z 8 · VR 200-500mm f/5.6E · 500mm · f/5.6 · 1/250s · ISO 2500')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('NIKON Z 8')).toBeInTheDocument();
+    expect(screen.queryByText(/200-500mm/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ISO 2500/)).not.toBeInTheDocument();
+  });
+
+  it('links each result to its detail page and trims long descriptions', async () => {
+    const long =
+      'A leopard rests on a branch. ' + 'It watches the forest floor below with patient attention. '.repeat(6);
+    vi.mocked(workerApiClient.search).mockResolvedValue([
+      { ...(await vi.mocked(workerApiClient.search)({})).at(0)!, description: long, tags: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
+    ]);
+    renderWithProviders(<Search />);
+    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+
+    expect(await screen.findByText('A leopard rests on a branch.')).toBeInTheDocument();
+    expect(screen.queryByText(/patient attention/)).not.toBeInTheDocument();
+    expect(screen.getByText('+2')).toBeInTheDocument();
+    expect(screen.queryByText('g')).not.toBeInTheDocument();
+    const detailLinks = screen.getAllByRole('link').filter((l) => l.getAttribute('href') === '/photos/p1');
+    expect(detailLinks.length).toBeGreaterThan(0);
   });
 
   it('shows a "View Original" link when getOriginalUrl resolves one', async () => {
