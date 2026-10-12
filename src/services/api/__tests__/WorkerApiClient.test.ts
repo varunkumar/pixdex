@@ -23,6 +23,18 @@ describe('WorkerApiClient', () => {
     expect(init).toBeUndefined();
   });
 
+  it('calls the default fetch unbound (window.fetch throws "Illegal invocation" otherwise)', async () => {
+    const strictFetch = vi.fn(function (this: unknown) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+      return Promise.resolve(new Response(JSON.stringify({ results: [], total: 0 }), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', strictFetch);
+
+    const defaultClient = new WorkerApiClient('/api');
+    await expect(defaultClient.search({})).resolves.toEqual([]);
+    vi.unstubAllGlobals();
+  });
+
   it('getAlbums() returns the albums array', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ albums: ['Kanha', 'Kaziranga'] }), { status: 200 }));
     expect(await client.getAlbums()).toEqual(['Kanha', 'Kaziranga']);

@@ -28,6 +28,20 @@ describe('GET /search', () => {
     expect(body.results[0].subjects).toEqual(['leopard']);
   });
 
+  it('reports the total matching count independent of limit', async () => {
+    const response = await SELF.fetch('https://example.com/search?limit=1', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
+    const body = (await response.json()) as any;
+    expect(body.results.length).toBe(1);
+    expect(body.total).toBe(2);
+
+    const filtered = await SELF.fetch('https://example.com/search?album=Kanha', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
+    expect(((await filtered.json()) as any).total).toBe(1);
+  });
+
   it('filters by album', async () => {
     const response = await SELF.fetch('https://example.com/search?album=Kaziranga', {
       headers: { Authorization: `Bearer ${env.READ_TOKEN}` },

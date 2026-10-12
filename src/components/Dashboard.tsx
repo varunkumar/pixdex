@@ -1,12 +1,33 @@
-import { Card, CardBody, CardHeader, Grid, Heading, Link, Stat, StatLabel, StatNumber, VStack } from '@chakra-ui/react';
+import {
+  Card,
+  CardBody,
+  CardHeader,
+  Grid,
+  Heading,
+  Image,
+  Link,
+  SimpleGrid,
+  Stat,
+  StatLabel,
+  StatNumber,
+  Text,
+  VStack,
+} from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+
+const RECENT_COUNT = 12;
 
 const Dashboard = () => {
   const { data: albums = [] } = useQuery({
     queryKey: ['albums'],
     queryFn: () => workerApiClient.getAlbums(),
+  });
+
+  const { data: recent } = useQuery({
+    queryKey: ['recent-photos'],
+    queryFn: () => workerApiClient.searchPage({ limit: RECENT_COUNT }),
   });
 
   return (
@@ -16,14 +37,51 @@ const Dashboard = () => {
           <Heading size="md">pixdex</Heading>
         </CardHeader>
         <CardBody>
-          <Link as={RouterLink} to="/albums" textDecoration="none" _hover={{ textDecoration: 'none' }}>
-            <Stat cursor="pointer">
-              <StatLabel>Albums</StatLabel>
-              <StatNumber>{albums.length}</StatNumber>
-            </Stat>
-          </Link>
+          <Grid templateColumns="repeat(2, 1fr)" gap={4}>
+            <Link as={RouterLink} to="/search" textDecoration="none" _hover={{ textDecoration: 'none' }}>
+              <Stat cursor="pointer">
+                <StatLabel>Photos</StatLabel>
+                <StatNumber>{recent?.total ?? 0}</StatNumber>
+              </Stat>
+            </Link>
+            <Link as={RouterLink} to="/albums" textDecoration="none" _hover={{ textDecoration: 'none' }}>
+              <Stat cursor="pointer">
+                <StatLabel>Albums</StatLabel>
+                <StatNumber>{albums.length}</StatNumber>
+              </Stat>
+            </Link>
+          </Grid>
         </CardBody>
       </Card>
+
+      {recent && recent.results.length > 0 && (
+        <Card>
+          <CardHeader>
+            <Heading size="sm">Recently indexed</Heading>
+          </CardHeader>
+          <CardBody>
+            <SimpleGrid columns={{ base: 2, md: 4, lg: 6 }} spacing={3}>
+              {recent.results.map((photo) => (
+                <Link key={photo.id} as={RouterLink} to="/search">
+                  <Image
+                    src={workerApiClient.thumbnailUrl(photo)}
+                    alt={photo.description ?? photo.filename ?? 'Photo'}
+                    borderRadius="md"
+                    objectFit="cover"
+                    w="100%"
+                    h="120px"
+                  />
+                  {photo.album && (
+                    <Text fontSize="xs" noOfLines={1} mt={1}>
+                      {photo.album}
+                    </Text>
+                  )}
+                </Link>
+              ))}
+            </SimpleGrid>
+          </CardBody>
+        </Card>
+      )}
 
       <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
         <Link as={RouterLink} to="/search">

@@ -10,7 +10,9 @@ export interface SearchParams {
 export class WorkerApiClient {
   constructor(
     private baseUrl: string,
-    private fetchFn: typeof fetch = fetch
+    // Wrapped so fetch is called unbound: invoking window.fetch as a method of
+    // this class throws "Illegal invocation" in browsers.
+    private fetchFn: typeof fetch = (...args) => fetch(...args)
   ) {}
 
   private async getJson<T>(path: string): Promise<T> {
@@ -22,6 +24,10 @@ export class WorkerApiClient {
   }
 
   async search(params: SearchParams): Promise<SerializedPhoto[]> {
+    return (await this.searchPage(params)).results;
+  }
+
+  async searchPage(params: SearchParams): Promise<SearchResponse> {
     const query = new URLSearchParams();
     if (params.q) query.set('q', params.q);
     if (params.album) query.set('album', params.album);
@@ -29,8 +35,7 @@ export class WorkerApiClient {
     if (params.offset != null) query.set('offset', String(params.offset));
 
     const suffix = query.toString() ? `?${query.toString()}` : '';
-    const { results } = await this.getJson<SearchResponse>(`/search${suffix}`);
-    return results;
+    return this.getJson<SearchResponse>(`/search${suffix}`);
   }
 
   async getAlbums(): Promise<string[]> {

@@ -11,13 +11,13 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
 
   const conditions: string[] = [];
   const params: unknown[] = [];
-  let sql: string;
+  let from: string;
 
   if (q) {
-    sql = `SELECT photos.* FROM photos JOIN photos_fts ON photos.rowid = photos_fts.rowid WHERE photos_fts MATCH ?`;
+    from = `FROM photos JOIN photos_fts ON photos.rowid = photos_fts.rowid WHERE photos_fts MATCH ?`;
     params.push(expandQuery(q, wildlifeSynonyms));
   } else {
-    sql = `SELECT * FROM photos WHERE 1=1`;
+    from = `FROM photos WHERE 1=1`;
   }
 
   if (album) {
@@ -26,12 +26,16 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
   }
 
   if (conditions.length > 0) {
-    sql += ` AND ${conditions.join(' AND ')}`;
+    from += ` AND ${conditions.join(' AND ')}`;
   }
 
-  sql += ` ORDER BY last_indexed DESC LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
-
-  const result = await c.env.DB.prepare(sql).bind(...params).all<PhotoRow>();
-  return c.json({ results: result.results.map(serializePhoto) });
+  const [result, count] = await Promise.all([
+    c.env.DB.prepare(`SELECT photos.* ${from} ORDER BY last_indexed DESC LIMIT ? OFFSET ?`)
+      .bind(...params, limit, offset)
+      .all<PhotoRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) AS total ${from}`)
+      .bind(...params)
+      .first<{ total: number }>(),
+  ]);
+  return c.json({ results: result.results.map(serializePhoto), total: count?.total ?? 0 });
 }

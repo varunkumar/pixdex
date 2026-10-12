@@ -29,6 +29,8 @@ export interface SerializedPhoto {
 
 export interface SearchResponse {
   results: SerializedPhoto[];
+  /** Total rows matching the query and album filter, ignoring limit/offset. */
+  total: number;
 }
 
 export interface AlbumsResponse {
