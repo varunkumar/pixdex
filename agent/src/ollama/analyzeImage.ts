@@ -1,4 +1,4 @@
-import fs from 'node:fs/promises';
+import sharp from 'sharp';
 import type { OllamaClient } from './client';
 
 export interface ImageAnalysisResult {
@@ -22,8 +22,18 @@ const ANALYSIS_PROMPT = `Analyze this wildlife photo and provide the following i
 
 Format each section clearly with headings.`;
 
+// Full-resolution camera JPEGs (15MB+) make the vision model call slow enough
+// to hit Node's 5 minute fetch header timeout, and the model downsamples
+// internally anyway.
+const ANALYSIS_MAX_DIMENSION = 1536;
+const ANALYSIS_JPEG_QUALITY = 85;
+
 export async function analyzeImage(imagePath: string, client: OllamaClient): Promise<ImageAnalysisResult> {
-  const bytes = await fs.readFile(imagePath);
+  const bytes = await sharp(imagePath)
+    .rotate()
+    .resize(ANALYSIS_MAX_DIMENSION, ANALYSIS_MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: ANALYSIS_JPEG_QUALITY })
+    .toBuffer();
   const base64Image = bytes.toString('base64');
 
   const content = await client.chat([

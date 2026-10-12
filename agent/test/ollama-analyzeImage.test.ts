@@ -64,4 +64,20 @@ describe('analyzeImage', () => {
     expect(userMessage.content).toMatch(/broader category/i);
     expect(userMessage.images).toHaveLength(1);
   });
+
+  it('downscales large images before sending them to the model', async () => {
+    const bigPath = path.join(dir, 'big.jpg');
+    await sharp({ create: { width: 4000, height: 3000, channels: 3, background: { r: 9, g: 9, b: 9 } } })
+      .jpeg()
+      .toFile(bigPath);
+    const chat = vi.fn().mockResolvedValue(SAMPLE_RESPONSE);
+    const client = { chat } as unknown as OllamaClient;
+
+    await analyzeImage(bigPath, client);
+
+    const [messages] = chat.mock.calls[0];
+    const userMessage = messages.find((m: { role: string }) => m.role === 'user');
+    const sent = await sharp(Buffer.from(userMessage.images[0], 'base64')).metadata();
+    expect(Math.max(sent.width ?? 0, sent.height ?? 0)).toBe(1536);
+  });
 });

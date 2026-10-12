@@ -4,7 +4,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sha256ContentHash } from '../src/hashing';
-import { indexLocalFolder } from '../src/indexLocalFolder';
+import { albumFromPath, indexLocalFolder } from '../src/indexLocalFolder';
 import type { AgentConfig } from '../src/config';
 
 interface IngestPhotoPayload {
@@ -174,5 +174,18 @@ describe('indexLocalFolder', () => {
       .map((call: any[]) => (call[0] as IngestPhotoPayload).path)
       .filter((p: string | undefined) => p === dupA || p === dupB);
     expect(dupPaths).toEqual([dupA]);
+  });
+});
+
+describe('albumFromPath', () => {
+  it('uses the folder above a Processed folder', () => {
+    expect(albumFromPath('/Volumes/T7/Varun/Bandipur (12,13,14-Sep-2026)/Processed/DSC_1.jpg')).toBe(
+      'Bandipur (12,13,14-Sep-2026)'
+    );
+    expect(albumFromPath('/pics/Kanha/processed/sub/DSC_1.jpg')).toBe('Kanha');
+  });
+
+  it('uses the parent folder when there is no Processed folder', () => {
+    expect(albumFromPath('/pics/Kaziranga/DSC_1.jpg')).toBe('Kaziranga');
   });
 });

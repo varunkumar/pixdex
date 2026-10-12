@@ -20,6 +20,18 @@ export interface IndexLocalFolderDeps {
   onProgress?: (message: string) => void;
 }
 
+/**
+ * Derives an album name from a photo's path: the folder directly above a
+ * "Processed" folder if there is one (".../Bandipur/Processed/x.jpg" ->
+ * "Bandipur"), otherwise the photo's own parent folder.
+ */
+export function albumFromPath(filePath: string): string | undefined {
+  const folders = path.dirname(filePath).split(path.sep).filter(Boolean);
+  const processedAt = folders.findIndex((name) => name.toLowerCase() === 'processed');
+  const album = processedAt > 0 ? folders[processedAt - 1] : folders[folders.length - 1];
+  return album || undefined;
+}
+
 export async function indexLocalFolder(
   folder: string,
   deps: IndexLocalFolderDeps
@@ -72,7 +84,14 @@ export async function indexLocalFolder(
 
     try {
       await processFile(
-        { localPath: file, contentHash, source: 'local', sourcePath: file, filename: path.basename(file) },
+        {
+          localPath: file,
+          contentHash,
+          source: 'local',
+          sourcePath: file,
+          filename: path.basename(file),
+          album: albumFromPath(file),
+        },
         { cloudflareClient, ollamaClient, config }
       );
       indexed++;
