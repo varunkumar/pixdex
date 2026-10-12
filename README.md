@@ -59,14 +59,14 @@ to Drive, no setup needed), follow `agent/cloudflared/README.md` once, then
 set `VITE_ORIGINALS_BASE_URL` and `VITE_ORIGINALS_TOKEN` in this app's `.env`
 to match.
 
-## CI/CD
+## Tests and deploys
 
-`.github/workflows/ci-cd.yml` runs lint, tests and a build for the frontend,
-worker and agent on every PR and push to `main`. A push to `main` then applies
-D1 migrations, deploys the Worker, and deploys the frontend (with its
-`functions/` proxy) to Pages. It needs two repository secrets:
-`CLOUDFLARE_API_TOKEN` (permissions: Workers Scripts Edit, D1 Edit, Cloudflare
-Pages Edit) and `CLOUDFLARE_ACCOUNT_ID`.
+There is no GitHub Actions pipeline. `.githooks/pre-commit` (enabled by
+`npm install`) runs the lint/test/build suites touched by the staged changes.
+Cloudflare builds and deploys the frontend (with `functions/`) from `main` via
+the Pages Git integration (build command `npm run build`, output `dist`). The
+Worker is deployed by hand: `cd worker && npx wrangler d1 migrations apply DB
+--remote && npm run deploy`.
 
 ## Testing
 

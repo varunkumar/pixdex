@@ -1,0 +1,29 @@
+#!/bin/sh
+# Test gate: runs only the suites touched by the staged changes.
+# Enabled by `npm install` (the "prepare" script sets core.hooksPath).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$staged" ] && exit 0
+
+# Docs/markdown-only commits need no gate.
+code=$(printf '%s\n' "$staged" | grep -v -E '^docs/|\.md$|\.todo$|^TODO' || true)
+[ -z "$code" ] && exit 0
+
+if printf '%s\n' "$code" | grep -q '^worker/'; then
+  echo "pre-commit: worker tests"
+  (cd worker && npm test --silent)
+fi
+
+if printf '%s\n' "$code" | grep -q '^agent/'; then
+  echo "pre-commit: agent typecheck + tests"
+  (cd agent && npm run typecheck --silent && npm test --silent)
+fi
+
+if printf '%s\n' "$code" | grep -v -E '^(worker|agent)/' | grep -q .; then
+  echo "pre-commit: frontend lint, tests, build"
+  npm run lint --silent
+  npm test --silent
+  npm run build --silent
+fi
