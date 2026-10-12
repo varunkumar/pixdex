@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { analyzeImage, parseAnalysisResponse } from '../src/ollama/analyzeImage';
+import { analyzeImage, parseAnalysisResponse, parseJsonAnalysis } from '../src/ollama/analyzeImage';
 import { OllamaClient } from '../src/ollama/client';
 
 const SAMPLE_RESPONSE = `SUBJECTS: leopard, big cat
@@ -33,6 +33,55 @@ describe('parseAnalysisResponse', () => {
     const result = parseAnalysisResponse('DESCRIPTION: just a photo.');
     expect(result.subjects).toEqual(['Unknown']);
     expect(result.colors).toEqual(['Not specified']);
+  });
+});
+
+describe('parseJsonAnalysis', () => {
+  it('parses a bare or fenced JSON reply', () => {
+    const json = JSON.stringify({
+      subjects: ['child', 'portrait'],
+      colors: ['red'],
+      patterns: [],
+      season: '',
+      environment: 'brick wall',
+      tags: ['girl'],
+      description: 'A girl.',
+    });
+    for (const reply of [json, '```json\n' + json + '\n```', 'Here you go: ' + json]) {
+      const result = parseJsonAnalysis(reply);
+      expect(result?.subjects).toEqual(['child', 'portrait']);
+      expect(result?.season).toBeUndefined();
+      expect(result?.patterns).toEqual(['None detected']);
+      expect(result?.description).toBe('A girl.');
+    }
+  });
+
+  it('returns null for non-JSON replies', () => {
+    expect(parseJsonAnalysis('SUBJECTS: leopard')).toBeNull();
+  });
+});
+
+describe('parseAnalysisResponse with markdown replies', () => {
+  it('handles headings, numbering, bullets and bold markers', () => {
+    const result = parseAnalysisResponse(`### 1. SUBJECTS
+- **Subject (human):** A young girl
+### 2. COLORS
+- red
+- pink
+### 6. TAGS
+portrait, child, girl
+### 7. DESCRIPTION
+A portrait of a girl.`);
+    expect(result.tags).toEqual(['portrait', 'child', 'girl']);
+    expect(result.description).toBe('A portrait of a girl.');
+    expect(result.colors).toEqual(['red pink']);
+  });
+
+  it('handles bulleted "- field: value" replies', () => {
+    const result = parseAnalysisResponse('- subjects: child, girl\n- season: \n- tags: a, b\n- description: A girl.');
+    expect(result.subjects).toEqual(['child', 'girl']);
+    expect(result.season).toBeUndefined();
+    expect(result.tags).toEqual(['a', 'b']);
   });
 });
 
