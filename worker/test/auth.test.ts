@@ -48,8 +48,15 @@ describe('read auth', () => {
     expect(response.status).toBe(401);
   });
 
-  it('accepts /thumbnails/:contentHash with the token as a query param, since <img> tags cannot set headers', async () => {
+  it('rejects /thumbnails/:contentHash with the token only as a query param', async () => {
     const response = await SELF.fetch(`https://example.com/thumbnails/does-not-exist?token=${env.READ_TOKEN}`);
+    expect(response.status).toBe(401);
+  });
+
+  it('accepts /thumbnails/:contentHash with a valid Authorization header', async () => {
+    const response = await SELF.fetch('https://example.com/thumbnails/does-not-exist', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
     // 404 (not 401) proves the token was accepted and the request reached the route handler.
     expect(response.status).toBe(404);
   });

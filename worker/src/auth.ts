@@ -19,15 +19,12 @@ export async function requireIngestToken(
   await next();
 }
 
-/**
- * Also accepts the token as a `?token=` query param, since <img> tags
- * (thumbnails) can't set an Authorization header.
- */
+/** Bearer header only: tokens in URLs end up in logs and browser history. */
 export async function requireReadToken(
   c: Context<{ Bindings: Env }>,
   next: Next
 ) {
-  const token = bearerToken(c) || c.req.query('token') || '';
+  const token = bearerToken(c);
 
   if (!token || token !== c.env.READ_TOKEN) {
     return c.text('Unauthorized', 401);
