@@ -8,6 +8,10 @@ interface Env {
   // Cloudflare Tunnel to the local originals server (optional until set up).
   ORIGINALS_BASE_URL?: string;
   ORIGINALS_TOKEN?: string;
+  // Cloudflare Access service token for the tunnel hostname. Optional: sent only
+  // when both are set, so Access can be enabled on the hostname independently.
+  ACCESS_CLIENT_ID?: string;
+  ACCESS_CLIENT_SECRET?: string;
 }
 
 interface Context {
@@ -58,6 +62,10 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
     if (value) headers.set(name, value);
   }
   headers.set('Authorization', `Bearer ${token}`);
+  if (isOriginal && env.ACCESS_CLIENT_ID && env.ACCESS_CLIENT_SECRET) {
+    headers.set('CF-Access-Client-Id', env.ACCESS_CLIENT_ID);
+    headers.set('CF-Access-Client-Secret', env.ACCESS_CLIENT_SECRET);
+  }
 
   let response: Response;
   try {

@@ -16,7 +16,15 @@ export default defineConfig(({ mode }) => {
           target: env.ORIGINALS_BASE_URL,
           changeOrigin: true,
           rewrite: (path: string) => path.replace(/^\/api/, ''),
-          headers: { Authorization: `Bearer ${env.ORIGINALS_TOKEN}` },
+          headers: {
+            Authorization: `Bearer ${env.ORIGINALS_TOKEN}`,
+            ...(env.ACCESS_CLIENT_ID && env.ACCESS_CLIENT_SECRET
+              ? {
+                  'CF-Access-Client-Id': env.ACCESS_CLIENT_ID,
+                  'CF-Access-Client-Secret': env.ACCESS_CLIENT_SECRET,
+                }
+              : {}),
+          },
         },
         '/api': {
           target: env.WORKER_URL,

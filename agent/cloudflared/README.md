@@ -30,6 +30,22 @@ One-time setup (requires a Cloudflare account with a domain on it):
    ever requests `/api/originals/:id`; the token is sent server-side as a
    Bearer header.
 
+## Optional: Access service token on the hostname
+
+Defense in depth on top of the bearer token. In Zero Trust:
+
+1. Access > Service auth > Create service token (e.g. `pixdex-originals-proxy`).
+   Copy the Client ID and Client Secret (the secret is shown once).
+2. Access > Applications > Add > Self-hosted, destination
+   `pixdex-originals.<your-domain>`, with a policy whose action is
+   **Service Auth** including that token. Do not add a human/email policy: it
+   would never match the proxy.
+3. Set `ACCESS_CLIENT_ID` and `ACCESS_CLIENT_SECRET` as Pages secrets
+   (production and preview), and in the root `.env` for local dev.
+
+Set the secrets before enabling the Access app; the proxy sends the headers
+only when both are present.
+
 ## Running it
 
 Two processes need to be running at the same time on the machine that has

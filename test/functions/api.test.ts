@@ -75,6 +75,24 @@ describe('/api proxy', () => {
       expect(h.get('accept')).toBe('image/*');
     });
 
+    it('adds Access service-token headers for originals only, when configured', async () => {
+      const withAccess = { ...env, ACCESS_CLIENT_ID: 'id.access', ACCESS_CLIENT_SECRET: 'sek' };
+      await call('/api/originals/p1', {}, withAccess);
+      const o = new Headers(fetchMock.mock.calls[0][1].headers);
+      expect(o.get('cf-access-client-id')).toBe('id.access');
+      expect(o.get('cf-access-client-secret')).toBe('sek');
+
+      await call('/api/albums', {}, withAccess);
+      const w = new Headers(fetchMock.mock.calls[1][1].headers);
+      expect(w.get('cf-access-client-id')).toBeNull();
+      expect(w.get('cf-access-client-secret')).toBeNull();
+    });
+
+    it('omits Access headers when the service token is not configured', async () => {
+      await call('/api/originals/p1');
+      expect(new Headers(fetchMock.mock.calls[0][1].headers).get('cf-access-client-id')).toBeNull();
+    });
+
     it('does not use the originals token for worker routes', async () => {
       await call('/api/albums');
       expect(new Headers(fetchMock.mock.calls[0][1].headers).get('authorization')).toBe('Bearer secret-token');
