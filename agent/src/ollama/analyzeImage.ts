@@ -22,20 +22,6 @@ const ANALYSIS_PROMPT = `Analyze this photo (mostly wildlife from India, but it 
 
 Reply with only a JSON object with exactly these keys (subjects, colors, patterns, tags are arrays of strings; season, environment, description are strings). No markdown, no commentary.`;
 
-const ANALYSIS_SCHEMA = {
-  type: 'object',
-  properties: {
-    subjects: { type: 'array', items: { type: 'string' } },
-    colors: { type: 'array', items: { type: 'string' } },
-    patterns: { type: 'array', items: { type: 'string' } },
-    season: { type: 'string' },
-    environment: { type: 'string' },
-    tags: { type: 'array', items: { type: 'string' } },
-    description: { type: 'string' },
-  },
-  required: ['subjects', 'colors', 'patterns', 'season', 'environment', 'tags', 'description'],
-};
-
 // Full-resolution camera JPEGs (15MB+) make the vision model call slow enough
 // to hit Node's 5 minute fetch header timeout, and the model downsamples
 // internally anyway.
@@ -57,7 +43,7 @@ export async function analyzeImage(imagePath: string, client: OllamaClient): Pro
         'You are a wildlife photography expert tasked with analyzing photos (mostly from India). Provide detailed, accurate information about the wildlife, environment, and photographic elements in each image.',
     },
     { role: 'user', content: ANALYSIS_PROMPT, images: [base64Image] },
-  ], { format: ANALYSIS_SCHEMA });
+  ]);
 
   return parseJsonAnalysis(content) ?? parseAnalysisResponse(content);
 }

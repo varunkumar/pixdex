@@ -12,12 +12,11 @@ export class OllamaClient {
     private fetchFn: typeof fetch = fetch
   ) {}
 
-  /** `format` is a JSON schema; Ollama constrains the reply to match it. */
-  async chat(messages: OllamaMessage[], options: { format?: object } = {}): Promise<string> {
+  async chat(messages: OllamaMessage[]): Promise<string> {
     const response = await this.fetchFn(`${this.config.OLLAMA_BASE_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: this.config.OLLAMA_MODEL, messages, stream: false, format: options.format }),
+      body: JSON.stringify({ model: this.config.OLLAMA_MODEL, messages, stream: false }),
     });
     if (!response.ok) {
       throw new Error(`Ollama chat failed: ${response.status}`);
