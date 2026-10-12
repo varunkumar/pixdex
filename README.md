@@ -32,15 +32,17 @@ run any backend of its own.
 
 2. Configure environment variables:
 
-   Copy `.env.example` to `.env` and set `VITE_WORKER_API_BASE_URL` to your
-   deployed worker's URL, and `VITE_WORKER_READ_TOKEN` to the same value as
-   the worker's `READ_TOKEN` secret (every read endpoint — search, albums,
-   a photo, the daily pick, thumbnails — requires this token; there is no
-   anonymous read access):
+   Copy `.env.example` to `.env` and set `WORKER_URL` to your deployed
+   worker's URL, and `READ_TOKEN` to the same value as the worker's
+   `READ_TOKEN` secret. These are **not** `VITE_`-prefixed on purpose: they are
+   used only by the dev server's `/api` proxy (`vite.config.ts`) and, in
+   production, by the Pages Function in `functions/api/` (set `READ_TOKEN` and
+   `WORKER_URL` as Pages secrets). The browser only ever talks to same-origin
+   `/api/*`, so the read token never ships in the bundle:
 
    ```
-   VITE_WORKER_API_BASE_URL=https://pixdex-worker.<your-subdomain>.workers.dev
-   VITE_WORKER_READ_TOKEN=<same value as the worker's READ_TOKEN secret>
+   WORKER_URL=https://pixdex-worker.<your-subdomain>.workers.dev
+   READ_TOKEN=<same value as the worker's READ_TOKEN secret>
    ```
 
 3. Start the development server:
@@ -56,6 +58,15 @@ Search results and the daily pick show thumbnails only by default. To enable
 to Drive, no setup needed), follow `agent/cloudflared/README.md` once, then
 set `VITE_ORIGINALS_BASE_URL` and `VITE_ORIGINALS_TOKEN` in this app's `.env`
 to match.
+
+## CI/CD
+
+`.github/workflows/ci-cd.yml` runs lint, tests and a build for the frontend,
+worker and agent on every PR and push to `main`. A push to `main` then applies
+D1 migrations, deploys the Worker, and deploys the frontend (with its
+`functions/` proxy) to Pages. It needs two repository secrets:
+`CLOUDFLARE_API_TOKEN` (permissions: Workers Scripts Edit, D1 Edit, Cloudflare
+Pages Edit) and `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Testing
 

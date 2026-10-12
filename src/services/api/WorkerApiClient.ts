@@ -10,14 +10,11 @@ export interface SearchParams {
 export class WorkerApiClient {
   constructor(
     private baseUrl: string,
-    private readToken: string,
     private fetchFn: typeof fetch = fetch
   ) {}
 
   private async getJson<T>(path: string): Promise<T> {
-    const response = await this.fetchFn(`${this.baseUrl}${path}`, {
-      headers: { Authorization: `Bearer ${this.readToken}` },
-    });
+    const response = await this.fetchFn(`${this.baseUrl}${path}`);
     if (!response.ok) {
       throw new Error(`Request to ${path} failed: ${response.status}`);
     }
@@ -51,22 +48,10 @@ export class WorkerApiClient {
 
   thumbnailUrl(photo: Pick<SerializedPhoto, 'thumbnailUrl'>): string {
     if (!photo.thumbnailUrl) return '';
-    // <img> tags can't set an Authorization header, so the read token travels
-    // as a query param here instead (the worker's /thumbnails/* route accepts either).
-    const separator = photo.thumbnailUrl.includes('?') ? '&' : '?';
-    return `${this.baseUrl}${photo.thumbnailUrl}${separator}token=${this.readToken}`;
+    // Same-origin proxy URL: the Pages Function adds the read token server-side.
+    return `${this.baseUrl}${photo.thumbnailUrl}`;
   }
 }
 
-if (!import.meta.env.VITE_WORKER_API_BASE_URL) {
-  console.error('VITE_WORKER_API_BASE_URL is not set — API requests will fail.');
-}
-
-if (!import.meta.env.VITE_WORKER_READ_TOKEN) {
-  console.error('VITE_WORKER_READ_TOKEN is not set — API requests will fail.');
-}
-
-export const workerApiClient = new WorkerApiClient(
-  import.meta.env.VITE_WORKER_API_BASE_URL ?? '',
-  import.meta.env.VITE_WORKER_READ_TOKEN ?? ''
-);
+// Same-origin read proxy (functions/api/[[path]].ts); holds the read token server-side.
+export const workerApiClient = new WorkerApiClient('/api');
