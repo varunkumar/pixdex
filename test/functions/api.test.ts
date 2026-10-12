@@ -112,4 +112,28 @@ describe('/api proxy', () => {
       expect((await call('/api/originals/a/b')).status).toBe(404);
     });
   });
+
+  describe('Cache-Control', () => {
+    it('revalidates API data on every request', async () => {
+      for (const path of ['/api/search?q=x', '/api/albums', '/api/daily-pick', '/api/photos/p1']) {
+        expect((await call(path)).headers.get('cache-control')).toBe('private, no-cache');
+      }
+    });
+
+    it('caches content-addressed thumbnails as immutable', async () => {
+      const res = await call('/api/thumbnails/abc123');
+      expect(res.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+    });
+
+    it('caches originals briefly', async () => {
+      const res = await call('/api/originals/p1');
+      expect(res.headers.get('cache-control')).toBe('private, max-age=3600');
+    });
+
+    it('never caches error responses', async () => {
+      fetchMock.mockResolvedValueOnce(new Response('nope', { status: 404 }));
+      const res = await call('/api/thumbnails/missing');
+      expect(res.headers.get('cache-control')).toBe('no-store');
+    });
+  });
 });

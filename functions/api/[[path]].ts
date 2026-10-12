@@ -36,6 +36,18 @@ const ORIGINALS_PATH = /^originals\/[^/]+$/;
 // client-supplied Authorization are intentionally dropped.
 const FORWARDED_HEADERS = ['accept', 'if-none-match', 'if-modified-since', 'range'];
 
+// Thumbnails are addressed by content hash, so they never change and can be
+// cached hard. Everything else (search, albums, daily pick, photo metadata)
+// changes as photos are indexed and must be revalidated on every request.
+// Originals are large and stable per id, so a short cache is fine. Errors are
+// never cached.
+function cacheControlFor(path: string, ok: boolean): string {
+  if (!ok) return 'no-store';
+  if (path.startsWith('thumbnails/')) return 'private, max-age=31536000, immutable';
+  if (ORIGINALS_PATH.test(path)) return 'private, max-age=3600';
+  return 'private, no-cache';
+}
+
 export const onRequestGet = async ({ request, env }: Context): Promise<Response> => {
   const incoming = new URL(request.url);
   const path = incoming.pathname.replace(/^\/api\//, '');
@@ -75,6 +87,6 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
     return new Response('Upstream unavailable', { status: 502 });
   }
   const out = new Response(response.body, response);
-  out.headers.set('Cache-Control', 'private, max-age=3600');
+  out.headers.set('Cache-Control', cacheControlFor(path, response.ok));
   return out;
 };
