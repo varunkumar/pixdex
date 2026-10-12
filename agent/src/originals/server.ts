@@ -20,8 +20,6 @@ export function createOriginalsServer(
   const { fetchIndexedPhoto: lookup } = { ...defaultDeps, ...deps };
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
     const url = new URL(req.url ?? '/', 'http://localhost');
     const match = url.pathname.match(PATH_PATTERN);
 
@@ -30,7 +28,7 @@ export function createOriginalsServer(
       return;
     }
 
-    if (!config.ORIGINALS_TOKEN || url.searchParams.get('token') !== config.ORIGINALS_TOKEN) {
+    if (!config.ORIGINALS_TOKEN || req.headers.authorization !== `Bearer ${config.ORIGINALS_TOKEN}`) {
       res.writeHead(401).end('Unauthorized');
       return;
     }

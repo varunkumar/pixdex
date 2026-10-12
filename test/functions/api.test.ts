@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { onRequestGet } from '../../functions/api/[[path]]';
 
-const env = { WORKER_URL: 'https://worker.example.dev/', READ_TOKEN: 'secret-token' };
+const env = {
+  WORKER_URL: 'https://worker.example.dev/',
+  READ_TOKEN: 'secret-token',
+  ORIGINALS_BASE_URL: 'https://originals.example.dev',
+  ORIGINALS_TOKEN: 'originals-token',
+};
 
-function call(path: string, headers: Record<string, string> = {}, e = env) {
+function call(path: string, headers: Record<string, string> = {}, e: Record<string, string> = env) {
   return onRequestGet({
     request: new Request(`https://pixdex.example.dev${path}`, { headers }),
     env: e,
@@ -57,5 +62,36 @@ describe('/api proxy', () => {
 
   it('returns 500 when not configured', async () => {
     expect((await call('/api/albums', {}, { WORKER_URL: '', READ_TOKEN: '' })).status).toBe(500);
+  });
+
+  describe('originals', () => {
+    it('forwards to the tunnel with the originals token, not the read token', async () => {
+      const res = await call('/api/originals/p1?token=leaked', { accept: 'image/*' });
+      expect(res.status).toBe(200);
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(String(url)).toBe('https://originals.example.dev/originals/p1');
+      const h = new Headers(init.headers);
+      expect(h.get('authorization')).toBe('Bearer originals-token');
+      expect(h.get('accept')).toBe('image/*');
+    });
+
+    it('does not use the originals token for worker routes', async () => {
+      await call('/api/albums');
+      expect(new Headers(fetchMock.mock.calls[0][1].headers).get('authorization')).toBe('Bearer secret-token');
+    });
+
+    it('returns 500 when the tunnel is not configured', async () => {
+      const res = await call('/api/originals/p1', {}, { WORKER_URL: env.WORKER_URL, READ_TOKEN: env.READ_TOKEN });
+      expect(res.status).toBe(500);
+    });
+
+    it('returns 502 when the tunnel is unreachable', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('connect failed'));
+      expect((await call('/api/originals/p1')).status).toBe(502);
+    });
+
+    it('rejects nested originals paths', async () => {
+      expect((await call('/api/originals/a/b')).status).toBe(404);
+    });
   });
 });

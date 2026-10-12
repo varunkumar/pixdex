@@ -20,7 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { getOriginalUrl, originalsConfig } from '../services/originals';
+import { getOriginalUrl } from '../services/originals';
 
 const Search = () => {
   const [searchParams] = useSearchParams();
@@ -127,7 +127,7 @@ const Search = () => {
                 ))}
               </Stack>
               {(() => {
-                const originalUrl = getOriginalUrl(photo, originalsConfig);
+                const originalUrl = getOriginalUrl(photo);
                 return (
                   originalUrl && (
                     <Link href={originalUrl} isExternal fontSize="sm" color="teal.500" mt={2} display="inline-block">

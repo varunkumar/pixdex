@@ -16,6 +16,8 @@ const config: AgentConfig = {
   READ_TOKEN: 'the-read-token',
 };
 
+const AUTH = { Authorization: 'Bearer originals-secret' };
+
 describe('originals server', () => {
   let dir: string;
   let filePath: string;
@@ -43,7 +45,7 @@ describe('originals server', () => {
   it('streams the file for a known local photo with a valid token', async () => {
     await start({ fetchIndexedPhoto: vi.fn().mockResolvedValue({ source: 'local', path: filePath }) });
 
-    const response = await fetch(`${baseUrl}/originals/photo-1?token=originals-secret`);
+    const response = await fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH });
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('fake jpeg bytes');
@@ -51,13 +53,13 @@ describe('originals server', () => {
 
   it('rejects a missing or wrong token', async () => {
     await start({ fetchIndexedPhoto: vi.fn() });
-    const response = await fetch(`${baseUrl}/originals/photo-1?token=wrong`);
+    const response = await fetch(`${baseUrl}/originals/photo-1`, { headers: { Authorization: 'Bearer wrong' } });
     expect(response.status).toBe(401);
   });
 
   it('returns 404 for a Drive-sourced photo, since there is no local path to serve', async () => {
     await start({ fetchIndexedPhoto: vi.fn().mockResolvedValue({ source: 'google_drive', path: null }) });
-    const response = await fetch(`${baseUrl}/originals/photo-1?token=originals-secret`);
+    const response = await fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH });
     expect(response.status).toBe(404);
   });
 
@@ -65,7 +67,7 @@ describe('originals server', () => {
     await start({
       fetchIndexedPhoto: vi.fn().mockResolvedValue({ source: 'local', path: path.join(dir, 'missing.jpg') }),
     });
-    const response = await fetch(`${baseUrl}/originals/photo-1?token=originals-secret`);
+    const response = await fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH });
     expect(response.status).toBe(404);
   });
 
@@ -92,10 +94,10 @@ describe('originals server', () => {
 
     // The first request's stream errors before any bytes are flushed, so the connection is
     // destroyed and the fetch itself rejects rather than resolving with a body.
-    await expect(fetch(`${baseUrl}/originals/photo-1?token=originals-secret`)).rejects.toBeTruthy();
+    await expect(fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH })).rejects.toBeTruthy();
 
     // Crucially, the server process must still be alive and able to serve further requests.
-    const response = await fetch(`${baseUrl}/originals/photo-2?token=originals-secret`);
+    const response = await fetch(`${baseUrl}/originals/photo-2`, { headers: AUTH });
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('fake jpeg bytes');
 

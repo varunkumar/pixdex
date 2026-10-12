@@ -5,6 +5,9 @@
 interface Env {
   WORKER_URL: string;
   READ_TOKEN: string;
+  // Cloudflare Tunnel to the local originals server (optional until set up).
+  ORIGINALS_BASE_URL?: string;
+  ORIGINALS_TOKEN?: string;
 }
 
 interface Context {
@@ -22,22 +25,29 @@ const ALLOWED_PATHS = [
   /^thumbnails\/[^/]+$/,
 ];
 
+// Full-resolution local-disk originals, served by the agent through a tunnel.
+const ORIGINALS_PATH = /^originals\/[^/]+$/;
+
 // Request headers worth forwarding. Cookies (incl. the Access session) and any
 // client-supplied Authorization are intentionally dropped.
 const FORWARDED_HEADERS = ['accept', 'if-none-match', 'if-modified-since', 'range'];
 
 export const onRequestGet = async ({ request, env }: Context): Promise<Response> => {
-  if (!env.WORKER_URL || !env.READ_TOKEN) {
-    return new Response('Proxy is not configured', { status: 500 });
-  }
-
   const incoming = new URL(request.url);
   const path = incoming.pathname.replace(/^\/api\//, '');
-  if (!ALLOWED_PATHS.some((pattern) => pattern.test(path))) {
+
+  const isOriginal = ORIGINALS_PATH.test(path);
+  if (!isOriginal && !ALLOWED_PATHS.some((pattern) => pattern.test(path))) {
     return new Response('Not found', { status: 404 });
   }
 
-  const upstream = new URL(`${env.WORKER_URL.replace(/\/$/, '')}/${path}`);
+  const baseUrl = isOriginal ? env.ORIGINALS_BASE_URL : env.WORKER_URL;
+  const token = isOriginal ? env.ORIGINALS_TOKEN : env.READ_TOKEN;
+  if (!baseUrl || !token) {
+    return new Response('Proxy is not configured', { status: 500 });
+  }
+
+  const upstream = new URL(`${baseUrl.replace(/\/$/, '')}/${path}`);
   incoming.searchParams.forEach((value, key) => {
     if (key !== 'token') upstream.searchParams.append(key, value);
   });
@@ -47,9 +57,15 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
-  headers.set('Authorization', `Bearer ${env.READ_TOKEN}`);
+  headers.set('Authorization', `Bearer ${token}`);
 
-  const response = await fetch(upstream, { headers });
+  let response: Response;
+  try {
+    response = await fetch(upstream, { headers });
+  } catch {
+    // e.g. the tunnel is down because the local machine is off.
+    return new Response('Upstream unavailable', { status: 502 });
+  }
   const out = new Response(response.body, response);
   out.headers.set('Cache-Control', 'private, max-age=3600');
   return out;

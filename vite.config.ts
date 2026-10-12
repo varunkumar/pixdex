@@ -11,6 +11,13 @@ export default defineConfig(({ mode }) => {
     // Dev-time stand-in for the Pages Function in functions/api: adds the read token.
     server: {
       proxy: {
+        // Must come before '/api' so originals go to the tunnel, not the Worker.
+        '/api/originals': {
+          target: env.ORIGINALS_BASE_URL,
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/api/, ''),
+          headers: { Authorization: `Bearer ${env.ORIGINALS_TOKEN}` },
+        },
         '/api': {
           target: env.WORKER_URL,
           changeOrigin: true,

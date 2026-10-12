@@ -22,10 +22,13 @@ One-time setup (requires a Cloudflare account with a domain on it):
    cloudflared tunnel route dns pixdex-originals pixdex-originals.<your-domain>
    ```
 
-5. Set `ORIGINALS_TOKEN` in `agent/.env` to a random secret, and set
-   `VITE_ORIGINALS_BASE_URL=https://pixdex-originals.<your-domain>` and
-   `VITE_ORIGINALS_TOKEN=<the same secret>` in the frontend's `.env`
-   (see the root `.env.example`).
+5. Set `ORIGINALS_TOKEN` in `agent/.env` to a random secret. Then give the
+   frontend's Pages Function the same secret and the tunnel URL, as Pages
+   secrets (production and preview) named `ORIGINALS_TOKEN` and
+   `ORIGINALS_BASE_URL=https://pixdex-originals.<your-domain>`. For local dev,
+   put the same two in the root `.env` (see `.env.example`). The browser only
+   ever requests `/api/originals/:id`; the token is sent server-side as a
+   Bearer header.
 
 ## Running it
 

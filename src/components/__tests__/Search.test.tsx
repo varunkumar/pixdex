@@ -19,8 +19,7 @@ vi.mock('../../services/api/WorkerApiClient', async () => {
 });
 
 vi.mock('../../services/originals', () => ({
-  getOriginalUrl: vi.fn(() => 'https://pixdex-originals.example.com/originals/p1?token=shh'),
-  originalsConfig: {},
+  getOriginalUrl: vi.fn(() => '/api/originals/p1'),
 }));
 
 function renderWithProviders(ui: React.ReactElement) {
@@ -85,7 +84,7 @@ describe('Search', () => {
     fireEvent.click(screen.getByRole('button', { name: /search/i }));
 
     const link = await screen.findByRole('link', { name: /view original/i });
-    expect(link).toHaveAttribute('href', 'https://pixdex-originals.example.com/originals/p1?token=shh');
+    expect(link).toHaveAttribute('href', '/api/originals/p1');
     expect(link).toHaveAttribute('target', '_blank');
   });
 });

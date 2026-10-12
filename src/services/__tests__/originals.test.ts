@@ -23,20 +23,17 @@ const basePhoto: SerializedPhoto = {
 };
 
 describe('getOriginalUrl', () => {
-  it('returns a Drive view link for google_drive photos, regardless of tunnel config', () => {
+  it('returns a Drive view link for google_drive photos', () => {
     const photo: SerializedPhoto = { ...basePhoto, source: 'google_drive', driveFileId: 'abc123' };
-    expect(getOriginalUrl(photo, { baseUrl: '', token: '' })).toBe('https://drive.google.com/file/d/abc123/view');
+    expect(getOriginalUrl(photo)).toBe('https://drive.google.com/file/d/abc123/view');
   });
 
-  it('returns a token-bearing tunnel URL for local photos when the tunnel is configured', () => {
+  it('returns the same-origin proxy URL (no token) for local photos', () => {
     const photo: SerializedPhoto = { ...basePhoto, source: 'local' };
-    expect(getOriginalUrl(photo, { baseUrl: 'https://pixdex-originals.example.com', token: 'shh' })).toBe(
-      'https://pixdex-originals.example.com/originals/p1?token=shh'
-    );
+    expect(getOriginalUrl(photo)).toBe('/api/originals/p1');
   });
 
-  it('returns null for local photos when the tunnel is not configured', () => {
-    const photo: SerializedPhoto = { ...basePhoto, source: 'local' };
-    expect(getOriginalUrl(photo, { baseUrl: '', token: '' })).toBeNull();
+  it('returns null when the photo has no original to link to', () => {
+    expect(getOriginalUrl({ ...basePhoto, source: 'google_drive', driveFileId: null })).toBeNull();
   });
 });

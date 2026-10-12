@@ -55,9 +55,10 @@ run any backend of its own.
 
 Search results and the daily pick show thumbnails only by default. To enable
 "View Original" for local-disk photos (Drive-sourced photos always deep-link
-to Drive, no setup needed), follow `agent/cloudflared/README.md` once, then
-set `VITE_ORIGINALS_BASE_URL` and `VITE_ORIGINALS_TOKEN` in this app's `.env`
-to match.
+to Drive, no setup needed), follow `agent/cloudflared/README.md` once. The
+browser never sees the tunnel URL or its token: links go to the same-origin
+`/api/originals/:id` proxy, which needs `ORIGINALS_BASE_URL` and
+`ORIGINALS_TOKEN` set as Pages secrets (and in `.env` for local dev).
 
 ## Tests and deploys
 

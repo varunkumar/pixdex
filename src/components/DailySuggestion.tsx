@@ -17,7 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { getOriginalUrl, originalsConfig } from '../services/originals';
+import { getOriginalUrl } from '../services/originals';
 
 const DailySuggestion = () => {
   const toast = useToast();
@@ -95,7 +95,7 @@ const DailySuggestion = () => {
               </Button>
 
               {(() => {
-                const originalUrl = getOriginalUrl(suggestion.photo, originalsConfig);
+                const originalUrl = getOriginalUrl(suggestion.photo);
                 return (
                   originalUrl && (
                     <Link href={originalUrl} isExternal color="teal.500">
