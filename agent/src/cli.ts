@@ -6,12 +6,21 @@ import { indexLocalFolder } from './indexLocalFolder';
 import { runIndexDrive } from './driveCli';
 import { runServeOriginals } from './originalsCli';
 import { backfillExif } from './backfillExif';
+import { runIndexBatch, runIndexStatus } from './batch/cli';
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, folder] = argv;
 
   if (command === 'serve-originals') {
     return runServeOriginals(loadConfig());
+  }
+
+  if (command === 'index-batch') {
+    return runIndexBatch(loadConfig(), argv.slice(1));
+  }
+
+  if (command === 'index-status') {
+    return runIndexStatus(argv.slice(1));
   }
 
   if (command === 'index-drive') {
@@ -45,7 +54,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }

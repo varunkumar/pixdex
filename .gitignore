@@ -76,3 +76,6 @@ ehthumbs.db
 # Google Drive OAuth token (defense-in-depth; agent/.gitignore already
 # covers its normal location at agent/.google-token.json)
 .google-token.json
+
+# Resumable batch indexer state (queue + lock)
+agent/.index-state/

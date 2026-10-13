@@ -62,6 +62,33 @@ vision pass:
 cd agent && npm run dev -- backfill-exif "/path/to/folder"
 ```
 
+## Indexing many folders (resumable)
+
+`index-batch` indexes every `<album>/Processed` folder under one or more roots
+(and skips `Unprocessed`), one album at a time, and records progress in
+`agent/.index-state/queue.json`. Stop it, reboot, or lose the disk at any point:
+running it again picks up where it left off, because finished albums are not
+revisited and photos already in the index are skipped by content hash.
+
+```bash
+cd agent
+npm run dev -- index-batch /Volumes/T9/Varun/Photos "/Volumes/T7Shield/Varun/Bandipur (12,13,14-Sep-2026)"
+npm run dev -- index-status            # progress, ETA, what is pending/failed
+npm run dev -- index-status --json
+```
+
+- Album folders (a folder that itself contains `Processed`) and roots (a folder
+  of albums) can be mixed. Re-running rediscovers: new albums are queued, and a
+  finished album is queued again if its number of photos changed.
+- `--priority=bandipur,nagarhole` runs matching albums first (regexes, comma
+  separated; the default puts wildlife albums first). `--retry-failed` retries
+  albums that finished with failed photos.
+- It waits (and logs why) when Ollama or the Worker is unreachable or a disk is
+  not mounted, instead of recording failures.
+- To start it automatically at login and restart it after a crash, run
+  `agent/scripts/install-launchd.sh <folders...>` once (`--uninstall` removes
+  it). Logs go to `agent/.index-state/batch.log`.
+
 ## Originals (optional)
 
 Search results and the daily pick show thumbnails only by default. To enable

@@ -18,6 +18,14 @@ export interface IndexLocalFolderDeps {
   ollamaClient: OllamaClient;
   config: AgentConfig;
   onProgress?: (message: string) => void;
+  /** Structured per-file outcome, for callers that track progress durably. */
+  onFile?: (event: IndexFileEvent) => void;
+}
+
+export interface IndexFileEvent {
+  file: string;
+  outcome: 'indexed' | 'skipped' | 'failed';
+  reason?: string;
 }
 
 /**
@@ -36,7 +44,7 @@ export async function indexLocalFolder(
   folder: string,
   deps: IndexLocalFolderDeps
 ): Promise<IndexLocalFolderResult> {
-  const { cloudflareClient, ollamaClient, config, onProgress } = deps;
+  const { cloudflareClient, ollamaClient, config, onProgress, onFile } = deps;
 
   const allFiles = await scanDirectory(folder);
   const imageFiles = allFiles.filter(isImageFile);
@@ -57,9 +65,9 @@ export async function indexLocalFolder(
     } else {
       failed++;
       const reason = result.reason;
-      onProgress?.(
-        `Failed: ${imageFiles[i]} (${reason instanceof Error ? reason.message : String(reason)})`
-      );
+      const message = reason instanceof Error ? reason.message : String(reason);
+      onProgress?.(`Failed: ${imageFiles[i]} (${message})`);
+      onFile?.({ file: imageFiles[i], outcome: 'failed', reason: message });
     }
   }
 
@@ -73,11 +81,13 @@ export async function indexLocalFolder(
     if (knownHashes.has(contentHash)) {
       skipped++;
       onProgress?.(`Skipping already-indexed: ${file}`);
+      onFile?.({ file, outcome: 'skipped' });
       continue;
     }
     if (processedHashes.has(contentHash)) {
       skipped++;
       onProgress?.(`Skipping duplicate content in this run: ${file}`);
+      onFile?.({ file, outcome: 'skipped' });
       continue;
     }
     processedHashes.add(contentHash);
@@ -96,9 +106,12 @@ export async function indexLocalFolder(
       );
       indexed++;
       onProgress?.(`Indexed: ${file}`);
+      onFile?.({ file, outcome: 'indexed' });
     } catch (error) {
       failed++;
-      onProgress?.(`Failed: ${file} (${error instanceof Error ? error.message : String(error)})`);
+      const message = error instanceof Error ? error.message : String(error);
+      onProgress?.(`Failed: ${file} (${message})`);
+      onFile?.({ file, outcome: 'failed', reason: message });
     }
   }
 
