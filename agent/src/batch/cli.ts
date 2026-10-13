@@ -5,7 +5,7 @@ import { CloudflareClient } from '../cloudflareClient';
 import { OllamaClient } from '../ollama/client';
 import { indexLocalFolder } from '../indexLocalFolder';
 import { runBatch } from './runBatch';
-import { formatStatus, summarize } from './status';
+import { formatStatus, summarize, type LiveCounts } from './status';
 import { loadState } from './state';
 
 // Wildlife albums first; everything else alphabetically afterwards.
@@ -85,6 +85,41 @@ export async function runIndexBatch(config: AgentConfig, args: string[]): Promis
   }
 }
 
+/** Library counts from the Worker; undefined when it cannot be reached or no READ_TOKEN is set. */
+export async function fetchLiveCounts(
+  env: Record<string, string | undefined>,
+  albumNames: string[],
+  fetchFn: typeof fetch = fetch
+): Promise<LiveCounts | undefined> {
+  const base = env.CLOUDFLARE_API_BASE_URL;
+  const token = env.READ_TOKEN;
+  if (!base || !token) return undefined;
+
+  const total = async (query: string): Promise<number> => {
+    const response = await fetchFn(`${base.replace(/\/$/, '')}/search?limit=1${query}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) throw new Error(`search failed: ${response.status}`);
+    return ((await response.json()) as { total: number }).total;
+  };
+
+  try {
+    const byAlbum: Record<string, number> = {};
+    const names = [...new Set(albumNames)];
+    for (let i = 0; i < names.length; i += 8) {
+      await Promise.all(
+        names.slice(i, i + 8).map(async (name) => {
+          byAlbum[name] = await total(`&album=${encodeURIComponent(name)}`);
+        })
+      );
+    }
+    return { total: await total(''), byAlbum };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runIndexStatus(args: string[]): Promise<number> {
   const { json } = parseBatchArgs(args);
   const { state } = await loadState(path.join(stateDirectory(), 'queue.json'));
@@ -92,6 +127,12 @@ export async function runIndexStatus(args: string[]): Promise<number> {
     console.log('No batch has been started yet. Run: npm run dev -- index-batch <folder>...');
     return 0;
   }
-  console.log(json ? JSON.stringify({ summary: summarize(state), state }, null, 2) : formatStatus(state));
+  const live = await fetchLiveCounts(
+    process.env,
+    Object.values(state.albums).map((a) => a.name)
+  );
+  console.log(
+    json ? JSON.stringify({ summary: summarize(state), live, state }, null, 2) : formatStatus(state, live)
+  );
   return 0;
 }

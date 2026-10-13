@@ -56,7 +56,14 @@ function bar(fraction: number, width = 20): string {
   return `[${'#'.repeat(filled)}${'.'.repeat(width - filled)}]`;
 }
 
-export function formatStatus(state: BatchState): string {
+export interface LiveCounts {
+  /** Photos in the library right now (from the Worker). */
+  total: number;
+  /** Photos in the library per album name. */
+  byAlbum: Record<string, number>;
+}
+
+export function formatStatus(state: BatchState, live?: LiveCounts): string {
   const summary = summarize(state);
   const albums = Object.values(state.albums);
   const lines: string[] = [];
@@ -74,6 +81,8 @@ export function formatStatus(state: BatchState): string {
         (summary.etaSeconds !== null ? `   ETA: up to ${duration(summary.etaSeconds)}` : '')
     );
   }
+  if (live) lines.push(`In the library now: ${live.total.toLocaleString()} photos (live, includes earlier runs)`);
+  lines.push('Counts above are image files; identical copies are indexed once, so the library can be smaller.');
   if (summary.photos.failed > 0) lines.push(`Failed photos: ${summary.photos.failed}`);
   lines.push(`Updated: ${state.updatedAt}`);
   lines.push('');
@@ -93,7 +102,14 @@ export function formatStatus(state: BatchState): string {
   section(
     'Pending',
     albums.filter((a) => a.status === 'pending'),
-    (a) => `${String(a.imageCount).padStart(5)}  ${a.name}${a.lastError ? `   (last error: ${a.lastError})` : ''}`
+    (a) => {
+      const already = live?.byAlbum[a.name] ?? 0;
+      return (
+        `${String(a.imageCount).padStart(5)}  ${a.name}` +
+        (already > 0 ? `   (${already} already in library)` : '') +
+        (a.lastError ? `   (last error: ${a.lastError})` : '')
+      );
+    }
   );
   section(
     'Completed with failures',

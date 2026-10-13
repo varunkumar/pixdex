@@ -6,6 +6,7 @@ import { discoverAlbums } from '../src/batch/discover';
 import { mergeDiscovered, orderQueue } from '../src/batch/queue';
 import { runBatch, type BatchDeps } from '../src/batch/runBatch';
 import { acquireLock, emptyState, loadState, saveState, type BatchState } from '../src/batch/state';
+import { fetchLiveCounts } from '../src/batch/cli';
 import { formatStatus, summarize } from '../src/batch/status';
 import type { IndexFileEvent } from '../src/indexLocalFolder';
 
@@ -335,5 +336,35 @@ describe('status', () => {
     expect(text).toContain('5/20  Doing');
     expect(text).toContain('Waiting');
     expect(text).toContain('Completed (1)');
+  });
+});
+
+describe('live library counts', () => {
+  it('shows the library total and what a pending album already has', () => {
+    const state = emptyState();
+    state.albums['/x/T7'] = {
+      name: 'T7 Album', albumDir: '/x/T7', processedDir: '/x/T7', status: 'pending',
+      imageCount: 176, indexed: 0, skipped: 0, failed: 0, failures: [],
+    };
+    const text = formatStatus(state, { total: 282, byAlbum: { 'T7 Album': 143 } });
+    expect(text).toContain('In the library now: 282 photos');
+    expect(text).toContain('176  T7 Album   (143 already in library)');
+  });
+
+  it('queries the Worker per album and overall, and degrades to undefined', async () => {
+    const fetchFn = vi.fn(async (url: string | URL | Request) => {
+      const u = String(url);
+      const total = u.includes('album=A') ? 5 : 12;
+      return new Response(JSON.stringify({ total }), { status: 200 });
+    });
+    const env = { CLOUDFLARE_API_BASE_URL: 'https://w.example.dev/', READ_TOKEN: 't' };
+
+    const live = await fetchLiveCounts(env, ['A', 'A', 'B'], fetchFn as unknown as typeof fetch);
+    expect(live).toEqual({ total: 12, byAlbum: { A: 5, B: 12 } });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+
+    expect(await fetchLiveCounts({}, ['A'])).toBeUndefined();
+    const failing = vi.fn().mockRejectedValue(new Error('offline'));
+    expect(await fetchLiveCounts(env, ['A'], failing as unknown as typeof fetch)).toBeUndefined();
   });
 });
