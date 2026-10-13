@@ -127,6 +127,12 @@ describe('analyzeImage', () => {
     expect(userMessage.images).toHaveLength(1);
   });
 
+  it('keeps thinking on for the image analysis, where reasoning improves the result', async () => {
+    const chat = vi.fn().mockResolvedValue(SAMPLE_RESPONSE);
+    await analyzeImage(filePath, { chat } as unknown as OllamaClient);
+    expect(chat.mock.calls[0][1]).toEqual({ think: true });
+  });
+
   it('downscales large images before sending them to the model', async () => {
     const bigPath = path.join(dir, 'big.jpg');
     await sharp({ create: { width: 4000, height: 3000, channels: 3, background: { r: 9, g: 9, b: 9 } } })

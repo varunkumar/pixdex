@@ -59,7 +59,7 @@ export async function analyzeImage(
         'You are a wildlife photography expert tasked with analyzing photos. Provide detailed, accurate information about the wildlife, environment, and photographic elements in each image, and state only what is visible or given to you.',
     },
     { role: 'user', content: buildAnalysisPrompt(context), images: [base64Image] },
-  ]);
+  ], { think: true });
 
   return parseJsonAnalysis(content) ?? parseAnalysisResponse(content);
 }
