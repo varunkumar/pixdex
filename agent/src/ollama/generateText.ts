@@ -7,6 +7,6 @@ export async function generateText(prompt: string, client: OllamaClient): Promis
       content: 'You are a wildlife photography expert writing engaging, accurate Instagram content.',
     },
     { role: 'user', content: prompt },
-  ]);
+  ], { think: false });
   return content.trim();
 }
