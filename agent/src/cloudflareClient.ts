@@ -36,6 +36,7 @@ export interface IngestPhotoPayload {
   iso?: number;
   latitude?: number;
   longitude?: number;
+  hasWatermark?: boolean;
 }
 
 export class CloudflareClient {

@@ -57,6 +57,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     modelProvider: 'ollama',
     modelName: config.OLLAMA_MODEL,
     ...exif.camera,
+    hasWatermark: analysis.hasWatermark,
   };
 
   // Upload the thumbnail before creating the D1 row: the thumbnail PUT is

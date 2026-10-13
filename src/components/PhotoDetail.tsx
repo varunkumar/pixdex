@@ -138,6 +138,10 @@ const PhotoDetail = () => {
                 {size && <Field label="File size">{size}</Field>}
                 {photo.format && <Field label="Format">{photo.format.toUpperCase()}</Field>}
                 {photo.season && <Field label="Season">{photo.season}</Field>}
+                {/* Unknown (null) is left out entirely rather than shown as "Unknown". */}
+                {photo.hasWatermark != null && (
+                  <Field label="Watermark">{photo.hasWatermark ? 'Yes' : 'No'}</Field>
+                )}
               </SimpleGrid>
 
               {originalUrl && (

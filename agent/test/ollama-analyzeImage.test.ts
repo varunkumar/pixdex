@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { analyzeImage, buildAnalysisPrompt, parseAnalysisResponse, parseJsonAnalysis } from '../src/ollama/analyzeImage';
+import {
+  analyzeImage,
+  buildAnalysisPrompt,
+  parseAnalysisResponse,
+  parseJsonAnalysis,
+  scrubWatermarkMentions,
+} from '../src/ollama/analyzeImage';
 import { OllamaClient } from '../src/ollama/client';
 
 const SAMPLE_RESPONSE = `SUBJECTS: leopard, big cat
@@ -147,5 +153,51 @@ describe('analyzeImage', () => {
     const userMessage = messages.find((m: { role: string }) => m.role === 'user');
     const sent = await sharp(Buffer.from(userMessage.images[0], 'base64')).metadata();
     expect(Math.max(sent.width ?? 0, sent.height ?? 0)).toBe(1536);
+  });
+});
+
+describe('watermark handling', () => {
+  const base = {
+    subjects: ['tiger'],
+    colors: ['orange'],
+    patterns: ['stripes'],
+    environment: 'forest',
+    tags: ['tiger', 'watermark', 'wildlife'],
+    description: 'A tiger rests. A photographer watermark reads "Name" in the lower-left corner. It is dusk.',
+  };
+
+  it('reads the watermark flag from JSON, accepting booleans and yes/no', () => {
+    const json = (watermark: unknown) => JSON.stringify({ ...base, tags: ['tiger'], watermark });
+    expect(parseJsonAnalysis(json(true))?.hasWatermark).toBe(true);
+    expect(parseJsonAnalysis(json(false))?.hasWatermark).toBe(false);
+    expect(parseJsonAnalysis(json('Yes'))?.hasWatermark).toBe(true);
+    expect(parseJsonAnalysis(json('no'))?.hasWatermark).toBe(false);
+    expect(parseJsonAnalysis(JSON.stringify({ ...base, tags: ['tiger'] }))?.hasWatermark).toBeUndefined();
+  });
+
+  it('reads the flag from a text reply', () => {
+    expect(parseAnalysisResponse('- subjects: tiger\n- watermark: false\n- description: A tiger.').hasWatermark).toBe(
+      false
+    );
+    expect(parseAnalysisResponse('SUBJECTS: tiger\n\nWATERMARK: yes\n\nDESCRIPTION: A tiger.').hasWatermark).toBe(true);
+  });
+
+  it('strips watermark mentions from tags and sentences, and infers the flag when missing', () => {
+    const result = scrubWatermarkMentions({ ...base });
+    expect(result.tags).toEqual(['tiger', 'wildlife']);
+    expect(result.description).toBe('A tiger rests. It is dusk.');
+    expect(result.hasWatermark).toBe(true);
+  });
+
+  it('leaves clean results alone and keeps an explicit false', () => {
+    const clean = { ...base, tags: ['tiger'], description: 'A tiger rests.', hasWatermark: false };
+    expect(scrubWatermarkMentions(clean)).toEqual(clean);
+    expect(scrubWatermarkMentions({ ...clean, hasWatermark: undefined }).hasWatermark).toBeUndefined();
+  });
+
+  it('asks the model to report watermarks only through the flag', () => {
+    const prompt = buildAnalysisPrompt();
+    expect(prompt).toMatch(/watermark: true if/);
+    expect(prompt).toMatch(/Never mention watermarks/);
   });
 });

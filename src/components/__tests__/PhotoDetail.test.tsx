@@ -59,6 +59,7 @@ describe('PhotoDetail', () => {
       iso: 2500,
       latitude: 11.67,
       longitude: 76.63,
+      hasWatermark: true,
     });
   });
 
@@ -78,6 +79,23 @@ describe('PhotoDetail', () => {
     );
     expect(screen.getByRole('link', { name: /view original/i })).toHaveAttribute('href', '/api/originals/p1');
     expect(workerApiClient.getPhoto).toHaveBeenCalledWith('p1');
+  });
+
+  it('shows the watermark field only when it is known', async () => {
+    renderAt('/photos/p1');
+    expect(await screen.findByText('Watermark')).toBeInTheDocument();
+    expect(screen.getByText('Yes')).toBeInTheDocument();
+  });
+
+  it('hides the watermark field when unknown', async () => {
+    vi.mocked(workerApiClient.getPhoto).mockResolvedValueOnce({
+      ...(await vi.mocked(workerApiClient.getPhoto)('p1')),
+      hasWatermark: null,
+    });
+    renderAt('/photos/p1');
+
+    expect(await screen.findByText('A long and detailed description of a tiger on a rock.')).toBeInTheDocument();
+    expect(screen.queryByText('Watermark')).not.toBeInTheDocument();
   });
 
   it('shows an error with a way back when the photo cannot be loaded', async () => {

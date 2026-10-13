@@ -39,6 +39,8 @@ export const ingestPhotoSchema = z.object({
   suggestedHashtags: z.array(z.string()).default([]),
   modelProvider: z.string().min(1),
   modelName: z.string().min(1),
+  // Absent means unknown; the agent sends true/false once it has looked.
+  hasWatermark: z.boolean().optional(),
 }).merge(exifFieldsSchema);
 
 export type IngestPhotoInput = z.infer<typeof ingestPhotoSchema>;
@@ -79,6 +81,7 @@ export interface PhotoRow {
   iso?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  has_watermark?: number | null;
   [key: string]: unknown;
 }
 
@@ -118,6 +121,8 @@ export interface SerializedPhoto {
   iso: number | null;
   latitude: number | null;
   longitude: number | null;
+  /** null when unknown (indexed before watermark detection existed). */
+  hasWatermark: boolean | null;
 }
 
 function parseJsonArray(value: string | undefined | null): unknown[] {
@@ -172,6 +177,7 @@ export function serializePhoto(row: PhotoRow): SerializedPhoto {
     iso: row.iso ?? null,
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
+    hasWatermark: row.has_watermark == null ? null : row.has_watermark === 1,
   };
 }
 

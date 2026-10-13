@@ -34,6 +34,8 @@ export interface SerializedPhoto {
   iso?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  /** null/undefined when unknown (indexed before watermark detection existed). */
+  hasWatermark?: boolean | null;
 }
 
 export interface SearchResponse {

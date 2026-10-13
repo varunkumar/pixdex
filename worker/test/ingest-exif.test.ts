@@ -103,4 +103,30 @@ describe('camera EXIF fields', () => {
     });
     expect(noAuth.status).toBe(401);
   });
+
+  describe('watermark flag', () => {
+    const post = (body: object) =>
+      SELF.fetch('https://example.com/ingest/photo', {
+        method: 'POST',
+        headers: ingestHeaders(),
+        body: JSON.stringify(body),
+      });
+
+    it('stores true and false, and returns null when unknown', async () => {
+      await post({ ...base, hasWatermark: true });
+      expect((await getPhoto(base.id)).hasWatermark).toBe(true);
+
+      await post({ ...base, hasWatermark: false });
+      expect((await getPhoto(base.id)).hasWatermark).toBe(false);
+
+      await env.DB.prepare('DELETE FROM photos').run();
+      await post(base);
+      expect((await getPhoto(base.id)).hasWatermark).toBeNull();
+    });
+
+    it('rejects a non-boolean flag', async () => {
+      const res = await post({ ...base, hasWatermark: 'maybe' });
+      expect(res.status).toBe(400);
+    });
+  });
 });

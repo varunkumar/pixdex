@@ -26,8 +26,8 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          season, environment, album, description, suggested_caption,
          suggested_hashtags, model_provider, model_name, search_text, last_indexed,
          camera_make, camera_model, lens_model, focal_length, f_number,
-         exposure_time, iso, latitude, longitude
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         exposure_time, iso, latitude, longitude, has_watermark
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          content_hash = excluded.content_hash,
          source = excluded.source,
@@ -61,7 +61,8 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          exposure_time = excluded.exposure_time,
          iso = excluded.iso,
          latitude = excluded.latitude,
-         longitude = excluded.longitude`
+         longitude = excluded.longitude,
+         has_watermark = excluded.has_watermark`
     )
       .bind(
         p.id, p.contentHash, p.source, p.path ?? null, p.driveFileId ?? null, p.filename,
@@ -72,7 +73,8 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
         searchText, now,
         p.cameraMake ?? null, p.cameraModel ?? null, p.lensModel ?? null,
         p.focalLength ?? null, p.fNumber ?? null, p.exposureTime ?? null,
-        p.iso ?? null, p.latitude ?? null, p.longitude ?? null
+        p.iso ?? null, p.latitude ?? null, p.longitude ?? null,
+        p.hasWatermark === undefined ? null : p.hasWatermark ? 1 : 0
       )
       .run();
   } catch (err) {
