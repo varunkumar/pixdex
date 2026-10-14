@@ -173,4 +173,24 @@ describe('PhotoDetail', () => {
     expect(back).toHaveAttribute('href', '/albums/Bandipur');
     window.history.replaceState(null, '');
   });
+
+  it('reached from an album page, offers a plain Back instead of Back to search', async () => {
+    renderWithRouter(
+      [{ path: '/albums/:name', element: <p>album page</p> }, ...routes],
+      ['/albums/Bandipur', '/photos/p1']
+    );
+    expect(await screen.findByRole('button', { name: /back/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /back to search/i })).not.toBeInTheDocument();
+  });
+
+  it('when the photo fails to load after in-app navigation, Back goes back instead of to Search', async () => {
+    vi.mocked(workerApiClient.getPhoto).mockRejectedValue(new Error('Your session has expired.'));
+    renderWithRouter(
+      [{ path: '/albums/:name', element: <p>album page</p> }, ...routes],
+      ['/albums/Bandipur', '/photos/p1']
+    );
+    expect(await screen.findByText('Your session has expired.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /back to search/i })).not.toBeInTheDocument();
+  });
 });
