@@ -1,9 +1,8 @@
-import { ChakraProvider } from '@chakra-ui/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DailySuggestion from '../DailySuggestion';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
+import { renderWithProviders } from '../../test/renderWithProviders';
 import type { SerializedPhoto } from '../../types/api';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
@@ -13,15 +12,6 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
 vi.mock('../../services/originals', () => ({
   getOriginalUrl: vi.fn(() => '/api/originals/p1'),
 }));
-
-function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient();
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <ChakraProvider>{ui}</ChakraProvider>
-    </QueryClientProvider>
-  );
-}
 
 describe('DailySuggestion', () => {
   beforeEach(() => {

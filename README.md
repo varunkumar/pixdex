@@ -1,4 +1,4 @@
-# PixDex
+# PixdeX
 
 A browse and search UI for a personal photo collection.
 

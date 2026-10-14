@@ -1,8 +1,9 @@
-import type { AlbumsResponse, DailyPickResponse, SearchResponse, SerializedPhoto } from '../../types/api';
+import type { AlbumsPageResponse, AlbumsResponse, DailyPickResponse, SearchResponse, SerializedPhoto } from '../../types/api';
 
 export interface SearchParams {
   q?: string;
   album?: string;
+  sort?: 'date';
   limit?: number;
   offset?: number;
 }
@@ -31,6 +32,7 @@ export class WorkerApiClient {
     const query = new URLSearchParams();
     if (params.q) query.set('q', params.q);
     if (params.album) query.set('album', params.album);
+    if (params.sort) query.set('sort', params.sort);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
 
@@ -38,9 +40,17 @@ export class WorkerApiClient {
     return this.getJson<SearchResponse>(`/search${suffix}`);
   }
 
+  /** Album names only, for dropdowns. */
   async getAlbums(): Promise<string[]> {
-    const { albums } = await this.getJson<AlbumsResponse>('/albums');
+    const { albums } = await this.getJson<AlbumsResponse>('/albums?names=1');
     return albums;
+  }
+
+  async getAlbumsPage(params: { limit?: number; offset?: number } = {}): Promise<AlbumsPageResponse> {
+    // A limit is always sent: the worker returns the rich shape only when asked for a page.
+    const query = new URLSearchParams({ limit: String(params.limit ?? 12) });
+    if (params.offset != null) query.set('offset', String(params.offset));
+    return this.getJson<AlbumsPageResponse>(`/albums?${query.toString()}`);
   }
 
   async getPhoto(id: string): Promise<SerializedPhoto> {

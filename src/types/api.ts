@@ -44,6 +44,21 @@ export interface SearchResponse {
   total: number;
 }
 
+export interface AlbumSummary {
+  name: string;
+  photoCount: number;
+  coverPhotoId: string;
+  coverThumbnailUrl: string | null;
+  /** Capture date of the cover (newest) photo; null when the photo has no date. */
+  latestDate: string | null;
+}
+
+export interface AlbumsPageResponse {
+  albums: AlbumSummary[];
+  /** Total number of albums, ignoring limit/offset. */
+  total: number;
+}
+
 export interface AlbumsResponse {
   albums: string[];
 }

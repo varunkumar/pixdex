@@ -1,37 +1,47 @@
-import { Box, ChakraProvider, Container } from '@chakra-ui/react';
+import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, ScrollRestoration } from 'react-router-dom';
+import AlbumPhotos from './components/AlbumPhotos';
 import Albums from './components/Albums';
 import DailySuggestion from './components/DailySuggestion';
 import Dashboard from './components/Dashboard';
-import Navigation from './components/Navigation';
+import Layout from './components/Layout';
 import PhotoDetail from './components/PhotoDetail';
 import Search from './components/Search';
+import { theme } from './theme';
 
 const queryClient = new QueryClient();
 
+const RootLayout = () => (
+  <>
+    <Layout />
+    <ScrollRestoration />
+  </>
+);
+
+const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
+      { path: '/', element: <Dashboard /> },
+      { path: '/albums', element: <Albums /> },
+      { path: '/albums/:name', element: <AlbumPhotos /> },
+      { path: '/search', element: <Search /> },
+      { path: '/photos/:id', element: <PhotoDetail /> },
+      { path: '/daily', element: <DailySuggestion /> },
+    ],
+  },
+]);
+
 function App() {
   return (
-    <ChakraProvider>
+    <MantineProvider theme={theme} defaultColorScheme="auto">
+      <Notifications />
       <QueryClientProvider client={queryClient}>
-        <Router>
-          <Box minH="100vh">
-            <Navigation />
-            <Box bg="gray.50" minH="calc(100vh - 64px)">
-              <Container maxW="container.xl" py={8}>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/albums" element={<Albums />} />
-                  <Route path="/search" element={<Search />} />
-                  <Route path="/photos/:id" element={<PhotoDetail />} />
-                  <Route path="/daily" element={<DailySuggestion />} />
-                </Routes>
-              </Container>
-            </Box>
-          </Box>
-        </Router>
+        <RouterProvider router={router} />
       </QueryClientProvider>
-    </ChakraProvider>
+    </MantineProvider>
   );
 }
 

@@ -1,28 +1,11 @@
-import {
-  Box,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  Flex,
-  Heading,
-  Image,
-  Link,
-  Skeleton,
-  Tag,
-  Text,
-  Textarea,
-  useToast,
-  VStack,
-} from '@chakra-ui/react';
+import { Anchor, Badge, Button, Card, Group, Image, Skeleton, Stack, Text, Textarea, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { getOriginalUrl } from '../services/originals';
 import PhotoMeta from './PhotoMeta';
 
 const DailySuggestion = () => {
-  const toast = useToast();
-
   const {
     data: suggestion,
     isLoading,
@@ -40,81 +23,72 @@ const DailySuggestion = () => {
       .join(' ')}`;
     navigator.clipboard.writeText(content).then(
       () => {
-        toast({ title: 'Copied to clipboard', status: 'success', duration: 2000 });
+        notifications.show({ title: 'Copied to clipboard', message: '', color: 'green', autoClose: 2000 });
       },
-      (err) => {
-        toast({ title: 'Failed to copy', description: err.message, status: 'error', duration: 3000 });
+      (err: Error) => {
+        notifications.show({ title: 'Failed to copy', message: err.message, color: 'red', autoClose: 3000 });
       }
     );
   };
 
+  const originalUrl = suggestion ? getOriginalUrl(suggestion.photo) : null;
+
   return (
-    <Box w="100%" maxW="container.xl" mx="auto">
-      <Card>
-        <CardHeader>
-          <Heading size="md">Today's Instagram Pick</Heading>
-        </CardHeader>
-        <CardBody>
-          {isLoading ? (
-            <VStack spacing={4} align="stretch">
-              <Skeleton height="400px" />
-              <Skeleton height="20px" />
-              <Skeleton height="100px" />
-              <Skeleton height="40px" />
-            </VStack>
-          ) : error ? (
-            <Text color="red.500">
-              {error instanceof Error ? error.message : 'An error occurred while loading the suggestion'}
-            </Text>
-          ) : suggestion ? (
-            <VStack spacing={4} align="stretch">
-              <Image
-                src={workerApiClient.thumbnailUrl(suggestion.photo)}
-                alt={suggestion.photo.description ?? suggestion.photo.filename ?? suggestion.photo.id}
-                borderRadius="lg"
-                objectFit="contain"
-                bg="blackAlpha.100"
-                maxH="500px"
-                w="100%"
-              />
-              <PhotoMeta photo={suggestion.photo} />
+    <Card withBorder maw={1100} mx="auto" w="100%">
+      <Title order={3} mb="md">
+        Today's Instagram Pick
+      </Title>
+      {isLoading ? (
+        <Stack>
+          <Skeleton height={400} />
+          <Skeleton height={20} />
+          <Skeleton height={100} />
+          <Skeleton height={40} />
+        </Stack>
+      ) : error ? (
+        <Text c="red">
+          {error instanceof Error ? error.message : 'An error occurred while loading the suggestion'}
+        </Text>
+      ) : suggestion ? (
+        <Stack>
+          <Image
+            src={workerApiClient.thumbnailUrl(suggestion.photo)}
+            alt={suggestion.photo.description ?? suggestion.photo.filename ?? suggestion.photo.id}
+            radius="md"
+            fit="contain"
+            mah={500}
+          />
+          <PhotoMeta photo={suggestion.photo} />
 
-              <Text fontWeight="bold">Why this photo?</Text>
-              <Text>{suggestion.reason}</Text>
+          <Text fw={700}>Why this photo?</Text>
+          <Text>{suggestion.reason}</Text>
 
-              <Text fontWeight="bold">Suggested Caption</Text>
-              <Textarea value={suggestion.suggestedCaption} isReadOnly rows={4} />
+          <Text fw={700}>Suggested Caption</Text>
+          <Textarea value={suggestion.suggestedCaption} readOnly rows={4} />
 
-              <Text fontWeight="bold">Suggested Hashtags</Text>
-              <Flex gap={2} flexWrap="wrap">
-                {suggestion.suggestedHashtags.map((tag) => (
-                  <Tag key={tag} colorScheme="teal">
-                    #{tag}
-                  </Tag>
-                ))}
-              </Flex>
+          <Text fw={700}>Suggested Hashtags</Text>
+          <Group gap="xs">
+            {suggestion.suggestedHashtags.map((tag) => (
+              <Badge key={tag} variant="light">
+                #{tag}
+              </Badge>
+            ))}
+          </Group>
 
-              <Button colorScheme="teal" onClick={handleCopyToClipboard}>
-                Copy to Clipboard
-              </Button>
+          <Button onClick={handleCopyToClipboard} w="fit-content">
+            Copy to Clipboard
+          </Button>
 
-              {(() => {
-                const originalUrl = getOriginalUrl(suggestion.photo);
-                return (
-                  originalUrl && (
-                    <Link href={originalUrl} isExternal color="teal.500">
-                      View Original
-                    </Link>
-                  )
-                );
-              })()}
-            </VStack>
-          ) : (
-            <Text>No suggestion available</Text>
+          {originalUrl && (
+            <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer">
+              View Original
+            </Anchor>
           )}
-        </CardBody>
-      </Card>
-    </Box>
+        </Stack>
+      ) : (
+        <Text>No suggestion available</Text>
+      )}
+    </Card>
   );
 };
 

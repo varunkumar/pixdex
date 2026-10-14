@@ -1,38 +1,55 @@
-import { Box, Card, CardBody, Grid, Heading, Link, Text, VStack } from '@chakra-ui/react';
-import { useQuery } from '@tanstack/react-query';
-import { Link as RouterLink } from 'react-router-dom';
+import { SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { useListParams } from '../hooks/useListParams';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import AlbumCard from './AlbumCard';
+import ListPagination from './ListPagination';
+
+const ALBUM_PAGE_SIZES = [12, 24, 48] as const;
 
 const Albums = () => {
-  const { data: albums = [] } = useQuery({
-    queryKey: ['albums'],
-    queryFn: () => workerApiClient.getAlbums(),
+  const { params, page, size, offset, update } = useListParams(12, ALBUM_PAGE_SIZES);
+
+  const { data, error, isPlaceholderData } = useQuery({
+    queryKey: ['albums-page', page, size],
+    queryFn: () => workerApiClient.getAlbumsPage({ limit: size, offset }),
+    placeholderData: keepPreviousData,
   });
 
-  return (
-    <VStack spacing={6} align="stretch" w="100%">
-      <Box>
-        <Heading size="lg">Albums</Heading>
-      </Box>
+  const onPage = useCallback(
+    (p: number, replace?: boolean) => update({ page: p }, { replace }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [params]
+  );
 
-      <Grid templateColumns="repeat(auto-fill, minmax(300px, 1fr))" gap={6}>
-        {albums.map((album) => (
-          <Link
-            key={album}
-            as={RouterLink}
-            to={`/search?${new URLSearchParams({ album }).toString()}`}
-            textDecoration="none"
-            _hover={{ textDecoration: 'none' }}
-          >
-            <Card>
-              <CardBody>
-                <Text fontSize="lg">{album}</Text>
-              </CardBody>
-            </Card>
-          </Link>
-        ))}
-      </Grid>
-    </VStack>
+  return (
+    <Stack gap="lg">
+      <Title order={2}>Albums</Title>
+
+      {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
+      {data && data.albums.length === 0 && <Text c="dimmed">No albums yet.</Text>}
+
+      {data && data.albums.length > 0 && (
+        <SimpleGrid cols={{ base: 1, xs: 2, md: 3, lg: 4 }} spacing="md">
+          {data.albums.map((album) => (
+            <AlbumCard key={album.name} album={album} />
+          ))}
+        </SimpleGrid>
+      )}
+
+      {data && (
+        <ListPagination
+          page={page}
+          size={size}
+          total={data.total}
+          settled={!isPlaceholderData}
+          sizes={ALBUM_PAGE_SIZES}
+          onPage={onPage}
+          onSize={(s) => update({ size: s }, { resetPage: true })}
+        />
+      )}
+    </Stack>
   );
 };
 

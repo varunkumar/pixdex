@@ -1,29 +1,27 @@
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  Grid,
-  Heading,
-  Image,
-  Link,
-  SimpleGrid,
-  Stat,
-  StatLabel,
-  StatNumber,
-  Text,
-  VStack,
-} from '@chakra-ui/react';
+import { Anchor, Card, Image, SimpleGrid, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { shortDescription } from '../services/text';
+import { BRAND } from '../theme';
 
 const RECENT_COUNT = 12;
 
+const Stat = ({ label, value, to }: { label: string; value: number; to: string }) => (
+  <UnstyledButton component={Link} to={to}>
+    <Text size="sm" c="dimmed">
+      {label}
+    </Text>
+    <Text fz={32} fw={700} lh={1.1}>
+      {value}
+    </Text>
+  </UnstyledButton>
+);
+
 const Dashboard = () => {
-  const { data: albums = [] } = useQuery({
-    queryKey: ['albums'],
-    queryFn: () => workerApiClient.getAlbums(),
+  const { data: albums } = useQuery({
+    queryKey: ['albums-page', 1, 1],
+    queryFn: () => workerApiClient.getAlbumsPage({ limit: 1 }),
   });
 
   const { data: recent } = useQuery({
@@ -32,77 +30,56 @@ const Dashboard = () => {
   });
 
   return (
-    <VStack spacing={6} align="stretch" w="100%">
-      <Card>
-        <CardHeader>
-          <Heading size="md">pixdex</Heading>
-        </CardHeader>
-        <CardBody>
-          <Grid templateColumns="repeat(2, 1fr)" gap={4}>
-            <Link as={RouterLink} to="/search" textDecoration="none" _hover={{ textDecoration: 'none' }}>
-              <Stat cursor="pointer">
-                <StatLabel>Photos</StatLabel>
-                <StatNumber>{recent?.total ?? 0}</StatNumber>
-              </Stat>
-            </Link>
-            <Link as={RouterLink} to="/albums" textDecoration="none" _hover={{ textDecoration: 'none' }}>
-              <Stat cursor="pointer">
-                <StatLabel>Albums</StatLabel>
-                <StatNumber>{albums.length}</StatNumber>
-              </Stat>
-            </Link>
-          </Grid>
-        </CardBody>
+    <Stack gap="lg">
+      <Card withBorder>
+        <Title order={3} mb="md">
+          {BRAND}
+        </Title>
+        <SimpleGrid cols={2}>
+          <Stat label="Photos" value={recent?.total ?? 0} to="/search" />
+          <Stat label="Albums" value={albums?.total ?? 0} to="/albums" />
+        </SimpleGrid>
       </Card>
 
       {recent && recent.results.length > 0 && (
-        <Card>
-          <CardHeader>
-            <Heading size="sm">Recently indexed</Heading>
-          </CardHeader>
-          <CardBody>
-            <SimpleGrid columns={{ base: 2, md: 4, lg: 6 }} spacing={3}>
-              {recent.results.map((photo) => (
-                <Link key={photo.id} as={RouterLink} to={`/photos/${photo.id}`}>
-                  <Image
-                    src={workerApiClient.thumbnailUrl(photo)}
-                    alt={shortDescription(photo.description, 80) || photo.filename || 'Photo'}
-                    borderRadius="md"
-                    objectFit="contain"
-                    bg="blackAlpha.100"
-                    w="100%"
-                    h="120px"
-                  />
-                  {photo.album && (
-                    <Text fontSize="xs" noOfLines={1} mt={1}>
-                      {photo.album}
-                    </Text>
-                  )}
-                </Link>
-              ))}
-            </SimpleGrid>
-          </CardBody>
+        <Card withBorder>
+          <Title order={4} mb="md">
+            Recently indexed
+          </Title>
+          <SimpleGrid cols={{ base: 2, md: 4, lg: 6 }} spacing="sm">
+            {recent.results.map((photo) => (
+              <Anchor key={photo.id} component={Link} to={`/photos/${photo.id}`} underline="never" c="inherit">
+                <Image
+                  src={workerApiClient.thumbnailUrl(photo)}
+                  alt={shortDescription(photo.description, 80) || photo.filename || 'Photo'}
+                  radius="md"
+                  fit="contain"
+                  h={120}
+                  bg="var(--mantine-color-default-hover)"
+                />
+                {photo.album && (
+                  <Text size="xs" lineClamp={1} mt={4}>
+                    {photo.album}
+                  </Text>
+                )}
+              </Anchor>
+            ))}
+          </SimpleGrid>
         </Card>
       )}
 
-      <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
-        <Link as={RouterLink} to="/search">
-          <Card>
-            <CardBody>Search</CardBody>
+      <SimpleGrid cols={{ base: 1, md: 3 }}>
+        {[
+          { to: '/search', label: 'Search' },
+          { to: '/albums', label: 'Albums' },
+          { to: '/daily', label: 'Daily Pick' },
+        ].map(({ to, label }) => (
+          <Card key={to} withBorder component={Link} to={to} style={{ textDecoration: 'none', color: 'inherit' }}>
+            {label}
           </Card>
-        </Link>
-        <Link as={RouterLink} to="/albums">
-          <Card>
-            <CardBody>Albums</CardBody>
-          </Card>
-        </Link>
-        <Link as={RouterLink} to="/daily">
-          <Card>
-            <CardBody>Daily Pick</CardBody>
-          </Card>
-        </Link>
-      </Grid>
-    </VStack>
+        ))}
+      </SimpleGrid>
+    </Stack>
   );
 };
 

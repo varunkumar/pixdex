@@ -1,54 +1,21 @@
-import { ChakraProvider } from '@chakra-ui/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import Dashboard from '../Dashboard';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
+import { makePhoto } from '../../test/fixtures';
+import { renderWithProviders } from '../../test/renderWithProviders';
+import Dashboard from '../Dashboard';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
-  workerApiClient: { getAlbums: vi.fn(), searchPage: vi.fn(), thumbnailUrl: vi.fn(() => '/api/thumbnails/h1') },
+  workerApiClient: { getAlbumsPage: vi.fn(), searchPage: vi.fn(), thumbnailUrl: vi.fn(() => '/api/thumbnails/h1') },
 }));
-
-function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient();
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <ChakraProvider>
-        <MemoryRouter>{ui}</MemoryRouter>
-      </ChakraProvider>
-    </QueryClientProvider>
-  );
-}
 
 describe('Dashboard', () => {
   beforeEach(() => {
-    vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
+    vi.clearAllMocks();
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({ albums: [], total: 2 });
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({
       total: 57,
-      results: [
-        {
-          id: 'p1',
-          path: null,
-          driveFileId: null,
-          dateTime: null,
-          width: null,
-          height: null,
-          format: null,
-          fileSize: null,
-          subjects: [],
-          colors: [],
-          patterns: [],
-          tags: [],
-          season: null,
-          environment: null,
-          album: 'Kanha',
-          description: 'A leopard in a tree.',
-          suggestedHashtags: [],
-          instagramSuggested: null,
-          thumbnailUrl: '/thumbnails/h1',
-        },
-      ],
+      results: [makePhoto({ album: 'Kanha' })],
     });
   });
 
@@ -65,5 +32,17 @@ describe('Dashboard', () => {
     expect(screen.getByRole('link', { name: 'Albums' })).toHaveAttribute('href', '/albums');
     expect(screen.getByRole('link', { name: /daily pick/i })).toHaveAttribute('href', '/daily');
     expect(screen.queryByRole('button', { name: /index photos/i })).not.toBeInTheDocument();
+  });
+
+  it('titles the card PixdeX', async () => {
+    renderWithProviders(<Dashboard />);
+    expect(await screen.findByRole('heading', { name: 'PixdeX' })).toBeInTheDocument();
+  });
+
+  it('shows zero counts for an empty library', async () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({ albums: [], total: 0 });
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [], total: 0 });
+    renderWithProviders(<Dashboard />);
+    expect(await screen.findAllByText('0')).toHaveLength(2);
   });
 });

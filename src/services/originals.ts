@@ -12,3 +12,11 @@ export function getOriginalUrl(photo: SerializedPhoto): string | null {
   }
   return null;
 }
+
+/**
+ * A URL that serves the original as an image, usable for prefetching and a
+ * lightbox. Drive originals are viewer pages (HTML), so they have none.
+ */
+export function getOriginalImageUrl(photo: SerializedPhoto): string | null {
+  return photo.source === 'local' ? `/api/originals/${encodeURIComponent(photo.id)}` : null;
+}

@@ -38,6 +38,26 @@ describe('WorkerApiClient', () => {
   it('getAlbums() returns the albums array', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ albums: ['Kanha', 'Kaziranga'] }), { status: 200 }));
     expect(await client.getAlbums()).toEqual(['Kanha', 'Kaziranga']);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/albums?names=1');
+  });
+
+  it('getAlbumsPage() requests limit and offset and returns the page', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ albums: [], total: 0 }), { status: 200 }));
+    const page = await client.getAlbumsPage({ limit: 12, offset: 24 });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/albums?limit=12&offset=24');
+    expect(page).toEqual({ albums: [], total: 0 });
+  });
+
+  it('getAlbumsPage() always sends a limit so the worker returns the rich shape', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ albums: [], total: 0 }), { status: 200 }));
+    await client.getAlbumsPage();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/albums?limit=12');
+  });
+
+  it('searchPage() forwards sort=date', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ results: [], total: 0 }), { status: 200 }));
+    await client.searchPage({ album: 'Kanha', sort: 'date', limit: 12, offset: 0 });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/search?album=Kanha&sort=date&limit=12&offset=0');
   });
 
   it('getPhoto() returns the photo or throws on 404', async () => {
