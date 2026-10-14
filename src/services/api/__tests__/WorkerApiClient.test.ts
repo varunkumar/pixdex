@@ -98,6 +98,16 @@ describe('WorkerApiClient', () => {
     expect(fetchMock.mock.calls[1][0]).toBe('/api/photos/p1');
   });
 
+  it('reloads the page once so Access can refresh the session when its redirect cannot be followed', async () => {
+    const reload = vi.fn(() => true);
+    const c = new WorkerApiClient('/api', fetchMock as unknown as typeof fetch, reload);
+    fetchMock
+      .mockResolvedValueOnce({ type: 'opaqueredirect', ok: false, status: 0 } as unknown as Response)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await expect(c.getDailyPick()).rejects.toThrow(/session has expired/i);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it('names the path when the network request itself fails', async () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     await expect(client.getDailyPick()).rejects.toThrow(/\/daily-pick.*Failed to fetch/);

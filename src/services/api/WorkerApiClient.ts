@@ -8,12 +8,32 @@ export interface SearchParams {
   offset?: number;
 }
 
+const RELOAD_KEY = 'pixdex:session-reload-at';
+const RELOAD_COOLDOWN_MS = 30_000;
+
+// Reload at most once per cooldown so a genuinely dead session cannot loop.
+function reloadOncePerWindow(): boolean {
+  try {
+    const last = Number(window.sessionStorage.getItem(RELOAD_KEY) ?? 0);
+    if (Date.now() - last < RELOAD_COOLDOWN_MS) return false;
+    window.sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+    window.location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class WorkerApiClient {
   constructor(
     private baseUrl: string,
     // Wrapped so fetch is called unbound: invoking window.fetch as a method of
     // this class throws "Illegal invocation" in browsers.
-    private fetchFn: typeof fetch = (...args) => fetch(...args)
+    private fetchFn: typeof fetch = (...args) => fetch(...args),
+    // Called when Access wants the browser to re-authenticate. Returns whether it
+    // started a reload. A full navigation can follow Access's cross-origin hops
+    // (usually silently, with no sign-in prompt) where fetch cannot.
+    private reloadForSession: () => boolean = reloadOncePerWindow
   ) {}
 
   private async getJson<T>(path: string): Promise<T> {
@@ -33,6 +53,7 @@ export class WorkerApiClient {
       try {
         response = await this.fetchFn(url);
       } catch {
+        this.reloadForSession();
         throw new Error('Your session has expired. Reload the page to sign in again.');
       }
     }
