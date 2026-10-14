@@ -87,6 +87,10 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
     return new Response('Upstream unavailable', { status: 502 });
   }
   const out = new Response(response.body, response);
+  // Never relay upstream cookies. The tunnel's Access app replies to service-token
+  // requests with its own CF_Authorization cookie; passed through, it would replace
+  // the user's session cookie for this origin and make Access reject later calls.
+  out.headers.delete('set-cookie');
   out.headers.set('Cache-Control', cacheControlFor(path, response.ok));
   return out;
 };

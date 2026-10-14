@@ -114,6 +114,24 @@ describe('/api proxy', () => {
       expect((await call('/api/originals/p1')).status).toBe(502);
     });
 
+    it('never passes upstream cookies to the browser', async () => {
+      // The tunnel's Access app answers service-token requests with its own
+      // CF_Authorization cookie. Forwarding it would overwrite the user's session
+      // cookie for the Pages origin and break every later /api call.
+      const upstream = new Response('img', {
+        status: 200,
+        headers: [
+          ['content-type', 'image/jpeg'],
+          ['set-cookie', 'CF_Authorization=tunnel-jwt; Path=/; Secure; HttpOnly'],
+          ['set-cookie', '__cf_bm=x; Path=/'],
+        ],
+      });
+      fetchMock.mockResolvedValueOnce(upstream);
+      const res = await call('/api/originals/p1');
+      expect(res.headers.get('set-cookie')).toBeNull();
+      expect(res.headers.get('content-type')).toBe('image/jpeg');
+    });
+
     it('rejects nested originals paths', async () => {
       expect((await call('/api/originals/a/b')).status).toBe(404);
     });
