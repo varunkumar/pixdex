@@ -103,6 +103,10 @@ The worker `/search` already returns `{results, total}` with `limit`/`offset`, o
 
 Mantine `AppShell.Header` with a burger and `Drawer`/`AppShell.Navbar` below the `sm` breakpoint. Logo and burger always visible, nav and logout inside the drawer on mobile. Header height 60.
 
+### Icons
+
+Keep `react-icons/md`. The existing nav icons (`MdHome`, `MdAlbum`, `MdSearch`, `MdPhoto`, `MdLogout`) are retained and rendered as plain components. New UI uses the same Material set for consistency (for example `MdChevronLeft`/`MdChevronRight`, `MdClose`, `MdMenu`, `MdOpenInNew`, `MdLightMode`/`MdDarkMode`). Only `@chakra-ui/icons`, which nothing imports, is removed.
+
 ### Naming
 
 Single `BRAND = 'PixdeX'` constant used by header, `<title>` and docs. Replace "PixDex"/"pixdex" in user-visible text (index.html, README, docs headings). Lowercase `pixdex` stays where it is an identifier (package name, repo, paths). Replace the Vite favicon with a PixdeX mark.
