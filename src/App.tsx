@@ -1,4 +1,6 @@
 import { Box, ChakraProvider, Container } from '@chakra-ui/react';
+import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import Albums from './components/Albums';
@@ -7,11 +9,14 @@ import Dashboard from './components/Dashboard';
 import Navigation from './components/Navigation';
 import PhotoDetail from './components/PhotoDetail';
 import Search from './components/Search';
+import { theme } from './theme';
 
 const queryClient = new QueryClient();
 
 function App() {
   return (
+    <MantineProvider theme={theme} defaultColorScheme="auto">
+    <Notifications />
     <ChakraProvider>
       <QueryClientProvider client={queryClient}>
         <Router>
@@ -32,6 +37,7 @@ function App() {
         </Router>
       </QueryClientProvider>
     </ChakraProvider>
+    </MantineProvider>
   );
 }
 
