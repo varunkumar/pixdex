@@ -31,7 +31,13 @@ describe('/api proxy', () => {
     expect(new Headers(init.headers).get('authorization')).toBe('Bearer secret-token');
   });
 
-  it.each(['/api/albums', '/api/daily-pick', '/api/photos/p1', '/api/thumbnails/abc123'])(
+  it.each([
+    '/api/albums',
+    '/api/albums?limit=12&offset=0',
+    '/api/albums?names=1',
+    '/api/daily-pick', '/api/photos/p1',
+    '/api/thumbnails/abc123',
+  ])(
     'allows %s',
     async (path) => {
       expect((await call(path)).status).toBe(200);
