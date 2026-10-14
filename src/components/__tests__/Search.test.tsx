@@ -98,7 +98,7 @@ describe('Search', () => {
     const long =
       'A leopard rests on a branch. ' + 'It watches the forest floor below with patient attention. '.repeat(6);
     vi.mocked(workerApiClient.search).mockResolvedValue([
-      { ...(await vi.mocked(workerApiClient.search)({})).at(0)!, description: long, tags: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
+      { ...(await vi.mocked(workerApiClient.search)({}))[0], description: long, tags: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
     ]);
     renderWithProviders(<Search />);
     fireEvent.click(screen.getByRole('button', { name: /search/i }));
