@@ -20,35 +20,41 @@ interface AlbumRow {
 }
 
 export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
-  // Lightweight list for dropdowns.
-  if (c.req.query('names') === '1') {
+  // The rich, paginated shape is opt-in (limit or offset present). A bare request
+  // keeps the original list of names so an older cached frontend does not break.
+  const wantsPage = c.req.query('limit') !== undefined || c.req.query('offset') !== undefined;
+  if (c.req.query('names') === '1' || !wantsPage) {
     const result = await c.env.DB.prepare(
       'SELECT DISTINCT album FROM photos WHERE album IS NOT NULL ORDER BY album'
     ).all<{ album: string }>();
     return c.json({ albums: result.results.map((r) => r.album) });
   }
 
-  const limit = Math.min(Math.max(Number(c.req.query('limit')) || 12, 1), 48);
-  const offset = Math.max(Number(c.req.query('offset')) || 0, 0);
+  const limit = Math.min(Math.max(Math.floor(Number(c.req.query('limit'))) || 12, 1), 48);
+  const offset = Math.max(Math.floor(Number(c.req.query('offset'))) || 0, 0);
 
-  // Cover is the newest photo in the album: date_time, else last_indexed, ties by id.
+  // Cover: a dated photo when the album has one (newest first), else the most
+  // recently indexed. latestDate and album order use the newest real photo date,
+  // falling back to ingest time only for albums with no dated photo at all.
   const [rows, count] = await Promise.all([
     c.env.DB.prepare(
       `WITH ranked AS (
          SELECT album, id, content_hash, date_time,
-                COALESCE(date_time, last_indexed) AS ts,
                 ROW_NUMBER() OVER (
-                  PARTITION BY album ORDER BY COALESCE(date_time, last_indexed) DESC, id
+                  PARTITION BY album
+                  ORDER BY date_time IS NULL, date_time DESC, last_indexed DESC, id
                 ) AS rn,
-                COUNT(*) OVER (PARTITION BY album) AS cnt
+                COUNT(*) OVER (PARTITION BY album) AS cnt,
+                MAX(date_time) OVER (PARTITION BY album) AS newest_date,
+                MAX(last_indexed) OVER (PARTITION BY album) AS newest_indexed
          FROM photos
          WHERE album IS NOT NULL
        )
        SELECT album AS name, cnt AS photo_count, id AS cover_photo_id,
-              content_hash, date_time AS latest_date
+              content_hash, newest_date AS latest_date
        FROM ranked
        WHERE rn = 1
-       ORDER BY ts DESC, album
+       ORDER BY COALESCE(newest_date, newest_indexed) DESC, album
        LIMIT ? OFFSET ?`
     )
       .bind(limit, offset)

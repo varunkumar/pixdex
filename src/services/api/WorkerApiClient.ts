@@ -47,11 +47,10 @@ export class WorkerApiClient {
   }
 
   async getAlbumsPage(params: { limit?: number; offset?: number } = {}): Promise<AlbumsPageResponse> {
-    const query = new URLSearchParams();
-    if (params.limit != null) query.set('limit', String(params.limit));
+    // A limit is always sent: the worker returns the rich shape only when asked for a page.
+    const query = new URLSearchParams({ limit: String(params.limit ?? 12) });
     if (params.offset != null) query.set('offset', String(params.offset));
-    const suffix = query.toString() ? `?${query.toString()}` : '';
-    return this.getJson<AlbumsPageResponse>(`/albums${suffix}`);
+    return this.getJson<AlbumsPageResponse>(`/albums?${query.toString()}`);
   }
 
   async getPhoto(id: string): Promise<SerializedPhoto> {

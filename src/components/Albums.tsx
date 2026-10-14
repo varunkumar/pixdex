@@ -11,7 +11,7 @@ const ALBUM_PAGE_SIZES = [12, 24, 48] as const;
 const Albums = () => {
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PAGE_SIZES);
 
-  const { data, error } = useQuery({
+  const { data, error, isPlaceholderData } = useQuery({
     queryKey: ['albums-page', page, size],
     queryFn: () => workerApiClient.getAlbumsPage({ limit: size, offset }),
     placeholderData: keepPreviousData,
@@ -43,6 +43,7 @@ const Albums = () => {
           page={page}
           size={size}
           total={data.total}
+          settled={!isPlaceholderData}
           sizes={ALBUM_PAGE_SIZES}
           onPage={onPage}
           onSize={(s) => update({ size: s }, { resetPage: true })}

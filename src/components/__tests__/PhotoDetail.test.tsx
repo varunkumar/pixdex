@@ -162,4 +162,15 @@ describe('PhotoDetail', () => {
     expect(await screen.findByText('Request to /photos/p1 failed: 404')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to search/i })).toHaveAttribute('href', '/search');
   });
+
+  it('after closing a deep-linked lightbox, Back still falls back to the album instead of leaving the app', async () => {
+    // A browser history entry that is the first one in this tab.
+    window.history.replaceState({ idx: 0 }, '');
+    renderWithRouter(routes, ['/photos/p1?lightbox=1']);
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    const back = await screen.findByRole('link', { name: /back to album/i });
+    expect(back).toHaveAttribute('href', '/albums/Bandipur');
+    window.history.replaceState(null, '');
+  });
 });

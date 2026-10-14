@@ -43,7 +43,7 @@ describe('GET /albums', () => {
       .run();
   }
 
-  async function get(query = '') {
+  async function get(query = '?limit=12') {
     const response = await SELF.fetch(`https://example.com/albums${query}`, {
       headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
     });
@@ -113,5 +113,24 @@ describe('GET /albums', () => {
     await insert('b', 'h-b', 'Beta', '2026-02-01T00:00:00.000Z');
     await insert('a', 'h-a', 'Alpha', '2026-03-01T00:00:00.000Z');
     expect(await get('?names=1')).toEqual({ albums: ['Alpha', 'Beta'] });
+  });
+
+  it('bare /albums keeps the legacy list of names so an older frontend keeps working', async () => {
+    await insert('a', 'h-a', 'Alpha', '2026-03-01T00:00:00.000Z');
+    expect(await get('')).toEqual({ albums: ['Alpha'] });
+  });
+
+  it('for a mixed album, latestDate is the newest real photo date and the cover is a dated photo', async () => {
+    await insert('shot-2019', 'h-2019', 'Mixed', '2019-05-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
+    await insert('screenshot', 'h-shot', 'Mixed', null, '2026-09-18T00:00:00.000Z');
+    await insert('other', 'h-other', 'Other', '2024-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+
+    const body = await get();
+    const mixed = body.albums.find((a: { name: string }) => a.name === 'Mixed');
+    expect(mixed.coverPhotoId).toBe('shot-2019');
+    expect(mixed.latestDate).toBe('2019-05-01T00:00:00.000Z');
+    expect(mixed.photoCount).toBe(2);
+    // Ordered by newest real photo date: Other (2024) before Mixed (2019).
+    expect(body.albums.map((a: { name: string }) => a.name)).toEqual(['Other', 'Mixed']);
   });
 });

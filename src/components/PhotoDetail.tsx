@@ -112,7 +112,10 @@ const PhotoDetail = () => {
   const size = formatBytes(photo.fileSize);
   const dimensions = photo.width && photo.height ? `${photo.width} × ${photo.height}` : null;
   const albumHref = photo.album ? `/albums/${encodeURIComponent(photo.album)}` : null;
-  const canGoBack = location.key !== 'default';
+  // history.state.idx is the entry's position in this tab (React Router browser history);
+  // a replace gives the entry a new key, so the key alone is not a reliable signal.
+  const historyIdx = (window.history.state as { idx?: number } | null)?.idx;
+  const canGoBack = typeof historyIdx === 'number' ? historyIdx > 0 : location.key !== 'default';
   const thumbnail = workerApiClient.thumbnailUrl(photo);
   const alt = photo.filename ?? photo.id;
 

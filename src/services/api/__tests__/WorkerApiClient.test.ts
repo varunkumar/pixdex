@@ -48,6 +48,12 @@ describe('WorkerApiClient', () => {
     expect(page).toEqual({ albums: [], total: 0 });
   });
 
+  it('getAlbumsPage() always sends a limit so the worker returns the rich shape', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ albums: [], total: 0 }), { status: 200 }));
+    await client.getAlbumsPage();
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/albums?limit=12');
+  });
+
   it('searchPage() forwards sort=date', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ results: [], total: 0 }), { status: 200 }));
     await client.searchPage({ album: 'Kanha', sort: 'date', limit: 12, offset: 0 });

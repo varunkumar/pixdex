@@ -26,7 +26,7 @@ const Search = () => {
     queryFn: () => workerApiClient.getAlbums(),
   });
 
-  const { data, isFetching, error } = useQuery({
+  const { data, isFetching, error, isPlaceholderData } = useQuery({
     queryKey: ['search', q, album, page, size],
     queryFn: () => workerApiClient.searchPage({ q, album, limit: size, offset }),
     placeholderData: keepPreviousData,
@@ -86,6 +86,7 @@ const Search = () => {
           page={page}
           size={size}
           total={data.total}
+          settled={!isPlaceholderData}
           sizes={PAGE_SIZES}
           onPage={onPage}
           onSize={(s) => update({ size: s }, { resetPage: true })}

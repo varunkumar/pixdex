@@ -34,4 +34,10 @@ describe('ListPagination', () => {
     renderWithProviders(<ListPagination {...base} page={999} onPage={onPage} />);
     expect(onPage).toHaveBeenCalledWith(6, true);
   });
+
+  it('does not clamp while the results are still a placeholder from a previous query', () => {
+    const onPage = vi.fn();
+    renderWithProviders(<ListPagination {...base} page={999} settled={false} onPage={onPage} />);
+    expect(onPage).not.toHaveBeenCalled();
+  });
 });

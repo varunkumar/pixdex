@@ -6,17 +6,19 @@ interface Props {
   size: number;
   total: number;
   sizes: readonly number[];
+  /** False while `total` still belongs to a previous query (placeholder data). */
+  settled?: boolean;
   onPage: (page: number, replace?: boolean) => void;
   onSize: (size: number) => void;
 }
 
-const ListPagination = ({ page, size, total, sizes, onPage, onSize }: Props) => {
+const ListPagination = ({ page, size, total, sizes, settled = true, onPage, onSize }: Props) => {
   const pages = Math.max(1, Math.ceil(total / size));
 
   // A stale or hand-edited URL can point past the last page: land on the last one.
   useEffect(() => {
-    if (total > 0 && page > pages) onPage(pages, true);
-  }, [total, page, pages, onPage]);
+    if (settled && total > 0 && page > pages) onPage(pages, true);
+  }, [settled, total, page, pages, onPage]);
 
   if (total === 0) return null;
 

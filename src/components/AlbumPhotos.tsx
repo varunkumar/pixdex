@@ -13,7 +13,7 @@ const AlbumPhotos = () => {
   const { name = '' } = useParams();
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PHOTO_SIZES);
 
-  const { data, error } = useQuery({
+  const { data, error, isPlaceholderData } = useQuery({
     queryKey: ['album-photos', name, page, size],
     queryFn: () => workerApiClient.searchPage({ album: name, sort: 'date', limit: size, offset }),
     enabled: name !== '',
@@ -49,6 +49,7 @@ const AlbumPhotos = () => {
           page={page}
           size={size}
           total={data.total}
+          settled={!isPlaceholderData}
           sizes={ALBUM_PHOTO_SIZES}
           onPage={onPage}
           onSize={(s) => update({ size: s }, { resetPage: true })}
