@@ -82,10 +82,20 @@ describe('WorkerApiClient', () => {
     expect(client.thumbnailUrl({ thumbnailUrl: undefined })).toBe('');
   });
 
-  it('reports an expired sign-in when the request is redirected to the login page', async () => {
-    // Cloudflare Access answers an expired session with a cross-origin redirect.
-    fetchMock.mockResolvedValueOnce({ type: 'opaqueredirect', ok: false, status: 0 } as unknown as Response);
+  it('reports an expired sign-in when the redirect leads somewhere fetch cannot follow', async () => {
+    // Cloudflare Access answers an expired session with a cross-origin redirect to its login page.
+    fetchMock
+      .mockResolvedValueOnce({ type: 'opaqueredirect', ok: false, status: 0 } as unknown as Response)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
     await expect(client.getDailyPick()).rejects.toThrow(/session has expired/i);
+  });
+
+  it('follows a redirect that fetch can follow (Access refreshing a live session) instead of failing', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ type: 'opaqueredirect', ok: false, status: 0 } as unknown as Response)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'p1' }), { status: 200 }));
+    await expect(client.getPhoto('p1')).resolves.toEqual({ id: 'p1' });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/photos/p1');
   });
 
   it('names the path when the network request itself fails', async () => {

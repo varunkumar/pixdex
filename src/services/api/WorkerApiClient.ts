@@ -17,16 +17,24 @@ export class WorkerApiClient {
   ) {}
 
   private async getJson<T>(path: string): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
     let response: Response;
     try {
-      // Never follow redirects: Cloudflare Access answers an expired sign-in with a
-      // cross-origin redirect, which fetch can only report as "Failed to fetch".
-      response = await this.fetchFn(`${this.baseUrl}${path}`, { redirect: 'manual' });
+      // Look at redirects before following them: Cloudflare Access answers an expired
+      // sign-in with a cross-origin redirect, which fetch can only report as the
+      // unhelpful "Failed to fetch".
+      response = await this.fetchFn(url, { redirect: 'manual' });
     } catch (err) {
       throw new Error(`Request to ${path} failed: ${err instanceof Error ? err.message : 'network error'}`);
     }
     if (response.type === 'opaqueredirect') {
-      throw new Error('Your session has expired. Reload the page to sign in again.');
+      // Access also redirects live sessions in-origin to refresh them. Follow it: only a
+      // redirect that cannot be followed (the cross-origin login page) is an expired session.
+      try {
+        response = await this.fetchFn(url);
+      } catch {
+        throw new Error('Your session has expired. Reload the page to sign in again.');
+      }
     }
     if (!response.ok) {
       throw new Error(`Request to ${path} failed: ${response.status}`);
