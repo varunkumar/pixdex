@@ -7,7 +7,7 @@ describe('WorkerApiClient', () => {
 
   beforeEach(() => {
     fetchMock = vi.fn();
-    client = new WorkerApiClient('/api', fetchMock as unknown as typeof fetch);
+    client = new WorkerApiClient('/api', fetchMock as unknown as typeof fetch, () => false);
   });
 
   it('search() builds the query string, and returns results', async () => {

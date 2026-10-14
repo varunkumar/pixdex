@@ -79,3 +79,6 @@ ehthumbs.db
 
 # Resumable batch indexer state (queue + lock)
 agent/.index-state/
+
+# Wrangler / miniflare local state
+.wrangler/
