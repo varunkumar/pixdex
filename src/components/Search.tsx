@@ -1,161 +1,97 @@
-import {
-  Box,
-  Button,
-  Card,
-  CardBody,
-  Input as ChakraInput,
-  FormControl,
-  FormLabel,
-  Grid,
-  Image,
-  Link,
-  Select,
-  SimpleGrid,
-  Stack,
-  Tag,
-  Text,
-  useToast,
-} from '@chakra-ui/react';
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Link as RouterLink, useSearchParams } from 'react-router-dom';
-import { shortDescription } from '../services/text';
+import { Button, Card, Group, Loader, Select, Stack, Text, TextInput } from '@mantine/core';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
+import { MdSearch } from 'react-icons/md';
+import { PAGE_SIZES, useListParams } from '../hooks/useListParams';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { getOriginalUrl } from '../services/originals';
-import PhotoMeta from './PhotoMeta';
-
-const MAX_LISTING_TAGS = 5;
+import ListPagination from './ListPagination';
+import PhotoGrid from './PhotoGrid';
 
 const Search = () => {
-  const [searchParams] = useSearchParams();
-  const [query, setQuery] = useState('');
-  const [album, setAlbum] = useState(searchParams.get('album') ?? '');
-  const toast = useToast();
+  const { params, page, size, offset, update } = useListParams();
+  const rawQ = params.get('q') ?? '';
+  const q = rawQ.trim();
+  const album = params.get('album') ?? '';
+  const [text, setText] = useState(rawQ);
+  const [syncedQ, setSyncedQ] = useState(rawQ);
 
-  const {
-    data: results = [],
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ['search', query, album],
-    queryFn: () => workerApiClient.search({ q: query, album }),
-    enabled: false,
-  });
+  // Keep the box in step with the URL (back/forward, deep links).
+  if (syncedQ !== rawQ) {
+    setSyncedQ(rawQ);
+    setText(rawQ);
+  }
 
   const { data: albums = [] } = useQuery({
-    queryKey: ['albums'],
+    queryKey: ['album-names'],
     queryFn: () => workerApiClient.getAlbums(),
   });
 
-  const handleSearch = () => {
-    refetch().catch((err) => {
-      toast({
-        title: 'Search failed',
-        description: err.message,
-        status: 'error',
-        duration: 3000,
-      });
-    });
-  };
+  const { data, isFetching, error } = useQuery({
+    queryKey: ['search', q, album, page, size],
+    queryFn: () => workerApiClient.searchPage({ q, album, limit: size, offset }),
+    placeholderData: keepPreviousData,
+  });
+
+  const submit = () => update({ q: text.trim() }, { resetPage: true });
+  const onPage = useCallback(
+    (p: number, replace?: boolean) => update({ page: p }, { replace }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [params]
+  );
 
   return (
-    <Box w="100%">
-      <Card mb={8}>
-        <CardBody>
-          <Stack spacing={4}>
-            <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
-              <FormControl id="album-select">
-                <FormLabel>Album</FormLabel>
-                <Select
-                  aria-label="Select photo album"
-                  name="album"
-                  placeholder="Select Album"
-                  value={album}
-                  onChange={(e) => setAlbum(e.target.value)}
-                >
-                  {albums.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Search</FormLabel>
-                <ChakraInput
-                  placeholder="Search photos..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSearch();
-                    }
-                  }}
-                />
-              </FormControl>
-              <Box pt={{ base: 0, md: 8 }}>
-                <Button w="100%" colorScheme="teal" onClick={handleSearch} isLoading={isLoading}>
-                  Search
-                </Button>
-              </Box>
-            </Grid>
-          </Stack>
-        </CardBody>
+    <Stack gap="lg">
+      <Card withBorder>
+        <Group align="flex-end" gap="md" grow preventGrowOverflow={false}>
+          <Select
+            label="Album"
+            aria-label="Select photo album"
+            placeholder="All albums"
+            data={albums}
+            value={album || null}
+            onChange={(value) => update({ album: value }, { resetPage: true })}
+            clearable
+            searchable
+          />
+          <TextInput
+            label="Search"
+            placeholder="Search photos..."
+            value={text}
+            onChange={(e) => setText(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
+          <Button
+            onClick={submit}
+            leftSection={isFetching ? <Loader size="xs" color="white" /> : <MdSearch />}
+            style={{ flexGrow: 0 }}
+          >
+            Search
+          </Button>
+        </Group>
       </Card>
 
-      {error && (
-        <Text color="red.500">{error instanceof Error ? error.message : 'An error occurred'}</Text>
-      )}
+      {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
 
-      <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-        {results.map((photo) => (
-          <Box key={photo.id} borderWidth={1} borderRadius="lg" overflow="hidden">
-            <Link as={RouterLink} to={`/photos/${photo.id}`} _hover={{ textDecoration: 'none' }} display="block">
-              <Image
-                src={workerApiClient.thumbnailUrl(photo)}
-                alt={shortDescription(photo.description, 80) || photo.filename || photo.id}
-                objectFit="contain"
-                bg="blackAlpha.100"
-                height="260px"
-                width="100%"
-              />
-            </Link>
-            <Box p={4}>
-              <Link as={RouterLink} to={`/photos/${photo.id}`} color="inherit" _hover={{ textDecoration: 'none' }}>
-                <Text fontSize="sm" mb={2}>
-                  {shortDescription(photo.description)}
-                </Text>
-              </Link>
-              <PhotoMeta photo={photo} compact />
-              <Stack direction="row" flexWrap="wrap" gap={2}>
-                {photo.tags.slice(0, MAX_LISTING_TAGS).map((tag) => (
-                  <Tag key={tag} size="sm">
-                    {tag}
-                  </Tag>
-                ))}
-                {photo.tags.length > MAX_LISTING_TAGS && (
-                  <Tag size="sm" variant="outline">
-                    +{photo.tags.length - MAX_LISTING_TAGS}
-                  </Tag>
-                )}
-              </Stack>
-              {(() => {
-                const originalUrl = getOriginalUrl(photo);
-                return (
-                  originalUrl && (
-                    <Link href={originalUrl} isExternal fontSize="sm" color="teal.500" mt={2} display="inline-block">
-                      View Original
-                    </Link>
-                  )
-                );
-              })()}
-            </Box>
-          </Box>
-        ))}
-      </SimpleGrid>
-    </Box>
+      {data && data.results.length === 0 && <Text c="dimmed">No photos match your search.</Text>}
+
+      {data && data.results.length > 0 && <PhotoGrid photos={data.results} />}
+
+      {data && (
+        <ListPagination
+          page={page}
+          size={size}
+          total={data.total}
+          sizes={PAGE_SIZES}
+          onPage={onPage}
+          onSize={(s) => update({ size: s }, { resetPage: true })}
+        />
+      )}
+    </Stack>
   );
 };
 

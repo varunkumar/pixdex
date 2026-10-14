@@ -1,125 +1,97 @@
-import { ChakraProvider } from '@chakra-ui/react';
-import { MantineProvider } from '@mantine/core';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import Search from '../Search';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
+import { makePhoto } from '../../test/fixtures';
+import { renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
+import Search from '../Search';
 
-vi.mock('../../services/api/WorkerApiClient', async () => {
-  const actual = await vi.importActual('../../services/api/WorkerApiClient');
-  return {
-    ...actual,
-    workerApiClient: {
-      search: vi.fn(),
-      getAlbums: vi.fn(),
-      thumbnailUrl: vi.fn((photo: { thumbnailUrl?: string }) => `https://example.workers.dev${photo.thumbnailUrl}`),
-    },
-  };
-});
-
-vi.mock('../../services/originals', () => ({
-  getOriginalUrl: vi.fn(() => '/api/originals/p1'),
+vi.mock('../../services/api/WorkerApiClient', () => ({
+  workerApiClient: {
+    searchPage: vi.fn(),
+    getAlbums: vi.fn(),
+    thumbnailUrl: vi.fn((p: { thumbnailUrl?: string }) => `/api${p.thumbnailUrl}`),
+  },
 }));
 
-function renderWithProviders(ui: React.ReactElement) {
-  const queryClient = new QueryClient();
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MantineProvider>
-        <ChakraProvider>
-          <MemoryRouter>{ui}</MemoryRouter>
-        </ChakraProvider>
-      </MantineProvider>
-    </QueryClientProvider>
-  );
-}
+vi.mock('../../services/originals', () => ({ getOriginalUrl: vi.fn(() => null) }));
+
+const page = (n: number) =>
+  Array.from({ length: n }, (_, i) => makePhoto({ id: `p${i}`, description: `Photo number ${i}.` }));
 
 describe('Search', () => {
   beforeEach(() => {
-    vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha']);
-    vi.mocked(workerApiClient.search).mockResolvedValue([
-      {
-        id: 'p1',
-        path: null,
-        driveFileId: null,
-        dateTime: null,
-        width: null,
-        height: null,
-        format: null,
-        fileSize: null,
-        subjects: ['leopard'],
-        colors: [],
-        patterns: [],
-        tags: ['leopard'],
-        season: null,
-        environment: null,
-        album: 'Kanha',
-        description: 'A leopard in a tree.',
-        suggestedHashtags: [],
-        instagramSuggested: null,
-        thumbnailUrl: '/thumbnails/h1',
-        cameraModel: 'NIKON Z 8',
-        lensModel: 'VR 200-500mm f/5.6E',
-        focalLength: 500,
-        fNumber: 5.6,
-        exposureTime: 0.004,
-        iso: 2500,
-      },
-    ]);
+    vi.clearAllMocks();
+    vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: page(10), total: 56 });
   });
 
-  it('runs a search and renders the results', async () => {
-    renderWithProviders(<Search />);
+  it('runs from the URL on load and fills the form from it', async () => {
+    renderWithProviders(<Search />, { route: '/search?q=big+cat&album=Kanha&page=2&size=20' });
 
-    fireEvent.change(screen.getByPlaceholderText('Search photos...'), {
-      target: { value: 'big cat' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith({
+        q: 'big cat',
+        album: 'Kanha',
+        limit: 20,
+        offset: 20,
+      })
+    );
+    expect(screen.getByPlaceholderText('Search photos...')).toHaveValue('big cat');
+    expect(await screen.findByText('Photo number 0.')).toBeInTheDocument();
+    expect(screen.getByText('Showing 21-40 of 56')).toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(workerApiClient.search).toHaveBeenCalledWith({ q: 'big cat', album: '' });
-    });
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /leopard in a tree/i })).toHaveAttribute(
-      'src',
-      'https://example.workers.dev/thumbnails/h1'
+  it('lists everything newest first when there are no params', async () => {
+    renderWithProviders(<Search />, { route: '/search' });
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: '', album: '', limit: 10, offset: 0 })
     );
   });
 
-  it('shows only the camera body in listings; lens and exposure live on the detail page', async () => {
-    renderWithProviders(<Search />);
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
-
-    expect(await screen.findByText('NIKON Z 8')).toBeInTheDocument();
-    expect(screen.queryByText(/200-500mm/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/ISO 2500/)).not.toBeInTheDocument();
+  it('treats a whitespace-only query as empty', async () => {
+    renderWithProviders(<Search />, { route: '/search?q=%20%20' });
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: '', album: '', limit: 10, offset: 0 })
+    );
   });
 
-  it('links each result to its detail page and trims long descriptions', async () => {
-    const long =
-      'A leopard rests on a branch. ' + 'It watches the forest floor below with patient attention. '.repeat(6);
-    vi.mocked(workerApiClient.search).mockResolvedValue([
-      { ...(await vi.mocked(workerApiClient.search)({}))[0], description: long, tags: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] },
-    ]);
-    renderWithProviders(<Search />);
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+  it('submitting writes q to the URL and resets to page 1', async () => {
+    const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion&page=3']);
 
-    expect(await screen.findByText('A leopard rests on a branch.')).toBeInTheDocument();
-    expect(screen.queryByText(/patient attention/)).not.toBeInTheDocument();
-    expect(screen.getByText('+2')).toBeInTheDocument();
-    expect(screen.queryByText('g')).not.toBeInTheDocument();
-    const detailLinks = screen.getAllByRole('link').filter((l) => l.getAttribute('href') === '/photos/p1');
-    expect(detailLinks.length).toBeGreaterThan(0);
+    const input = await screen.findByPlaceholderText('Search photos...');
+    fireEvent.change(input, { target: { value: 'leopard' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(router.state.location.search).toBe('?q=leopard'));
   });
 
-  it('shows a "View Original" link when getOriginalUrl resolves one', async () => {
-    renderWithProviders(<Search />);
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+  it('back navigation restores the previous query in the form', async () => {
+    const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion']);
 
-    const link = await screen.findByRole('link', { name: /view original/i });
-    expect(link).toHaveAttribute('href', '/api/originals/p1');
-    expect(link).toHaveAttribute('target', '_blank');
+    const input = await screen.findByPlaceholderText('Search photos...');
+    fireEvent.change(input, { target: { value: 'leopard' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(router.state.location.search).toBe('?q=leopard'));
+
+    await router.navigate(-1);
+    await waitFor(() => expect(screen.getByPlaceholderText('Search photos...')).toHaveValue('lion'));
+  });
+
+  it('paging updates the URL', async () => {
+    const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion']);
+    fireEvent.click(await screen.findByRole('button', { name: '2' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?q=lion&page=2'));
+  });
+
+  it('shows an empty state when nothing matches', async () => {
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [], total: 0 });
+    renderWithProviders(<Search />, { route: '/search?q=dragon' });
+    expect(await screen.findByText(/no photos match/i)).toBeInTheDocument();
+  });
+
+  it('shows the error message when the search fails', async () => {
+    vi.mocked(workerApiClient.searchPage).mockRejectedValue(new Error('Request to /search failed: 500'));
+    renderWithProviders(<Search />, { route: '/search?q=lion' });
+    expect(await screen.findByText('Request to /search failed: 500')).toBeInTheDocument();
   });
 });
