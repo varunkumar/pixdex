@@ -1,4 +1,3 @@
-import { ChakraProvider } from '@chakra-ui/react';
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -39,11 +38,9 @@ function App() {
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
       <Notifications />
-      <ChakraProvider>
-        <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
-      </ChakraProvider>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
     </MantineProvider>
   );
 }

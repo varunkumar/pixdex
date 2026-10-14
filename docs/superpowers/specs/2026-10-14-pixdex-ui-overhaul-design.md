@@ -26,7 +26,7 @@ Status: draft, awaiting review
 Each phase ends with `npm test`, `npm run lint` and `npm run build` green.
 
 - **Phase 0, dependency bump on Chakra 2:** React 19, react-router-dom 7, Vite 8 (+ `@vitejs/plugin-react`), Vitest 5, jsdom, TypeScript, TanStack Query, ESLint/typescript-eslint, testing-library. No UI change.
-- **Phase 1, UI kit swap:** remove Chakra, emotion, framer-motion and `@chakra-ui/icons`. Add `@mantine/core`, `@mantine/hooks`, `@mantine/notifications`. Port the 7 components and 5 component tests 1:1. Introduce the Aurora theme and `BRAND` constant.
+- **Phase 1, UI kit swap** (Search, Albums, Dashboard and PhotoDetail were rewritten directly on Mantine in Phase 2 instead of being ported 1:1 first): remove Chakra, emotion, framer-motion and `@chakra-ui/icons`. Add `@mantine/core`, `@mantine/hooks`, `@mantine/notifications`. Port the 7 components and 5 component tests 1:1. Introduce the Aurora theme and `BRAND` constant.
 - **Phase 2, features:** items 2 to 9 on the new stack.
 
 ## Routing and state (items 2, 5)
@@ -42,8 +42,8 @@ Switch from `BrowserRouter` to `createBrowserRouter`/`RouterProvider` so `Scroll
 | `/photos/:id` | `lightbox=1` | Photo detail, optional lightbox open |
 | `/daily` | none | Daily pick |
 
-- `:name` is URL-encoded. The existing `/search?album=X` links are redirected to `/albums/X` only when `q` is absent, so old links keep working.
-- Search fetches automatically when `q` or `album` is present; otherwise it shows a prompt state. `page` and `size` default to 1 and 10 and are omitted from the URL when default.
+- `:name` is URL-encoded. There is no redirect from `/search?album=X`: Search keeps its album filter, so an old link still works as a filtered search.
+- Search always fetches from the URL. With no params it lists everything newest first (paginated); a whitespace-only `q` counts as empty. `page` and `size` default to 1 and 10 and are omitted from the URL when default.
 - Changing `q`, `album` or `size` resets `page` to 1. Page changes use `replace: false` so back steps through pages.
 - The photo "Back" link uses history back when the previous entry is in-app, otherwise falls back to `/albums/:album` or `/search`.
 - TanStack Query keeps previous results (`placeholderData: keepPreviousData`) so paging does not flash empty.
@@ -127,7 +127,7 @@ Defined once in `src/theme.ts` via `createTheme`; no component sets raw colours.
 - Header: `linear-gradient(100deg, teal, blue 55%, violet)`.
 - Mantine `primaryColor: 'aurora'` with a 10-shade scale generated around the teal; `defaultGradient` set to the header gradient.
 - Neutral surfaces keep photos the loudest element; colour only in header, buttons, tags, focus rings.
-- Light and dark via Mantine `ColorSchemeProvider` defaults, following the system setting, with a toggle in the header.
+- Light and dark via `MantineProvider defaultColorScheme="auto"` (follows the system) with a toggle in the header (`useMantineColorScheme`).
 - Fonts: Bricolage Grotesque (display) and DM Sans (body) via Google Fonts, system fallbacks.
 
 ## Testing
