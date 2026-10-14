@@ -3,6 +3,7 @@ import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider, ScrollRestoration } from 'react-router-dom';
+import AlbumPhotos from './components/AlbumPhotos';
 import Albums from './components/Albums';
 import DailySuggestion from './components/DailySuggestion';
 import Dashboard from './components/Dashboard';
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/', element: <Dashboard /> },
       { path: '/albums', element: <Albums /> },
+      { path: '/albums/:name', element: <AlbumPhotos /> },
       { path: '/search', element: <Search /> },
       { path: '/photos/:id', element: <PhotoDetail /> },
       { path: '/daily', element: <DailySuggestion /> },
