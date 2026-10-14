@@ -1,27 +1,28 @@
 import {
+  Anchor,
+  Badge,
   Box,
   Button,
   Card,
-  CardBody,
   Divider,
-  Flex,
-  Heading,
+  Group,
   Image,
-  Link,
   SimpleGrid,
   Skeleton,
   Stack,
-  Tag,
   Text,
   Textarea,
-  VStack,
-} from '@chakra-ui/react';
+  Title,
+  UnstyledButton,
+} from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { Link as RouterLink, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
-import { getOriginalUrl } from '../services/originals';
+import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
+import Lightbox from './Lightbox';
 
 function formatBytes(bytes: number | null | undefined): string | null {
   if (bytes == null) return null;
@@ -30,26 +31,35 @@ function formatBytes(bytes: number | null | undefined): string | null {
 
 const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   <Box>
-    <Text fontSize="xs" color="gray.500" textTransform="uppercase">
+    <Text size="xs" c="dimmed" tt="uppercase">
       {label}
     </Text>
-    <Text fontSize="sm">{children}</Text>
+    <Text size="sm">{children}</Text>
   </Box>
 );
 
-const TagList = ({ items, colorScheme }: { items: unknown[]; colorScheme?: string }) =>
+const Section = ({ title, items, variant }: { title: string; items: unknown[]; variant?: 'light' | 'outline' }) =>
   items.length === 0 ? null : (
-    <Stack direction="row" flexWrap="wrap" gap={2}>
-      {items.map((item) => (
-        <Tag key={String(item)} size="sm" colorScheme={colorScheme}>
-          {String(item)}
-        </Tag>
-      ))}
-    </Stack>
+    <Box>
+      <Title order={5} mb="xs">
+        {title}
+      </Title>
+      <Group gap="xs">
+        {items.map((item) => (
+          <Badge key={String(item)} variant={variant ?? 'light'} size="lg" tt="none">
+            {String(item)}
+          </Badge>
+        ))}
+      </Group>
+    </Box>
   );
 
 const PhotoDetail = () => {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const {
     data: photo,
     isLoading,
@@ -60,189 +70,183 @@ const PhotoDetail = () => {
     enabled: id !== '',
   });
 
+  const originalImage = photo ? getOriginalImageUrl(photo) : null;
+  const originalStatus = usePrefetchImage(originalImage);
+  const lightboxOpen = searchParams.get('lightbox') === '1';
+
+  const openLightbox = () => navigate({ search: '?lightbox=1' }, { state: { lightbox: true } });
+  const closeLightbox = () => {
+    if ((location.state as { lightbox?: boolean } | null)?.lightbox) {
+      navigate(-1);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('lightbox');
+    setSearchParams(next, { replace: true });
+  };
+
   if (isLoading) {
     return (
-      <VStack align="stretch" spacing={4}>
-        <Skeleton height="360px" />
-        <Skeleton height="120px" />
-      </VStack>
+      <Stack>
+        <Skeleton height={360} />
+        <Skeleton height={120} />
+      </Stack>
     );
   }
 
   if (error || !photo) {
     return (
-      <VStack align="start" spacing={4}>
-        <Text color="red.500">
-          {error instanceof Error ? error.message : 'Photo not found'}
-        </Text>
-        <Link as={RouterLink} to="/search" color="teal.500">
+      <Stack align="flex-start">
+        <Text c="red">{error instanceof Error ? error.message : 'Photo not found'}</Text>
+        <Anchor component={Link} to="/search">
           Back to search
-        </Link>
-      </VStack>
+        </Anchor>
+      </Stack>
     );
   }
 
   const originalUrl = getOriginalUrl(photo);
   const date = formatPhotoDate(photo.dateTime);
-  const location = mapsUrl(photo);
+  const gps = mapsUrl(photo);
   const exposure = exposureSummary(photo);
   const size = formatBytes(photo.fileSize);
   const dimensions = photo.width && photo.height ? `${photo.width} × ${photo.height}` : null;
+  const albumHref = photo.album ? `/albums/${encodeURIComponent(photo.album)}` : null;
+  const canGoBack = location.key !== 'default';
+  const thumbnail = workerApiClient.thumbnailUrl(photo);
+  const alt = photo.filename ?? photo.id;
 
   return (
-    <VStack align="stretch" spacing={6}>
-      <Link as={RouterLink} to="/search" color="teal.500" fontSize="sm">
-        ← Back to search
-      </Link>
+    <Stack gap="lg">
+      {canGoBack ? (
+        <Anchor component="button" type="button" size="sm" onClick={() => navigate(-1)} w="fit-content">
+          ← Back
+        </Anchor>
+      ) : (
+        <Anchor component={Link} to={albumHref ?? '/search'} size="sm" w="fit-content">
+          {albumHref ? '← Back to album' : '← Back to search'}
+        </Anchor>
+      )}
 
-      <Card>
-        <CardBody>
-          <Stack direction={{ base: 'column', lg: 'row' }} spacing={6} align="start">
+      <Card withBorder>
+        <Group align="flex-start" wrap="wrap" gap="lg">
+          <UnstyledButton
+            onClick={openLightbox}
+            aria-label="Open full-size photo"
+            style={{ cursor: 'zoom-in', flex: '1 1 320px', maxWidth: '100%' }}
+          >
             <Image
-              src={workerApiClient.thumbnailUrl(photo)}
-              alt={photo.filename ?? photo.id}
-              objectFit="contain"
-              bg="blackAlpha.100"
-              borderRadius="md"
-              maxH="600px"
-              w={{ base: '100%', lg: '55%' }}
+              src={thumbnail}
+              alt={alt}
+              fit="contain"
+              radius="md"
+              mah={600}
+              bg="var(--mantine-color-default-hover)"
             />
+          </UnstyledButton>
 
-            <VStack align="stretch" spacing={4} flex={1}>
-              <Heading size="md">{photo.filename ?? 'Photo'}</Heading>
+          <Stack gap="md" style={{ flex: '1 1 280px' }}>
+            <Title order={3}>{photo.filename ?? 'Photo'}</Title>
 
-              <SimpleGrid columns={2} spacing={3}>
-                {date && <Field label="Taken">{date}</Field>}
-                {photo.album && (
-                  <Field label="Album">
-                    <Link
-                      as={RouterLink}
-                      to={`/search?${new URLSearchParams({ album: photo.album }).toString()}`}
-                      color="teal.500"
-                    >
-                      {photo.album}
-                    </Link>
-                  </Field>
-                )}
-                {photo.cameraModel && <Field label="Camera">{photo.cameraModel}</Field>}
-                {photo.lensModel && <Field label="Lens">{photo.lensModel}</Field>}
-                {exposure.length > 0 && <Field label="Exposure">{exposure.join(' · ')}</Field>}
-                {location && (
-                  <Field label="Location">
-                    <Link href={location} isExternal color="teal.500">
-                      View on map
-                    </Link>
-                  </Field>
-                )}
-                {dimensions && <Field label="Dimensions">{dimensions}</Field>}
-                {size && <Field label="File size">{size}</Field>}
-                {photo.format && <Field label="Format">{photo.format.toUpperCase()}</Field>}
-                {photo.season && <Field label="Season">{photo.season}</Field>}
-                {/* Unknown (null) is left out entirely rather than shown as "Unknown". */}
-                {photo.hasWatermark != null && (
-                  <Field label="Watermark">{photo.hasWatermark ? 'Yes' : 'No'}</Field>
-                )}
-              </SimpleGrid>
-
-              {originalUrl && (
-                <Link href={originalUrl} isExternal color="teal.500" fontSize="sm">
-                  View Original
-                </Link>
+            <SimpleGrid cols={2} spacing="sm">
+              {date && <Field label="Taken">{date}</Field>}
+              {photo.album && albumHref && (
+                <Field label="Album">
+                  <Anchor component={Link} to={albumHref}>
+                    {photo.album}
+                  </Anchor>
+                </Field>
               )}
-            </VStack>
+              {photo.cameraModel && <Field label="Camera">{photo.cameraModel}</Field>}
+              {photo.lensModel && <Field label="Lens">{photo.lensModel}</Field>}
+              {exposure.length > 0 && <Field label="Exposure">{exposure.join(' · ')}</Field>}
+              {gps && (
+                <Field label="Location">
+                  <Anchor href={gps} target="_blank" rel="noopener noreferrer">
+                    View on map
+                  </Anchor>
+                </Field>
+              )}
+              {dimensions && <Field label="Dimensions">{dimensions}</Field>}
+              {size && <Field label="File size">{size}</Field>}
+              {photo.format && <Field label="Format">{photo.format.toUpperCase()}</Field>}
+              {photo.season && <Field label="Season">{photo.season}</Field>}
+              {/* Unknown (null) is left out entirely rather than shown as "Unknown". */}
+              {photo.hasWatermark != null && <Field label="Watermark">{photo.hasWatermark ? 'Yes' : 'No'}</Field>}
+            </SimpleGrid>
+
+            {originalUrl && (
+              <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer" size="sm">
+                View Original
+              </Anchor>
+            )}
           </Stack>
-        </CardBody>
+        </Group>
       </Card>
 
-      <Card>
-        <CardBody>
-          <VStack align="stretch" spacing={4}>
-            {photo.description && (
-              <Box>
-                <Heading size="sm" mb={2}>
-                  Description
-                </Heading>
-                <Text>{photo.description}</Text>
-              </Box>
-            )}
-
-            {photo.environment && (
-              <Box>
-                <Heading size="sm" mb={2}>
-                  Environment
-                </Heading>
-                <Text>{photo.environment}</Text>
-              </Box>
-            )}
-
-            <Divider />
-
-            {photo.subjects.length > 0 && (
-              <Box>
-                <Heading size="sm" mb={2}>
-                  Subjects
-                </Heading>
-                <TagList items={photo.subjects} colorScheme="teal" />
-              </Box>
-            )}
-            {photo.tags.length > 0 && (
-              <Box>
-                <Heading size="sm" mb={2}>
-                  Tags
-                </Heading>
-                <TagList items={photo.tags} />
-              </Box>
-            )}
-            {photo.colors.length > 0 && (
-              <Box>
-                <Heading size="sm" mb={2}>
-                  Colors
-                </Heading>
-                <TagList items={photo.colors} />
-              </Box>
-            )}
-            {photo.patterns.length > 0 && (
-              <Box>
-                <Heading size="sm" mb={2}>
-                  Patterns
-                </Heading>
-                <TagList items={photo.patterns} />
-              </Box>
-            )}
-          </VStack>
-        </CardBody>
+      <Card withBorder>
+        <Stack gap="md">
+          {photo.description && (
+            <Box>
+              <Title order={5} mb="xs">
+                Description
+              </Title>
+              <Text>{photo.description}</Text>
+            </Box>
+          )}
+          {photo.environment && (
+            <Box>
+              <Title order={5} mb="xs">
+                Environment
+              </Title>
+              <Text>{photo.environment}</Text>
+            </Box>
+          )}
+          <Divider />
+          <Section title="Subjects" items={photo.subjects} />
+          <Section title="Tags" items={photo.tags} variant="outline" />
+          <Section title="Colors" items={photo.colors} variant="outline" />
+          <Section title="Patterns" items={photo.patterns} variant="outline" />
+        </Stack>
       </Card>
 
       {(photo.suggestedCaption || photo.suggestedHashtags.length > 0) && (
-        <Card>
-          <CardBody>
-            <VStack align="stretch" spacing={3}>
-              <Heading size="sm">Suggested caption</Heading>
-              <Textarea value={photo.suggestedCaption ?? ''} isReadOnly rows={4} />
-              {photo.suggestedHashtags.length > 0 && (
-                <Flex gap={2} flexWrap="wrap">
-                  {photo.suggestedHashtags.map((tag) => (
-                    <Tag key={tag} colorScheme="teal">
-                      #{tag}
-                    </Tag>
-                  ))}
-                </Flex>
-              )}
-              <Button
-                alignSelf="start"
-                colorScheme="teal"
-                onClick={() => {
-                  const hashtags = photo.suggestedHashtags.map((t) => `#${t}`).join(' ');
-                  void navigator.clipboard.writeText(`${photo.suggestedCaption ?? ''}\n\n${hashtags}`.trim());
-                }}
-              >
-                Copy to Clipboard
-              </Button>
-            </VStack>
-          </CardBody>
+        <Card withBorder>
+          <Stack gap="sm">
+            <Title order={5}>Suggested caption</Title>
+            <Textarea value={photo.suggestedCaption ?? ''} readOnly rows={4} />
+            {photo.suggestedHashtags.length > 0 && (
+              <Group gap="xs">
+                {photo.suggestedHashtags.map((tag) => (
+                  <Badge key={tag} variant="light">
+                    #{tag}
+                  </Badge>
+                ))}
+              </Group>
+            )}
+            <Button
+              w="fit-content"
+              onClick={() => {
+                const hashtags = photo.suggestedHashtags.map((t) => `#${t}`).join(' ');
+                void navigator.clipboard.writeText(`${photo.suggestedCaption ?? ''}\n\n${hashtags}`.trim());
+              }}
+            >
+              Copy to Clipboard
+            </Button>
+          </Stack>
         </Card>
       )}
-    </VStack>
+
+      <Lightbox
+        opened={lightboxOpen}
+        onClose={closeLightbox}
+        thumbnailSrc={thumbnail}
+        originalSrc={originalImage}
+        originalStatus={originalStatus}
+        alt={alt}
+        fallbackHref={originalUrl}
+      />
+    </Stack>
   );
 };
 
