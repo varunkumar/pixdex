@@ -138,4 +138,24 @@ describe('GET /search', () => {
       expect(await ids('monsoon')).toEqual(['photo-old']);
     });
   });
+  it('sort=date orders by photo date newest first, nulls last', async () => {
+    await env.DB.prepare('DELETE FROM photos').run();
+    const insert = (id: string, date: string | null) =>
+      env.DB.prepare(
+        `INSERT INTO photos (id, content_hash, source, filename, album, date_time, model_provider, model_name, search_text, last_indexed)
+         VALUES (?,?,'local',?,'Kanha',?,'ollama','qwen3.5:27b-mlx','','2026-09-18T00:00:00.000Z')`
+      )
+        .bind(id, `h-${id}`, `${id}.jpg`, date)
+        .run();
+    await insert('old', '2026-01-01T00:00:00.000Z');
+    await insert('undated', null);
+    await insert('new', '2026-05-01T00:00:00.000Z');
+
+    const response = await SELF.fetch('https://example.com/search?album=Kanha&sort=date', {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
+    const body = (await response.json()) as any;
+    expect(body.results.map((r: { id: string }) => r.id)).toEqual(['new', 'old', 'undated']);
+  });
+
 });
