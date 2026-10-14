@@ -1,4 +1,4 @@
-import { Link, Text, VStack } from '@chakra-ui/react';
+import { Anchor, Stack, Text } from '@mantine/core';
 import type { SerializedPhoto } from '../types/api';
 import { exifSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 
@@ -12,20 +12,24 @@ const PhotoMeta = ({ photo, compact = false }: { photo: SerializedPhoto; compact
   if (!date && camera.length === 0 && !location) return null;
 
   return (
-    <VStack align="stretch" spacing={0} mb={2} fontSize="xs" color="gray.500">
+    <Stack gap={0} mb="xs">
       {(date || location) && (
-        <Text>
+        <Text size="xs" c="dimmed">
           {date}
           {date && location && ' · '}
           {location && (
-            <Link href={location} isExternal color="teal.500">
+            <Anchor href={location} target="_blank" rel="noopener noreferrer" size="xs">
               View location
-            </Link>
+            </Anchor>
           )}
         </Text>
       )}
-      {camera.length > 0 && <Text>{camera.join(' · ')}</Text>}
-    </VStack>
+      {camera.length > 0 && (
+        <Text size="xs" c="dimmed">
+          {camera.join(' · ')}
+        </Text>
+      )}
+    </Stack>
   );
 };
 

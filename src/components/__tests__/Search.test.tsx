@@ -1,4 +1,5 @@
 import { ChakraProvider } from '@chakra-ui/react';
+import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -26,9 +27,11 @@ function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
-      <ChakraProvider>
-        <MemoryRouter>{ui}</MemoryRouter>
-      </ChakraProvider>
+      <MantineProvider>
+        <ChakraProvider>
+          <MemoryRouter>{ui}</MemoryRouter>
+        </ChakraProvider>
+      </MantineProvider>
     </QueryClientProvider>
   );
 }
