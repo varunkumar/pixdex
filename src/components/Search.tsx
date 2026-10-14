@@ -26,9 +26,13 @@ const Search = () => {
     queryFn: () => workerApiClient.getAlbums(),
   });
 
+  // No term and no album means nothing to look for: show a prompt, not the whole library.
+  const hasCriteria = q !== '' || album !== '';
+
   const { data, isFetching, error, isPlaceholderData } = useQuery({
     queryKey: ['search', q, album, page, size],
     queryFn: () => workerApiClient.searchPage({ q, album, limit: size, offset }),
+    enabled: hasCriteria,
     placeholderData: keepPreviousData,
   });
 
@@ -67,7 +71,7 @@ const Search = () => {
           />
           <Button
             onClick={submit}
-            leftSection={isFetching ? <Loader size="xs" color="white" /> : <MdSearch />}
+            leftSection={hasCriteria && isFetching ? <Loader size="xs" color="white" /> : <MdSearch />}
             style={{ flexGrow: 0 }}
           >
             Search
@@ -75,13 +79,19 @@ const Search = () => {
         </Group>
       </Card>
 
-      {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
+      {!hasCriteria && <Text c="dimmed">Enter a search term or pick an album to find photos.</Text>}
 
-      {data && data.results.length === 0 && <Text c="dimmed">No photos match your search.</Text>}
+      {hasCriteria && error && (
+        <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>
+      )}
 
-      {data && data.results.length > 0 && <PhotoGrid photos={data.results} />}
+      {hasCriteria && data && data.results.length === 0 && (
+        <Text c="dimmed">No photos match your search.</Text>
+      )}
 
-      {data && (
+      {hasCriteria && data && data.results.length > 0 && <PhotoGrid photos={data.results} />}
+
+      {hasCriteria && data && (
         <ListPagination
           page={page}
           size={size}

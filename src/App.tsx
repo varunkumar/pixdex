@@ -11,7 +11,11 @@ import PhotoDetail from './components/PhotoDetail';
 import Search from './components/Search';
 import { theme } from './theme';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  // One retry, then show the error: three backed-off retries kept spinners going for seconds.
+  // Refetching on every tab focus only surfaces errors for data that rarely changes.
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+});
 
 const RootLayout = () => (
   <>

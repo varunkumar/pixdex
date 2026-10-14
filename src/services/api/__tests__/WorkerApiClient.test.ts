@@ -20,7 +20,7 @@ describe('WorkerApiClient', () => {
     expect(results).toEqual([{ id: 'p1', thumbnailUrl: '/thumbnails/h1' }]);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/search?q=big+cat&album=Kanha');
-    expect(init).toBeUndefined();
+    expect(init).toEqual({ redirect: 'manual' });
   });
 
   it('calls the default fetch unbound (window.fetch throws "Illegal invocation" otherwise)', async () => {
@@ -80,5 +80,16 @@ describe('WorkerApiClient', () => {
 
   it('thumbnailUrl() returns an empty string when there is no thumbnail', () => {
     expect(client.thumbnailUrl({ thumbnailUrl: undefined })).toBe('');
+  });
+
+  it('reports an expired sign-in when the request is redirected to the login page', async () => {
+    // Cloudflare Access answers an expired session with a cross-origin redirect.
+    fetchMock.mockResolvedValueOnce({ type: 'opaqueredirect', ok: false, status: 0 } as unknown as Response);
+    await expect(client.getDailyPick()).rejects.toThrow(/session has expired/i);
+  });
+
+  it('names the path when the network request itself fails', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await expect(client.getDailyPick()).rejects.toThrow(/\/daily-pick.*Failed to fetch/);
   });
 });

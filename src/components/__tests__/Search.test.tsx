@@ -26,32 +26,37 @@ describe('Search', () => {
   });
 
   it('runs from the URL on load and fills the form from it', async () => {
-    renderWithProviders(<Search />, { route: '/search?q=big+cat&album=Kanha&page=2&size=20' });
+    renderWithProviders(<Search />, { route: '/search?q=big+cat&album=Kanha&page=2&size=24' });
 
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenCalledWith({
         q: 'big cat',
         album: 'Kanha',
-        limit: 20,
-        offset: 20,
+        limit: 24,
+        offset: 24,
       })
     );
     expect(screen.getByPlaceholderText('Search photos...')).toHaveValue('big cat');
     expect(await screen.findByText('Photo number 0.')).toBeInTheDocument();
-    expect(screen.getByText('Showing 21-40 of 56')).toBeInTheDocument();
+    expect(screen.getByText('Showing 25-48 of 56')).toBeInTheDocument();
   });
 
-  it('lists everything newest first when there are no params', async () => {
+  it('does not search and shows a prompt when there is no query or album', async () => {
     renderWithProviders(<Search />, { route: '/search' });
-    await waitFor(() =>
-      expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: '', album: '', limit: 10, offset: 0 })
-    );
+    expect(await screen.findByText(/enter a search term or pick an album/i)).toBeInTheDocument();
+    expect(workerApiClient.searchPage).not.toHaveBeenCalled();
   });
 
   it('treats a whitespace-only query as empty', async () => {
     renderWithProviders(<Search />, { route: '/search?q=%20%20' });
+    expect(await screen.findByText(/enter a search term or pick an album/i)).toBeInTheDocument();
+    expect(workerApiClient.searchPage).not.toHaveBeenCalled();
+  });
+
+  it('searches by album alone', async () => {
+    renderWithProviders(<Search />, { route: '/search?album=Kanha' });
     await waitFor(() =>
-      expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: '', album: '', limit: 10, offset: 0 })
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: '', album: 'Kanha', limit: 12, offset: 0 })
     );
   });
 

@@ -14,4 +14,8 @@ describe('theme', () => {
     expect(theme.colors?.aurora).toHaveLength(10);
     expect(theme.colors?.aurora?.[6]).toBe('#0E8F9A');
   });
+
+  it('keeps tag text as written instead of uppercasing it', () => {
+    expect(theme.components?.Badge?.defaultProps?.tt).toBe('none');
+  });
 });

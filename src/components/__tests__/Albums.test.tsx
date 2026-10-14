@@ -34,7 +34,10 @@ describe('Albums', () => {
     expect(await screen.findByText('Kanha 2026')).toBeInTheDocument();
     expect(workerApiClient.getAlbumsPage).toHaveBeenCalledWith({ limit: 12, offset: 0 });
     expect(screen.getAllByText(/3 photos/).length).toBeGreaterThan(0);
-    expect(screen.getByRole('img', { name: /kanha 2026/i })).toHaveAttribute('src', '/api/thumbnails/h1');
+    const cover = screen.getByRole('img', { name: /kanha 2026/i });
+    expect(cover).toHaveAttribute('src', '/api/thumbnails/h1');
+    // The whole cover photo is shown, never cropped.
+    expect(cover.getAttribute('style')).toContain('--image-object-fit: contain');
     expect(screen.getByText('Showing 1-12 of 30')).toBeInTheDocument();
   });
 

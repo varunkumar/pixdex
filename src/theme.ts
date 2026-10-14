@@ -1,4 +1,4 @@
-import { createTheme, type MantineColorsTuple } from '@mantine/core';
+import { Badge, createTheme, type MantineColorsTuple } from '@mantine/core';
 
 export const BRAND = 'PixdeX';
 
@@ -27,5 +27,9 @@ export const theme = createTheme({
     fontWeight: '700',
   },
   defaultRadius: 'md',
+  components: {
+    // Tags and hashtags are shown as written (Mantine uppercases badges by default).
+    Badge: Badge.extend({ defaultProps: { tt: 'none' } }),
+  },
   defaultGradient: { from: '#0E8F9A', to: '#7C3AED', deg: 100 },
 });

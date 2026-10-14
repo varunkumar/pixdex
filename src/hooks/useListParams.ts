@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 
-export const PAGE_SIZES = [10, 20, 50] as const;
+// Multiples of 12 so every grid width (1, 2, 3 or 4 columns) fills its last row.
+export const PAGE_SIZES = [12, 24, 48] as const;
 
 type Patch = Record<string, string | number | null | undefined>;
 
@@ -8,7 +9,7 @@ type Patch = Record<string, string | number | null | undefined>;
  * Pagination state that lives in the URL, so every list page is deep-linkable
  * and back/forward restores it. Invalid or default values never reach the URL.
  */
-export function useListParams(defaultSize = 10, sizes: readonly number[] = PAGE_SIZES) {
+export function useListParams(defaultSize = 12, sizes: readonly number[] = PAGE_SIZES) {
   const [params, setParams] = useSearchParams();
 
   const page = Math.max(1, Math.floor(Number(params.get('page'))) || 1);

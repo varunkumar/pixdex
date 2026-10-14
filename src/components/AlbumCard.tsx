@@ -22,7 +22,13 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
     >
       <Card.Section>
         {cover ? (
-          <Image src={cover} alt={album.name} h={180} fit="cover" />
+          <Image
+            src={cover}
+            alt={album.name}
+            h={180}
+            fit="contain"
+            bg="var(--mantine-color-default-hover)"
+          />
         ) : (
           <Center h={180} bg="var(--mantine-color-default-hover)">
             <Box c="dimmed" fz={40} lh={1}>
