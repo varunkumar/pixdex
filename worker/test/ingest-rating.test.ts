@@ -45,6 +45,17 @@ describe('POST /ingest/rating', () => {
     expect(JSON.stringify(await res.json())).toContain('p1');
   });
 
+  it('replaces the previous caption in search_text when re-rated', async () => {
+    await post({ contentHash: 'h1', shortCaption: 'Woman and child by' });
+    await post({ contentHash: 'h1', shortCaption: 'Woman and child' });
+
+    const row = await env.DB.prepare('SELECT search_text, short_caption FROM photos WHERE id = ?')
+      .bind('p1')
+      .first<{ search_text: string; short_caption: string }>();
+    expect(row?.short_caption).toBe('Woman and child');
+    expect(row?.search_text.trim()).toBe('Woman and child');
+  });
+
   it('requires the ingest token (the read token is not enough)', async () => {
     for (const headers of [{} as Record<string, string>, { Authorization: `Bearer ${env.READ_TOKEN}` }]) {
       const res = await SELF.fetch('https://example.com/ingest/rating', {

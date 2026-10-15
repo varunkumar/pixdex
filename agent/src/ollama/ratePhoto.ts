@@ -15,19 +15,19 @@ Be strict, most photos are ordinary:
 7-8: good, would be proud to post
 9-10: exceptional, portfolio quality (rare)
 
-2. caption: a title for the photo in 3 to 4 words (e.g. "Leopard resting at dusk"). Describe what is shown. No place names, no hashtags, no quotes.
+2. caption: a short title for the photo. It must be a complete phrase of 2 to 4 words, never more than 4 words (e.g. "Leopard resting at dusk", "Osprey with fish", "Mother and daughter embrace"). Choose a phrase that is naturally short; do not write a longer phrase and cut it. It must not end on a connecting word such as by, with, and, on, in, at or of. Describe what is shown. No place names, no hashtags, no quotes.
 
 Reply with only a JSON object like {"score": 6, "caption": "Leopard resting at dusk"}. No commentary.`;
 
 const RATING_MAX_DIMENSION = 1024;
 const MAX_CAPTION_WORDS = 4;
-// Cutting at 4 words can leave a dangling connector ("Woman and child by").
-const TRAILING_CONNECTOR = /^(a|an|the|and|or|of|by|with|in|on|at|to|for|from|near|under|over)$/i;
+// A caption over the limit is never cut down; the model is asked again instead.
+const MAX_ATTEMPTS = 3;
 
 export interface PhotoRating {
   /** 1-10; null when the model gave no usable score. */
   score: number | null;
-  /** At most 4 words; null when the model gave none. */
+  /** As written by the model, at most 4 words; null when none was usable. */
   caption: string | null;
 }
 
@@ -37,17 +37,17 @@ function parseScore(raw: unknown): number | null {
   return Math.round(n * 10) / 10;
 }
 
-/** Trims a caption to at most 4 words and strips quotes and trailing punctuation. */
+/**
+ * Returns the caption as the model wrote it (whitespace and surrounding quotes
+ * aside), or null when it is empty or longer than 4 words. Over-long captions
+ * are rejected, not shortened: a cut phrase reads wrong ("Woman and child by").
+ */
 export function normalizeCaption(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const words = raw
-    .replace(/["“”'`#]/g, '')
-    .replace(/[.!?,;:]+$/, '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, MAX_CAPTION_WORDS);
-  while (words.length > 1 && TRAILING_CONNECTOR.test(words[words.length - 1])) words.pop();
-  return words.length ? words.join(' ') : null;
+  const caption = raw.trim().replace(/^["“”'`]+|["“”'`]+$/g, '').trim();
+  const words = caption.split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > MAX_CAPTION_WORDS) return null;
+  return caption;
 }
 
 /** Extracts the score and caption from the model reply. */
@@ -76,9 +76,15 @@ export async function ratePhoto(imagePath: string, client: OllamaClient): Promis
 
   // No reasoning phase: a number and a few words do not need it, and it keeps
   // a backfill over thousands of photos fast.
-  const content = await client.chat(
-    [{ role: 'user', content: RATING_PROMPT, images: [bytes.toString('base64')] }],
-    { think: false }
-  );
-  return parsePhotoRating(content);
+  let rating: PhotoRating = { score: null, caption: null };
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const content = await client.chat(
+      [{ role: 'user', content: RATING_PROMPT, images: [bytes.toString('base64')] }],
+      { think: false }
+    );
+    const parsed = parsePhotoRating(content);
+    rating = { score: parsed.score ?? rating.score, caption: parsed.caption };
+    if (rating.score !== null && rating.caption !== null) break;
+  }
+  return rating;
 }

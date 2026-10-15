@@ -16,7 +16,7 @@ const requestSchema = z
  * Sets the aesthetic rating and/or short caption on an already-indexed photo,
  * keyed by content hash, so existing photos can be updated without a full
  * re-index. A field that is omitted keeps its current value. The caption is
- * also appended to search_text once (the update trigger keeps FTS in sync).
+ * also kept in search_text (the update trigger keeps FTS in sync).
  */
 export async function ingestRatingRoute(c: Context<{ Bindings: Env }>) {
   let body: unknown;
@@ -33,17 +33,28 @@ export async function ingestRatingRoute(c: Context<{ Bindings: Env }>) {
   const p = parsed.data;
   const caption = p.shortCaption ?? '';
 
+  // Re-rating replaces the caption: drop the previous one from search_text when
+  // it was appended at the end (as this route does) so stale words do not pile up.
+  let searchText: string | null = null;
+  if (caption) {
+    const current = await c.env.DB.prepare('SELECT search_text, short_caption FROM photos WHERE content_hash = ?')
+      .bind(p.contentHash)
+      .first<{ search_text: string; short_caption: string | null }>();
+    if (!current) return c.json({ error: 'Unknown content hash' }, 404);
+    let text = current.search_text;
+    const old = current.short_caption;
+    if (old && old !== caption && text.endsWith(` ${old}`)) text = text.slice(0, -(old.length + 1));
+    searchText = text.includes(caption) ? text : `${text} ${caption}`;
+  }
+
   const result = await c.env.DB.prepare(
     `UPDATE photos SET
        aesthetic_score = COALESCE(?, aesthetic_score),
        short_caption = COALESCE(?, short_caption),
-       search_text = CASE
-         WHEN ? = '' OR instr(search_text, ?) > 0 THEN search_text
-         ELSE search_text || ' ' || ?
-       END
+       search_text = COALESCE(?, search_text)
      WHERE content_hash = ?`
   )
-    .bind(p.score ?? null, p.shortCaption ?? null, caption, caption, caption, p.contentHash)
+    .bind(p.score ?? null, p.shortCaption ?? null, searchText, p.contentHash)
     .run();
 
   if (!result.meta.changes) {
