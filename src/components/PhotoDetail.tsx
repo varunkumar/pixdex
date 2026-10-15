@@ -182,6 +182,9 @@ const PhotoDetail = () => {
               {size && <Field label="File size">{size}</Field>}
               {photo.format && <Field label="Format">{photo.format.toUpperCase()}</Field>}
               {photo.season && <Field label="Season">{photo.season}</Field>}
+              {photo.aestheticScore != null && (
+                <Field label="Aesthetics">{photo.aestheticScore.toFixed(1)} / 10</Field>
+              )}
               {/* Unknown (null) is left out entirely rather than shown as "Unknown". */}
               {photo.hasWatermark != null && <Field label="Watermark">{photo.hasWatermark ? 'Yes' : 'No'}</Field>}
             </SimpleGrid>
@@ -255,6 +258,7 @@ const PhotoDetail = () => {
         originalSrc={originalImage}
         originalStatus={originalStatus}
         alt={alt}
+        title={photo.shortCaption ?? photo.filename ?? undefined}
         fallbackHref={originalUrl}
       />
     </Stack>
