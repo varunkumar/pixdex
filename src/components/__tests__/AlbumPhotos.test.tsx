@@ -2,8 +2,9 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { makePhoto } from '../../test/fixtures';
-import { renderWithProviders } from '../../test/renderWithProviders';
+import { renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
 import AlbumPhotos from '../AlbumPhotos';
+import Albums from '../Albums';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
@@ -63,5 +64,20 @@ describe('AlbumPhotos', () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
     fireEvent.click(await screen.findByRole('button', { name: /set as cover/i }));
     await waitFor(() => expect(workerApiClient.setAlbumCover).toHaveBeenCalledWith('Kanha', makePhoto().id));
+  });
+
+  it('returns to the albums listing it came from, keeping its sort', async () => {
+    renderWithRouter(
+      [
+        { path: '/albums', element: <Albums /> },
+        { path: '/albums/:name', element: <AlbumPhotos /> },
+      ],
+      ['/albums?sort=rating&page=2']
+    );
+    fireEvent.click(await screen.findByRole('link', { name: /kanha/i }));
+    expect(await screen.findByRole('link', { name: /all albums/i })).toHaveAttribute(
+      'href',
+      '/albums?sort=rating&page=2'
+    );
   });
 });

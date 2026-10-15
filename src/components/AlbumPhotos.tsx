@@ -1,7 +1,7 @@
 import { Anchor, Button, Group, Select, Stack, Text, Title } from '@mantine/core';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import ListPagination from './ListPagination';
@@ -17,6 +17,7 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
 
 const AlbumPhotos = () => {
   const { name = '' } = useParams();
+  const albumsList = (useLocation().state as { albumsList?: string } | null)?.albumsList ?? '/albums';
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PHOTO_SIZES);
 
   const requestedSort = params.get('sort');
@@ -53,7 +54,7 @@ const AlbumPhotos = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to="/albums" size="sm">
+      <Anchor component={Link} to={albumsList} size="sm">
         ← All albums
       </Anchor>
       <Group justify="space-between" align="baseline">

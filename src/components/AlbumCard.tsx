@@ -1,11 +1,12 @@
 import { Box, Card, Center, Image, Stack, Text } from '@mantine/core';
 import { MdPhoto } from 'react-icons/md';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
 import type { AlbumSummary } from '../types/api';
 
 const AlbumCard = ({ album }: { album: AlbumSummary }) => {
+  const location = useLocation();
   const date = formatPhotoDate(album.latestDate);
   const cover = album.coverThumbnailUrl
     ? workerApiClient.thumbnailUrl({ thumbnailUrl: album.coverThumbnailUrl })
@@ -18,6 +19,8 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
       radius="md"
       component={Link}
       to={`/albums/${encodeURIComponent(album.name)}`}
+      // Lets "All albums" return to this listing with its sort and page intact.
+      state={{ albumsList: `${location.pathname}${location.search}` }}
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       <Card.Section>
