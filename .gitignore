@@ -82,3 +82,6 @@ agent/.index-state/
 
 # Wrangler / miniflare local state
 .wrangler/
+
+# graphify output (regenerate with `graphify update .`)
+graphify-out/
