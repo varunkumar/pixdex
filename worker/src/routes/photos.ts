@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { z } from 'zod';
 import type { Env } from '../types';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
@@ -17,6 +18,36 @@ interface AlbumRow {
   cover_photo_id: string;
   content_hash: string | null;
   latest_date: string | null;
+  avg_score: number | null;
+}
+
+// Whitelisted ORDER BY clauses; the sort query param never reaches SQL directly.
+const ALBUM_ORDER: Record<string, string> = {
+  date: 'COALESCE(newest_date, newest_indexed) DESC, album',
+  name: 'album COLLATE NOCASE, album',
+  count: 'cnt DESC, album COLLATE NOCASE',
+  rating: 'avg_score IS NULL, avg_score DESC, album COLLATE NOCASE',
+};
+
+const coverBody = z.object({ album: z.string().min(1), photoId: z.string().min(1) });
+
+export async function putAlbumCoverRoute(c: Context<{ Bindings: Env }>) {
+  const parsed = coverBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'album and photoId are required' }, 400);
+  const { album, photoId } = parsed.data;
+
+  const photo = await c.env.DB.prepare('SELECT album FROM photos WHERE id = ?')
+    .bind(photoId)
+    .first<{ album: string | null }>();
+  if (!photo || photo.album !== album) return c.json({ error: 'Photo is not in this album' }, 400);
+
+  await c.env.DB.prepare(
+    `INSERT INTO album_covers (album, photo_id) VALUES (?, ?)
+     ON CONFLICT(album) DO UPDATE SET photo_id = excluded.photo_id`
+  )
+    .bind(album, photoId)
+    .run();
+  return c.json({ album, photoId });
 }
 
 export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
@@ -33,31 +64,39 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   const limit = Math.min(Math.max(Math.floor(Number(c.req.query('limit'))) || 12, 1), 48);
   const offset = Math.max(Math.floor(Number(c.req.query('offset'))) || 0, 0);
 
-  // Cover: a dated photo when the album has one (newest first), else the most
-  // recently indexed. latestDate and album order use the newest real photo date,
-  // falling back to ingest time only for albums with no dated photo at all.
+  const orderBy = ALBUM_ORDER[c.req.query('sort') ?? ''] ?? ALBUM_ORDER.date;
+  const only = c.req.query('name');
+  const filter = only ? 'AND album = ?' : '';
+  const filterParams = only ? [only] : [];
+
+  // Cover: the photo picked for the album if it is still in it, else a dated photo
+  // when the album has one (newest first), else the most recently indexed.
+  // latestDate and the default order use the newest real photo date, falling back
+  // to ingest time only for albums with no dated photo at all.
   const [rows, count] = await Promise.all([
     c.env.DB.prepare(
       `WITH ranked AS (
          SELECT album, id, content_hash, date_time,
                 ROW_NUMBER() OVER (
                   PARTITION BY album
-                  ORDER BY date_time IS NULL, date_time DESC, last_indexed DESC, id
+                  ORDER BY (id = (SELECT photo_id FROM album_covers WHERE album_covers.album = photos.album)) DESC,
+                           date_time IS NULL, date_time DESC, last_indexed DESC, id
                 ) AS rn,
+                AVG(aesthetic_score) OVER (PARTITION BY album) AS avg_score,
                 COUNT(*) OVER (PARTITION BY album) AS cnt,
                 MAX(date_time) OVER (PARTITION BY album) AS newest_date,
                 MAX(last_indexed) OVER (PARTITION BY album) AS newest_indexed
          FROM photos
-         WHERE album IS NOT NULL
+         WHERE album IS NOT NULL ${filter}
        )
        SELECT album AS name, cnt AS photo_count, id AS cover_photo_id,
-              content_hash, newest_date AS latest_date
+              content_hash, newest_date AS latest_date, avg_score
        FROM ranked
        WHERE rn = 1
-       ORDER BY COALESCE(newest_date, newest_indexed) DESC, album
+       ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     )
-      .bind(limit, offset)
+      .bind(...filterParams, limit, offset)
       .all<AlbumRow>(),
     c.env.DB.prepare('SELECT COUNT(DISTINCT album) AS total FROM photos WHERE album IS NOT NULL').first<{
       total: number;

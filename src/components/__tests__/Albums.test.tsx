@@ -32,7 +32,7 @@ describe('Albums', () => {
   it('requests the first page of 12 and shows cover, name and count', async () => {
     renderWithProviders(<Albums />, { route: '/albums' });
     expect(await screen.findByText('Kanha 2026')).toBeInTheDocument();
-    expect(workerApiClient.getAlbumsPage).toHaveBeenCalledWith({ limit: 12, offset: 0 });
+    expect(workerApiClient.getAlbumsPage).toHaveBeenCalledWith({ limit: 12, offset: 0, sort: 'date' });
     expect(screen.getAllByText(/3 photos/).length).toBeGreaterThan(0);
     const cover = screen.getByRole('img', { name: /kanha 2026/i });
     expect(cover).toHaveAttribute('src', '/api/thumbnails/h1');
@@ -59,7 +59,17 @@ describe('Albums', () => {
     fireEvent.click(await screen.findByRole('button', { name: '2' }));
     await waitFor(() => expect(router.state.location.search).toBe('?page=2'));
     await waitFor(() =>
-      expect(workerApiClient.getAlbumsPage).toHaveBeenLastCalledWith({ limit: 12, offset: 12 })
+      expect(workerApiClient.getAlbumsPage).toHaveBeenLastCalledWith({ limit: 12, offset: 12, sort: 'date' })
+    );
+  });
+
+  it('sorts through the URL and resets to the first page', async () => {
+    const { router } = renderWithRouter([{ path: '/albums', element: <Albums /> }], ['/albums?page=2']);
+    fireEvent.click(await screen.findByRole('combobox', { name: /sort albums/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Best rated', hidden: true }));
+    await waitFor(() => expect(router.state.location.search).toBe('?sort=rating'));
+    await waitFor(() =>
+      expect(workerApiClient.getAlbumsPage).toHaveBeenLastCalledWith({ limit: 12, offset: 0, sort: 'rating' })
     );
   });
 

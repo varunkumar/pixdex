@@ -1,4 +1,5 @@
 import { Anchor, Badge, Card, Group, Image, Stack, Text } from '@mantine/core';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { getOriginalUrl } from '../services/originals';
@@ -8,7 +9,7 @@ import PhotoMeta from './PhotoMeta';
 
 const MAX_LISTING_TAGS = 5;
 
-const PhotoCard = ({ photo }: { photo: SerializedPhoto }) => {
+const PhotoCard = ({ photo, footer }: { photo: SerializedPhoto; footer?: ReactNode }) => {
   const originalUrl = getOriginalUrl(photo);
   const alt = shortDescription(photo.description, 80) || photo.filename || photo.id;
 
@@ -51,6 +52,7 @@ const PhotoCard = ({ photo }: { photo: SerializedPhoto }) => {
             View Original
           </Anchor>
         )}
+        {footer}
       </Stack>
     </Card>
   );

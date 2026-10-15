@@ -94,3 +94,29 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
   out.headers.set('Cache-Control', cacheControlFor(path, response.ok));
   return out;
 };
+
+// The one write the browser may make: choosing an album's cover. JSON only, so a
+// cross-origin form post cannot trigger it (it would need a CORS preflight).
+export const onRequestPut = async ({ request, env }: Context): Promise<Response> => {
+  const path = new URL(request.url).pathname.replace(/^\/api\//, '');
+  if (path !== 'albums/cover') return new Response('Not found', { status: 404 });
+  if (!request.headers.get('content-type')?.startsWith('application/json')) {
+    return new Response('Unsupported media type', { status: 415 });
+  }
+  if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
+
+  let response: Response;
+  try {
+    response = await fetch(`${env.WORKER_URL.replace(/\/$/, '')}/albums/cover`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' },
+      body: await request.text(),
+    });
+  } catch {
+    return new Response('Upstream unavailable', { status: 502 });
+  }
+  const out = new Response(response.body, response);
+  out.headers.delete('set-cookie');
+  out.headers.set('Cache-Control', 'no-store');
+  return out;
+};

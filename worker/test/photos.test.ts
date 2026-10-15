@@ -52,6 +52,49 @@ describe('GET /albums', () => {
 
   beforeEach(async () => {
     await env.DB.prepare('DELETE FROM photos').run();
+    await env.DB.prepare('DELETE FROM album_covers').run();
+  });
+
+  async function score(id: string, value: number) {
+    await env.DB.prepare('UPDATE photos SET aesthetic_score = ? WHERE id = ?').bind(value, id).run();
+  }
+
+  it('sorts albums by name, photo count and average rating', async () => {
+    await insert('b-1', 'h-b-1', 'beta', '2026-03-01T00:00:00.000Z');
+    await insert('a-1', 'h-a-1', 'Alpha', '2026-01-01T00:00:00.000Z');
+    await insert('a-2', 'h-a-2', 'Alpha', '2026-01-02T00:00:00.000Z');
+    await insert('c-1', 'h-c-1', 'Gamma', '2026-02-01T00:00:00.000Z');
+    await score('b-1', 9);
+    await score('a-1', 4);
+    await score('a-2', 6);
+
+    const names = async (sort: string) =>
+      (await get(`?limit=12&sort=${sort}`)).albums.map((a: { name: string }) => a.name);
+    expect(await names('name')).toEqual(['Alpha', 'beta', 'Gamma']);
+    expect(await names('count')).toEqual(['Alpha', 'beta', 'Gamma']);
+    expect(await names('rating')).toEqual(['beta', 'Alpha', 'Gamma']);
+    expect(await names('date')).toEqual(['beta', 'Gamma', 'Alpha']);
+    expect(await names('bogus; DROP')).toEqual(['beta', 'Gamma', 'Alpha']);
+  });
+
+  it('uses the picked cover and rejects a photo from another album', async () => {
+    await insert('k-old', 'h-k-old', 'Kanha', '2026-01-01T00:00:00.000Z');
+    await insert('k-new', 'h-k-new', 'Kanha', '2026-03-01T00:00:00.000Z');
+    await insert('z-1', 'h-z-1', 'Kaziranga', '2026-02-01T00:00:00.000Z');
+    const put = (body: unknown) =>
+      SELF.fetch('https://example.com/albums/cover', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    expect((await put({ album: 'Kanha', photoId: 'z-1' })).status).toBe(400);
+    expect((await put({ album: 'Kanha', photoId: 'k-old' })).status).toBe(200);
+
+    const body = await get('?limit=1&name=Kanha');
+    expect(body.albums).toHaveLength(1);
+    expect(body.albums[0].coverPhotoId).toBe('k-old');
+    expect(body.albums[0].photoCount).toBe(2);
   });
 
   it('returns rich albums with count, newest-photo cover and total', async () => {

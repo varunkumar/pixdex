@@ -1,9 +1,12 @@
 import type { AlbumsPageResponse, AlbumsResponse, DailyPickResponse, SearchResponse, SerializedPhoto } from '../../types/api';
 
+export type PhotoSort = 'date' | 'name' | 'rating';
+export type AlbumSort = 'date' | 'name' | 'count' | 'rating';
+
 export interface SearchParams {
   q?: string;
   album?: string;
-  sort?: 'date';
+  sort?: PhotoSort;
   limit?: number;
   offset?: number;
 }
@@ -85,11 +88,29 @@ export class WorkerApiClient {
     return albums;
   }
 
-  async getAlbumsPage(params: { limit?: number; offset?: number } = {}): Promise<AlbumsPageResponse> {
+  async getAlbumsPage(
+    params: { limit?: number; offset?: number; sort?: AlbumSort; name?: string } = {}
+  ): Promise<AlbumsPageResponse> {
     // A limit is always sent: the worker returns the rich shape only when asked for a page.
     const query = new URLSearchParams({ limit: String(params.limit ?? 12) });
     if (params.offset != null) query.set('offset', String(params.offset));
+    if (params.sort) query.set('sort', params.sort);
+    if (params.name) query.set('name', params.name);
     return this.getJson<AlbumsPageResponse>(`/albums?${query.toString()}`);
+  }
+
+  async setAlbumCover(album: string, photoId: string): Promise<void> {
+    let response: Response;
+    try {
+      response = await this.fetchFn(`${this.baseUrl}/albums/cover`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ album, photoId }),
+      });
+    } catch (err) {
+      throw new Error(`Could not set cover: ${err instanceof Error ? err.message : 'network error'}`);
+    }
+    if (!response.ok) throw new Error(`Could not set cover: ${response.status}`);
   }
 
   async getPhoto(id: string): Promise<SerializedPhoto> {

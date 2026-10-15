@@ -5,7 +5,7 @@ import { ingestExifRoute } from './routes/ingest-exif';
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
-import { getAlbumsRoute, getPhotoRoute } from './routes/photos';
+import { getAlbumsRoute, getPhotoRoute, putAlbumCoverRoute } from './routes/photos';
 import { searchRoute } from './routes/search';
 import { dailyPickRoute } from './routes/daily-pick';
 import type { Env } from './types';
@@ -37,6 +37,9 @@ app.get('/photos/:id', getPhotoRoute);
 
 app.use('/albums', requireReadToken);
 app.get('/albums', getAlbumsRoute);
+
+app.use('/albums/cover', requireReadToken);
+app.put('/albums/cover', putAlbumCoverRoute);
 
 app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);

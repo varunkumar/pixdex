@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { onRequestGet } from '../../functions/api/[[path]]';
+import { onRequestGet, onRequestPut } from '../../functions/api/[[path]]';
 
 const env = {
   WORKER_URL: 'https://worker.example.dev/',
@@ -159,5 +159,37 @@ describe('/api proxy', () => {
       const res = await call('/api/thumbnails/missing');
       expect(res.headers.get('cache-control')).toBe('no-store');
     });
+  });
+});
+
+describe('/api proxy PUT', () => {
+  const put = (path: string, type = 'application/json') =>
+    onRequestPut({
+      request: new Request(`https://pixdex.example.dev${path}`, {
+        method: 'PUT',
+        headers: { 'content-type': type },
+        body: '{"album":"A","photoId":"p1"}',
+      }),
+      env,
+    });
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it('forwards only the album cover write, with the server-side token', async () => {
+    expect((await put('/api/albums/cover')).status).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('https://worker.example.dev/albums/cover');
+    expect(init.method).toBe('PUT');
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer secret-token');
+  });
+
+  it('rejects other paths and non-JSON bodies without calling the worker', async () => {
+    expect((await put('/api/ingest/photo')).status).toBe(404);
+    expect((await put('/api/albums/cover', 'text/plain')).status).toBe(415);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

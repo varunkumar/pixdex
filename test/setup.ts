@@ -24,3 +24,6 @@ class ResizeObserverStub {
 window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+
+// Mantine's Select scrolls the active option into view; jsdom has no scrollIntoView.
+Element.prototype.scrollIntoView = vi.fn();

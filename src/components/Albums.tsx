@@ -1,19 +1,29 @@
-import { SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useListParams } from '../hooks/useListParams';
-import { workerApiClient } from '../services/api/WorkerApiClient';
+import { workerApiClient, type AlbumSort } from '../services/api/WorkerApiClient';
 import AlbumCard from './AlbumCard';
 import ListPagination from './ListPagination';
 
 const ALBUM_PAGE_SIZES = [12, 24, 48] as const;
 
+const SORT_OPTIONS: { value: AlbumSort; label: string }[] = [
+  { value: 'date', label: 'Newest first' },
+  { value: 'rating', label: 'Best rated' },
+  { value: 'name', label: 'Alphabetical' },
+  { value: 'count', label: 'Most photos' },
+];
+
 const Albums = () => {
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PAGE_SIZES);
 
+  const requestedSort = params.get('sort');
+  const sort = SORT_OPTIONS.find((o) => o.value === requestedSort)?.value ?? 'date';
+
   const { data, error, isPlaceholderData } = useQuery({
-    queryKey: ['albums-page', page, size],
-    queryFn: () => workerApiClient.getAlbumsPage({ limit: size, offset }),
+    queryKey: ['albums-page', page, size, sort],
+    queryFn: () => workerApiClient.getAlbumsPage({ limit: size, offset, sort }),
     placeholderData: keepPreviousData,
   });
 
@@ -25,7 +35,17 @@ const Albums = () => {
 
   return (
     <Stack gap="lg">
-      <Title order={2}>Albums</Title>
+      <Group justify="space-between" align="center">
+        <Title order={2}>Albums</Title>
+        <Select
+          aria-label="Sort albums"
+          data={SORT_OPTIONS}
+          value={sort}
+          allowDeselect={false}
+          w={170}
+          onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
+        />
+      </Group>
 
       {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
       {data && data.albums.length === 0 && <Text c="dimmed">No albums yet.</Text>}

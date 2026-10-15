@@ -24,14 +24,19 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
       params.push(album);
     }
 
-    // sort=date: newest photo first (album pages). Otherwise best text match first;
-    // newest indexed first among equals and when there is no query.
+    // Album pages sort by date (newest first), name (file name) or rating (best first).
+    // Otherwise best text match first; newest indexed first among equals and when
+    // there is no query.
     const order =
       sort === 'date'
         ? `ORDER BY photos.date_time DESC, last_indexed DESC`
-        : match
-          ? `ORDER BY bm25(photos_fts), last_indexed DESC`
-          : `ORDER BY last_indexed DESC`;
+        : sort === 'name'
+          ? `ORDER BY filename COLLATE NOCASE, photos.id`
+          : sort === 'rating'
+            ? `ORDER BY aesthetic_score IS NULL, aesthetic_score DESC, photos.date_time DESC, photos.id`
+            : match
+              ? `ORDER BY bm25(photos_fts), last_indexed DESC`
+              : `ORDER BY last_indexed DESC`;
     const [rows, count] = await Promise.all([
       c.env.DB.prepare(`SELECT photos.* ${from} ${order} LIMIT ? OFFSET ?`)
         .bind(...params, limit, offset)

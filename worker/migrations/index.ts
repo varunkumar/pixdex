@@ -97,6 +97,8 @@ export const EXIF_MIGRATION_STATEMENTS = [
   // Mirrors 0005_rating_fields.sql.
   'ALTER TABLE photos ADD COLUMN aesthetic_score REAL;',
   'ALTER TABLE photos ADD COLUMN short_caption TEXT;',
+  // Mirrors 0006_album_covers.sql.
+  'CREATE TABLE IF NOT EXISTS album_covers (album TEXT PRIMARY KEY, photo_id TEXT NOT NULL);',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];
