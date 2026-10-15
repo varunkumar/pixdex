@@ -1,5 +1,8 @@
 # PixdeX
 
+[![Frontend build](https://img.shields.io/github/check-runs/varunkumar/pixdex/main?nameFilter=Cloudflare%20Pages&label=frontend%20build)](https://github.com/varunkumar/pixdex/commits/main)
+[![Worker build](https://img.shields.io/github/check-runs/varunkumar/pixdex/main?nameFilter=Workers%20Builds%3A%20pixdex-worker&label=worker%20build)](https://github.com/varunkumar/pixdex/commits/main)
+
 A browse and search UI for a personal photo collection.
 
 ## Architecture
@@ -102,10 +105,12 @@ browser never sees the tunnel URL or its token: links go to the same-origin
 
 There is no GitHub Actions pipeline. `.githooks/pre-commit` (enabled by
 `npm install`) runs the lint/test/build suites touched by the staged changes.
-Cloudflare builds and deploys the frontend (with `functions/`) from `main` via
-the Pages Git integration (build command `npm run build`, output `dist`). The
-Worker is deployed by hand: `cd worker && npx wrangler d1 migrations apply DB
---remote && npm run deploy`.
+Cloudflare builds and deploys both the frontend (with `functions/`) and the
+Worker from `main` via its GitHub integration (Pages for the frontend, Workers
+Builds for `worker/`). Frontend build command is
+`npm run build`, output `dist`. D1 migrations are not applied by the deploy:
+run `cd worker && npx wrangler d1 migrations apply DB --remote` before pushing
+code that needs a new schema. See `docs/development.md` for deploy notes.
 
 ## Testing
 
@@ -121,9 +126,18 @@ npm run build
 
 ## Project Structure
 
-- `src/components` - React UI components (Search, Albums, DailySuggestion, Dashboard, Navigation)
-- `src/services/api` - `WorkerApiClient`, used to call the deployed worker
-- `src/types` - TypeScript type definitions
+- `src/components` - React UI (Search, Albums, AlbumPhotos, PhotoDetail,
+  DailySuggestion, Dashboard, Lightbox, Layout)
+- `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
+  and helpers, API types
+- `functions/api` - Pages Function: same-origin proxy that adds the read token
+- `worker/` - Cloudflare Worker (Hono, D1, R2) and its migrations
+- `agent/` - local indexing CLI and originals server
+- `docs/` - [architecture](docs/architecture.md),
+  [development guide](docs/development.md), plans and specs
+
+Agent-oriented summary: `AGENTS.md`. Update this README and `AGENTS.md` with
+every feature or change.
 
 ## Contributing
 

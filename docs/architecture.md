@@ -1,0 +1,89 @@
+# Architecture
+
+PixdeX is a browse and search UI for a personal photo collection. Original
+photos never leave local disk or Google Drive; only derived data (metadata,
+captions, ratings, thumbnails) lives in the cloud.
+
+```
+Your Mac
+  ├─ Ollama (vision + text generation, local)
+  ├─ agent/  (Node/TS CLI: index photos, serve originals)
+  └─ cloudflared tunnel (originals on demand only)
+
+Cloudflare
+  ├─ worker/    Hono Worker: ingest + read API
+  ├─ D1         photo metadata + FTS5 search index
+  ├─ R2         thumbnails only
+  └─ Pages      src/ (React UI) + functions/api (same-origin proxy)
+```
+
+Browsing and searching never needs the Mac: it is served from D1/R2. The Mac is
+needed only to run an indexing pass or to fetch a full-resolution local original.
+Drive-sourced photos deep-link to Drive and need no tunnel.
+
+Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud-redesign-design.md`.
+
+## Components
+
+### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
+
+- `components/` - Search, Albums, AlbumPhotos, PhotoDetail, Dashboard,
+  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
+- `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
+  It calls same-origin `/api/*`.
+- `hooks/useListParams.ts` - sort/page state kept in the URL so listings are
+  linkable and "back" returns to the same sort and page.
+- `types/api.ts` - API response types shared by components.
+- Tests sit next to code in `__tests__/`; helpers in `src/test/`.
+
+### `functions/api/[[path]].ts` - Pages Function proxy
+
+Same-origin read proxy. Adds `READ_TOKEN` server-side so it never ships in the
+bundle. Only an allowlist of read routes is forwarded (`search`, `albums`,
+`daily-pick`, `photos/:id`, `thumbnails/:hash`) plus `originals/:id`, which goes
+to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
+Thumbnails are cached immutably (content-hash addressed); other routes use
+`no-cache`.
+
+### `worker/` - Cloudflare Worker (Hono, D1, R2)
+
+- Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
+  read routes require `READ_TOKEN` (`src/auth.ts`).
+- `routes/search.ts` + `search/synonyms.ts` - FTS5 search with wildlife synonym
+  expansion (`search/wildlife-synonyms.json`).
+- `db/photos.ts` - D1 queries. Schema changes are numbered SQL files in
+  `migrations/` and registered in `migrations/index.ts`.
+- Tests run in the Workers runtime via `@cloudflare/vitest-pool-workers`.
+
+### `agent/` - local indexing agent (Node/TS, tsx)
+
+- `cli.ts` is the entry point. Commands: `index-local`, `index-drive`,
+  `index-batch`, `index-status`, `backfill-exif`, `backfill-ratings`,
+  `serve-originals`.
+- Pipeline per photo (`processFile.ts`): hash content, skip if already indexed
+  (`check-hashes`), read EXIF, make a thumbnail (sharp), ask Ollama for a
+  description/tags/caption/quality rating, then push to the Worker.
+- `batch/` - resumable multi-folder indexing with state in
+  `agent/.index-state/` (gitignored). `scripts/install-launchd.sh` runs it at
+  login.
+- `google/` - OAuth + folder-scoped Drive listing (read-only scope).
+- `originals/` - local server exposing full-resolution files, reached via
+  `cloudflared` (`agent/cloudflared/`).
+
+## Data flow
+
+1. `agent` indexes: files -> hash -> Ollama analysis -> `POST /ingest/*` on the Worker.
+2. Worker stores rows in D1 (with FTS5 text) and thumbnails in R2.
+3. Browser -> Pages `/api/*` -> Pages Function adds token -> Worker read route.
+4. "View Original": browser -> `/api/originals/:id` -> tunnel -> agent server
+   (local files) or a Drive deep-link (Drive files).
+
+## Config and secrets
+
+| Where | Variables |
+| --- | --- |
+| Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET` |
+| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN` |
+| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN` |
+
+Never prefix server-side secrets with `VITE_`.
