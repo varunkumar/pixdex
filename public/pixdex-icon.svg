@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <title>PixdeX icon</title>
+  <g stroke-linecap="round" stroke-linejoin="round" stroke-width="44">
+    <path d="M104 184V112Q104 96 120 96H192" stroke="#00E5F5"/>
+    <path d="M320 96H392Q408 96 408 112V184" stroke="#FFFFFF"/>
+    <path d="M104 328V400Q104 416 120 416H192" stroke="#FFFFFF"/>
+    <path d="M320 416H392Q408 416 408 400V328" stroke="#A855F7"/>
+  </g>
+  <circle cx="256" cy="256" r="36" fill="#00E5F5"/>
+</svg>

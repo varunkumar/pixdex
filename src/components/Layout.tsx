@@ -84,16 +84,20 @@ const Layout = () => {
               color="white"
               aria-label="Toggle navigation"
             />
-            <Text
-              component={Link}
+            <Link
               to="/"
-              fw={700}
-              fz="xl"
-              c="white"
-              style={{ textDecoration: 'none', fontFamily: 'var(--mantine-font-family-headings)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}
             >
-              {BRAND}
-            </Text>
+              <img src="/pixdex-icon.svg" alt="" width={32} height={32} />
+              <Text
+                fw={700}
+                fz="xl"
+                c="white"
+                style={{ fontFamily: 'var(--mantine-font-family-headings)' }}
+              >
+                {BRAND}
+              </Text>
+            </Link>
             <Group gap={4} visibleFrom="sm" wrap="nowrap">
               {LINKS.map((item) => (
                 <HeaderLink key={item.to} {...item} />
