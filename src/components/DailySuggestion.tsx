@@ -118,6 +118,7 @@ const DailySuggestion = () => {
         originalSrc={originalImage}
         originalStatus={originalStatus}
         alt={alt}
+        title={suggestion?.photo.shortCaption ?? suggestion?.photo.filename ?? undefined}
         fallbackHref={originalUrl}
       />
     </Card>

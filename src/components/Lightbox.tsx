@@ -10,11 +10,13 @@ interface Props {
   originalSrc: string | null;
   originalStatus: PrefetchStatus;
   alt: string;
+  /** Heading shown above the photo; defaults to `alt`. */
+  title?: string;
   /** Where the full original can be opened when it cannot be shown inline. */
   fallbackHref: string | null;
 }
 
-const Lightbox = ({ opened, onClose, thumbnailSrc, originalSrc, originalStatus, alt, fallbackHref }: Props) => {
+const Lightbox = ({ opened, onClose, thumbnailSrc, originalSrc, originalStatus, alt, title, fallbackHref }: Props) => {
   const showOriginal = originalSrc !== null && originalStatus === 'ready';
   const unavailable = originalSrc === null || originalStatus === 'error';
 
@@ -23,7 +25,7 @@ const Lightbox = ({ opened, onClose, thumbnailSrc, originalSrc, originalStatus, 
       opened={opened}
       onClose={onClose}
       fullScreen
-      title={alt}
+      title={title ?? alt}
       styles={{ content: { background: '#000' }, header: { background: '#000' }, title: { color: '#fff' } }}
     >
       <Stack align="center" gap="sm">

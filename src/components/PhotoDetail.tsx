@@ -159,6 +159,7 @@ const PhotoDetail = () => {
             <Title order={3}>{photo.shortCaption ?? photo.filename ?? 'Photo'}</Title>
 
             <SimpleGrid cols={2} spacing="sm">
+              {photo.filename && <Field label="File name">{photo.filename}</Field>}
               {date && <Field label="Taken">{date}</Field>}
               {photo.album && albumHref && (
                 <Field label="Album">

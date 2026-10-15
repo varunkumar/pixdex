@@ -21,6 +21,8 @@ Reply with only a JSON object like {"score": 6, "caption": "Leopard resting at d
 
 const RATING_MAX_DIMENSION = 1024;
 const MAX_CAPTION_WORDS = 4;
+// Cutting at 4 words can leave a dangling connector ("Woman and child by").
+const TRAILING_CONNECTOR = /^(a|an|the|and|or|of|by|with|in|on|at|to|for|from|near|under|over)$/i;
 
 export interface PhotoRating {
   /** 1-10; null when the model gave no usable score. */
@@ -44,6 +46,7 @@ export function normalizeCaption(raw: unknown): string | null {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, MAX_CAPTION_WORDS);
+  while (words.length > 1 && TRAILING_CONNECTOR.test(words[words.length - 1])) words.pop();
   return words.length ? words.join(' ') : null;
 }
 

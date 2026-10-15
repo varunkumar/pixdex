@@ -87,6 +87,15 @@ describe('PhotoDetail', () => {
     expect(workerApiClient.getPhoto).toHaveBeenCalledWith('p1');
   });
 
+  it('shows the file name as its own field next to the short caption title', async () => {
+    vi.mocked(workerApiClient.getPhoto).mockResolvedValue({ ...tiger, shortCaption: 'Tiger on a rock' });
+    renderWithRouter(routes, ['/photos/p1']);
+
+    expect(await screen.findByRole('heading', { name: 'Tiger on a rock' })).toBeInTheDocument();
+    expect(screen.getByText('File name')).toBeInTheDocument();
+    expect(screen.getByText('DSC_8707-2.jpg')).toBeInTheDocument();
+  });
+
   it('shows the watermark field only when it is known', async () => {
     renderWithRouter(routes, ['/photos/p1']);
     expect(await screen.findByText('Watermark')).toBeInTheDocument();

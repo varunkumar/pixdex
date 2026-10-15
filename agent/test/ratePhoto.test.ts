@@ -27,6 +27,10 @@ describe('normalizeCaption', () => {
     expect(normalizeCaption('#Golden hour.')).toBe('Golden hour');
   });
 
+  it('drops a connector left dangling by the 4-word cut', () => {
+    expect(normalizeCaption('Woman and child by the river')).toBe('Woman and child');
+  });
+
   it('returns null for empty or non-string input', () => {
     expect(normalizeCaption('  ')).toBeNull();
     expect(normalizeCaption(undefined)).toBeNull();
