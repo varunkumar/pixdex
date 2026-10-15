@@ -1,12 +1,18 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-async function seed(id: string, subjects: string[], description: string, instagramSuggested: string | null) {
+async function seed(
+  id: string,
+  subjects: string[],
+  description: string,
+  instagramSuggested: string | null,
+  aestheticScore: number | null = null
+) {
   await env.DB.prepare(
-    `INSERT INTO photos (id, content_hash, source, filename, subjects, description, suggested_caption, suggested_hashtags, model_provider, model_name, search_text, last_indexed, instagram_suggested)
-     VALUES (?,?,'local',?,?,?, 'caption', '[]', 'ollama', 'qwen3.5:27b-mlx', '', '2026-09-18T00:00:00.000Z', ?)`
+    `INSERT INTO photos (id, content_hash, source, filename, subjects, description, suggested_caption, suggested_hashtags, model_provider, model_name, search_text, last_indexed, instagram_suggested, aesthetic_score)
+     VALUES (?,?,'local',?,?,?, 'caption', '[]', 'ollama', 'qwen3.5:27b-mlx', '', '2026-09-18T00:00:00.000Z', ?, ?)`
   )
-    .bind(id, `hash-${id}`, `${id}.jpg`, JSON.stringify(subjects), description, instagramSuggested)
+    .bind(id, `hash-${id}`, `${id}.jpg`, JSON.stringify(subjects), description, instagramSuggested, aestheticScore)
     .run();
 }
 
@@ -23,6 +29,25 @@ describe('GET /daily-pick', () => {
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('rich');
     expect(body.suggestedCaption).toBe('caption');
+  });
+
+  it('prefers the better-looking photo over one with more subjects and a longer description', async () => {
+    await seed('busy', ['a', 'b', 'c', 'd', 'e'], 'A very long description of a cluttered scene with many things in it.', null, 4);
+    await seed('pretty', ['leopard'], 'A leopard.', null, 9);
+
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const body = (await response.json()) as any;
+    expect(body.photo.id).toBe('pretty');
+    expect(body.photo.aestheticScore).toBe(9);
+  });
+
+  it('never picks an unrated photo over a photo rated good', async () => {
+    await seed('unrated', ['a', 'b', 'c', 'd', 'e'], 'Many words '.repeat(20), null, null);
+    await seed('good', ['leopard'], 'A leopard.', null, 7.5);
+
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const body = (await response.json()) as any;
+    expect(body.photo.id).toBe('good');
   });
 
   it('skips a photo suggested within the last 90 days if another is eligible', async () => {

@@ -94,6 +94,9 @@ export const EXIF_MIGRATION_STATEMENTS = [
   'ALTER TABLE photos ADD COLUMN longitude REAL;',
   // Mirrors 0004_has_watermark.sql.
   'ALTER TABLE photos ADD COLUMN has_watermark INTEGER;',
+  // Mirrors 0005_rating_fields.sql.
+  'ALTER TABLE photos ADD COLUMN aesthetic_score REAL;',
+  'ALTER TABLE photos ADD COLUMN short_caption TEXT;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

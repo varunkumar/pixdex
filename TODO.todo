@@ -9,6 +9,9 @@ UI enhancements:
 AI:
   - Add an implementation to run models locally
 
+API:
+  - Fold every Worker route under /api/* (/api/search, /api/ingest/rating, ...) so the Pages proxy forwards paths unchanged and the agent's CLOUDFLARE_API_BASE_URL gets /api appended. Keep /api/ingest/* out of the proxy allowlist. Deploy the worker and agent together; update tests, README and functions/api/[[path]].ts
+
 Auth:
   - Add Auth for operations
 

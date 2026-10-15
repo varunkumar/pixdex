@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { extractExifData } from './exif';
 import { generateThumbnail } from './thumbnail';
 import { analyzeImage, type ImageAnalysisResult } from './ollama/analyzeImage';
+import { ratePhoto } from './ollama/ratePhoto';
 import { generateText } from './ollama/generateText';
 import type { OllamaClient } from './ollama/client';
 import { CloudflareClient, type IngestPhotoPayload } from './cloudflareClient';
@@ -28,6 +29,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
 
   const exif = await extractExifData(input.localPath);
   const analysis = await analyzeImage(input.localPath, ollamaClient, { album: input.album });
+  const rating = await ratePhoto(input.localPath, ollamaClient);
   const caption = await generateText(buildCaptionPrompt(analysis), ollamaClient);
   const hashtags = await generateText(buildHashtagPrompt(analysis), ollamaClient);
   const thumbnail = await generateThumbnail(input.localPath);
@@ -58,6 +60,8 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     modelName: config.OLLAMA_MODEL,
     ...exif.camera,
     hasWatermark: analysis.hasWatermark,
+    aestheticScore: rating.score ?? undefined,
+    shortCaption: rating.caption ?? undefined,
   };
 
   // Upload the thumbnail before creating the D1 row: the thumbnail PUT is

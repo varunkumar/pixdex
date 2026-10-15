@@ -36,6 +36,10 @@ export interface SerializedPhoto {
   longitude?: number | null;
   /** null/undefined when unknown (indexed before watermark detection existed). */
   hasWatermark?: boolean | null;
+  /** 1-10 vision-model rating of how good the photo looks; null/undefined when not rated. */
+  aestheticScore?: number | null;
+  /** 3-4 word title; null/undefined when not generated yet. */
+  shortCaption?: string | null;
 }
 
 export interface SearchResponse {

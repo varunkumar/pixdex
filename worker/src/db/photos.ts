@@ -41,6 +41,10 @@ export const ingestPhotoSchema = z.object({
   modelName: z.string().min(1),
   // Absent means unknown; the agent sends true/false once it has looked.
   hasWatermark: z.boolean().optional(),
+  // 1-10; absent means not rated.
+  aestheticScore: z.number().min(1).max(10).optional(),
+  // 3-4 word title.
+  shortCaption: z.string().max(80).optional(),
 }).merge(exifFieldsSchema);
 
 export type IngestPhotoInput = z.infer<typeof ingestPhotoSchema>;
@@ -82,6 +86,8 @@ export interface PhotoRow {
   latitude?: number | null;
   longitude?: number | null;
   has_watermark?: number | null;
+  aesthetic_score?: number | null;
+  short_caption?: string | null;
   [key: string]: unknown;
 }
 
@@ -123,6 +129,10 @@ export interface SerializedPhoto {
   longitude: number | null;
   /** null when unknown (indexed before watermark detection existed). */
   hasWatermark: boolean | null;
+  /** 1-10 vision-model rating; null when not rated yet. */
+  aestheticScore: number | null;
+  /** 3-4 word title; null when not generated yet. */
+  shortCaption: string | null;
 }
 
 function parseJsonArray(value: string | undefined | null): unknown[] {
@@ -178,6 +188,8 @@ export function serializePhoto(row: PhotoRow): SerializedPhoto {
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
     hasWatermark: row.has_watermark == null ? null : row.has_watermark === 1,
+    aestheticScore: row.aesthetic_score ?? null,
+    shortCaption: row.short_caption ?? null,
   };
 }
 
@@ -193,6 +205,7 @@ export function buildSearchText(input: {
   colors?: string[];
   patterns?: string[];
   season?: string;
+  shortCaption?: string;
 }): string {
   return [
     ...input.subjects,
@@ -200,6 +213,7 @@ export function buildSearchText(input: {
     ...(input.colors ?? []),
     ...(input.patterns ?? []),
     input.season ?? '',
+    input.shortCaption ?? '',
     input.description,
     input.environment ?? '',
     input.album ?? '',

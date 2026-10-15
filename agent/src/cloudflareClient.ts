@@ -37,6 +37,10 @@ export interface IngestPhotoPayload {
   latitude?: number;
   longitude?: number;
   hasWatermark?: boolean;
+  /** 1-10 rating of how good the photo looks; omitted when the model gave none. */
+  aestheticScore?: number;
+  /** 3-4 word title; omitted when the model gave none. */
+  shortCaption?: string;
 }
 
 export class CloudflareClient {
@@ -93,6 +97,20 @@ export class CloudflareClient {
     if (response.status === 404) return false;
     if (!response.ok) {
       throw new Error(`ingest/exif failed: ${response.status}`);
+    }
+    return true;
+  }
+
+  /** Sets the aesthetic score and/or short caption on an already-indexed photo; false if the hash is unknown. */
+  async updateRating(contentHash: string, rating: { score?: number; shortCaption?: string }): Promise<boolean> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/rating`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ contentHash, ...rating }),
+    });
+    if (response.status === 404) return false;
+    if (!response.ok) {
+      throw new Error(`ingest/rating failed: ${response.status}`);
     }
     return true;
   }

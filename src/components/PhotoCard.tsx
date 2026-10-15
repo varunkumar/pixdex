@@ -26,6 +26,11 @@ const PhotoCard = ({ photo }: { photo: SerializedPhoto }) => {
 
       <Stack gap="xs" p="md">
         <Anchor component={Link} to={`/photos/${photo.id}`} c="inherit" underline="never">
+          {photo.shortCaption && (
+            <Text size="sm" fw={600}>
+              {photo.shortCaption}
+            </Text>
+          )}
           <Text size="sm">{shortDescription(photo.description)}</Text>
         </Anchor>
         <PhotoMeta photo={photo} compact />

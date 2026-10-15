@@ -156,7 +156,7 @@ const PhotoDetail = () => {
           </UnstyledButton>
 
           <Stack gap="md" style={{ flex: '1 1 280px' }}>
-            <Title order={3}>{photo.filename ?? 'Photo'}</Title>
+            <Title order={3}>{photo.shortCaption ?? photo.filename ?? 'Photo'}</Title>
 
             <SimpleGrid cols={2} spacing="sm">
               {date && <Field label="Taken">{date}</Field>}

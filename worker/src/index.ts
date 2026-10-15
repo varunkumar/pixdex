@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { requireIngestToken, requireReadToken } from './auth';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
 import { ingestExifRoute } from './routes/ingest-exif';
+import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { getAlbumsRoute, getPhotoRoute } from './routes/photos';
@@ -22,6 +23,7 @@ app.use('/ingest/*', requireIngestToken);
 app.post('/ingest/check-hashes', checkHashesRoute);
 app.post('/ingest/photo', ingestPhotoRoute);
 app.post('/ingest/exif', ingestExifRoute);
+app.post('/ingest/rating', ingestRatingRoute);
 app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);
 
 app.use('/thumbnails/*', requireReadToken);

@@ -86,7 +86,7 @@ describe('camera EXIF fields', () => {
     const row = await env.DB.prepare('SELECT search_text FROM photos WHERE id = ?')
       .bind(base.id)
       .first<{ search_text: string }>();
-    expect(row?.search_text.split('NIKON Z 8').length - 1).toBe(1);
+    expect((row?.search_text.split('NIKON Z 8').length ?? 0) - 1).toBe(1);
   });
 
   it('404s for an unknown content hash and requires the ingest token', async () => {

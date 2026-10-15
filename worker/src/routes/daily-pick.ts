@@ -12,7 +12,7 @@ const SEASON_MONTHS: Record<string, number[]> = {
 // Only the columns the route actually reads, to keep D1 row-read cost down
 // (this endpoint is unauthenticated and can be called by anyone).
 const SELECT_COLUMNS =
-  'id, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested, source, drive_file_id';
+  'id, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested, source, drive_file_id, aesthetic_score, short_caption, has_watermark';
 
 function isEligible(row: PhotoRow): boolean {
   if (!row.instagram_suggested) return true;
@@ -20,10 +20,16 @@ function isEligible(row: PhotoRow): boolean {
   return daysSince > 90;
 }
 
+// A photo must be rated at least this well (1-10) to be considered a "good" pick.
+const MIN_GOOD_AESTHETIC = 7;
+
 function score(row: PhotoRow): number {
   const subjects: string[] = row.subjects ? JSON.parse(row.subjects) : [];
-  let s = subjects.length * 2;
-  s += (row.description ?? '').split(' ').filter(Boolean).length * 0.1;
+  // Looks dominate; subject count and description length only break ties
+  // between similarly rated photos (and rank photos that are not rated yet).
+  let s = (row.aesthetic_score ?? 0) * 10;
+  s += Math.min(subjects.length, 5) * 0.5;
+  s += Math.min((row.description ?? '').split(' ').filter(Boolean).length, 60) * 0.02;
 
   if (row.season) {
     const months = SEASON_MONTHS[row.season.toLowerCase()];
@@ -36,9 +42,10 @@ function score(row: PhotoRow): number {
 
 function buildResponse(row: PhotoRow) {
   const subjects: string[] = row.subjects ? JSON.parse(row.subjects) : [];
+  const looks = row.aesthetic_score != null ? ` It rated ${row.aesthetic_score.toFixed(1)}/10 for visual quality.` : '';
   const reason = `This photo was selected because it features ${
     subjects.length > 0 ? subjects.join(', ') : 'interesting subjects'
-  } in a ${row.environment ?? 'natural'} setting${row.season ? ` during ${row.season}` : ''}.`;
+  } in a ${row.environment ?? 'natural'} setting${row.season ? ` during ${row.season}` : ''}.${looks}`;
 
   return {
     photo: serializePhoto(row),
@@ -69,7 +76,13 @@ export async function dailyPickRoute(c: Context<{ Bindings: Env }>) {
   }
 
   const eligible = all.results.filter(isEligible);
-  const pool = eligible.length > 0 ? eligible : all.results;
+  const candidates = eligible.length > 0 ? eligible : all.results;
+
+  // Prefer photos rated as good-looking; if none qualify, take the best rated
+  // ones; if nothing has been rated yet, fall back to every candidate.
+  const rated = candidates.filter((r) => r.aesthetic_score != null);
+  const good = rated.filter((r) => (r.aesthetic_score ?? 0) >= MIN_GOOD_AESTHETIC);
+  const pool = good.length > 0 ? good : rated.length > 0 ? rated : candidates;
 
   const best = pool.reduce((a, b) => (score(b) > score(a) ? b : a));
 
