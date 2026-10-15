@@ -1,11 +1,28 @@
-import { Anchor, Badge, Button, Card, Group, Image, Skeleton, Stack, Text, Textarea, Title } from '@mantine/core';
+import {
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Image,
+  Skeleton,
+  Stack,
+  Text,
+  Textarea,
+  Title,
+  UnstyledButton,
+} from '@mantine/core';
+import { useState } from 'react';
 import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { getOriginalUrl } from '../services/originals';
+import { usePrefetchImage } from '../hooks/usePrefetchImage';
+import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
+import Lightbox from './Lightbox';
 import PhotoMeta from './PhotoMeta';
 
 const DailySuggestion = () => {
+  const [zoomOpen, setZoomOpen] = useState(false);
   const {
     data: suggestion,
     isLoading,
@@ -32,6 +49,11 @@ const DailySuggestion = () => {
   };
 
   const originalUrl = suggestion ? getOriginalUrl(suggestion.photo) : null;
+  const originalImage = suggestion ? getOriginalImageUrl(suggestion.photo) : null;
+  // Only fetch the (large) original once the viewer is opened.
+  const originalStatus = usePrefetchImage(zoomOpen ? originalImage : null);
+  const thumbnail = suggestion ? workerApiClient.thumbnailUrl(suggestion.photo) : '';
+  const alt = suggestion ? (suggestion.photo.description ?? suggestion.photo.filename ?? suggestion.photo.id) : '';
 
   return (
     <Card withBorder maw={1100} mx="auto" w="100%">
@@ -51,13 +73,14 @@ const DailySuggestion = () => {
         </Text>
       ) : suggestion ? (
         <Stack>
-          <Image
-            src={workerApiClient.thumbnailUrl(suggestion.photo)}
-            alt={suggestion.photo.description ?? suggestion.photo.filename ?? suggestion.photo.id}
-            radius="md"
-            fit="contain"
-            mah={500}
-          />
+          <UnstyledButton
+            onClick={() => setZoomOpen(true)}
+            aria-label="Open full-size photo"
+            style={{ cursor: 'zoom-in' }}
+          >
+            <Image src={thumbnail} alt={alt} radius="md" fit="contain" mah={500} w="100%" />
+          </UnstyledButton>
+          {suggestion.photo.shortCaption && <Title order={4}>{suggestion.photo.shortCaption}</Title>}
           <PhotoMeta photo={suggestion.photo} />
 
           <Text fw={700}>Why this photo?</Text>
@@ -88,6 +111,15 @@ const DailySuggestion = () => {
       ) : (
         <Text>No suggestion available</Text>
       )}
+      <Lightbox
+        opened={zoomOpen}
+        onClose={() => setZoomOpen(false)}
+        thumbnailSrc={thumbnail}
+        originalSrc={originalImage}
+        originalStatus={originalStatus}
+        alt={alt}
+        fallbackHref={originalUrl}
+      />
     </Card>
   );
 };

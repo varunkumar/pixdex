@@ -1,5 +1,6 @@
-import { Anchor, Center, Image, Loader, Modal, Stack, Text } from '@mantine/core';
+import { Anchor, Center, Loader, Modal, Stack, Text } from '@mantine/core';
 import type { PrefetchStatus } from '../hooks/usePrefetchImage';
+import ZoomableImage from './ZoomableImage';
 
 interface Props {
   opened: boolean;
@@ -26,12 +27,10 @@ const Lightbox = ({ opened, onClose, thumbnailSrc, originalSrc, originalStatus, 
       styles={{ content: { background: '#000' }, header: { background: '#000' }, title: { color: '#fff' } }}
     >
       <Stack align="center" gap="sm">
-        <Image
+        <ZoomableImage
           src={showOriginal ? originalSrc : thumbnailSrc}
           alt={alt}
-          fit="contain"
-          mah="calc(100vh - 140px)"
-          maw="100%"
+          height="calc(100vh - 140px)"
         />
         {originalSrc !== null && originalStatus === 'loading' && (
           <Center>

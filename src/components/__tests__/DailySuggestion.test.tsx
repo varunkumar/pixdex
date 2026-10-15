@@ -11,6 +11,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
 
 vi.mock('../../services/originals', () => ({
   getOriginalUrl: vi.fn(() => '/api/originals/p1'),
+  getOriginalImageUrl: vi.fn(() => '/api/originals/p1'),
 }));
 
 describe('DailySuggestion', () => {
