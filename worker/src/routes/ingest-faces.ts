@@ -143,7 +143,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   if (!photo) return c.json({ error: 'Unknown content hash' }, 404);
 
   const confirmed = await c.env.DB.prepare(
-    "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces WHERE photo_id = ? AND assign_status = 'confirmed'"
+    "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces WHERE photo_id = ? AND +assign_status = 'confirmed'"
   )
     .bind(photo.id)
     .all<{ id: string; bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number }>();
@@ -154,14 +154,14 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   const rejections = await c.env.DB.prepare(
     `SELECT r.face_id, r.person_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h
      FROM face_rejections r JOIN faces f ON f.id = r.face_id
-     WHERE f.photo_id = ? AND f.assign_status IN ('unassigned', 'auto')`
+     WHERE f.photo_id = ? AND +f.assign_status IN ('unassigned', 'auto')`
   )
     .bind(photo.id)
     .all<{ face_id: string; person_id: string; bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number }>();
 
   // Crops of the faces about to be replaced go away with them.
   const stale = await c.env.DB.prepare(
-    "SELECT crop_key FROM faces WHERE photo_id = ? AND assign_status IN ('unassigned', 'auto') AND crop_key IS NOT NULL"
+    "SELECT crop_key FROM faces WHERE photo_id = ? AND +assign_status IN ('unassigned', 'auto') AND crop_key IS NOT NULL"
   )
     .bind(photo.id)
     .all<{ crop_key: string }>();
@@ -170,9 +170,9 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   const statements = [
     c.env.DB.prepare(
       `DELETE FROM face_rejections WHERE face_id IN
-         (SELECT id FROM faces WHERE photo_id = ? AND assign_status IN ('unassigned', 'auto'))`
+         (SELECT id FROM faces WHERE photo_id = ? AND +assign_status IN ('unassigned', 'auto'))`
     ).bind(photo.id),
-    c.env.DB.prepare("DELETE FROM faces WHERE photo_id = ? AND assign_status IN ('unassigned', 'auto')").bind(photo.id),
+    c.env.DB.prepare("DELETE FROM faces WHERE photo_id = ? AND +assign_status IN ('unassigned', 'auto')").bind(photo.id),
   ];
   let stored = 0;
   let kept = 0;
