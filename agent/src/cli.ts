@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { loadConfig } from './config';
 import { CloudflareClient } from './cloudflareClient';
@@ -55,7 +56,7 @@ export async function runCli(argv: string[]): Promise<number> {
     }
   }
 
-  if (command === 'backfill-faces' && folder) {
+  if (command === 'backfill-faces') {
     try {
       const config = loadConfig();
       const sidecar = createFaceSidecar(config);
@@ -63,13 +64,15 @@ export async function runCli(argv: string[]): Promise<number> {
         console.error('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
         return 1;
       }
-      const result = await backfillFaces(folder, {
+      const result = await backfillFaces({
         cloudflareClient: new CloudflareClient(config),
         sidecar,
+        // A trailing separator keeps "Processed" from also matching "Processed 2".
+        pathPrefix: folder ? path.join(path.resolve(folder), path.sep) : undefined,
         onProgress: (message) => console.log(message),
       });
       console.log(
-        `Done. Total: ${result.total}, Scanned: ${result.scanned}, Faces: ${result.faces}, Already scanned: ${result.skipped}, Not indexed: ${result.notIndexed}, Failed: ${result.failed}`
+        `Done. Unscanned: ${result.total}, Scanned: ${result.scanned}, Faces: ${result.faces}, File missing: ${result.missing}, Not indexed: ${result.notIndexed}, Failed: ${result.failed}`
       );
       return result.failed > 0 ? 1 : 0;
     } catch (error) {
@@ -98,7 +101,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces <folder>\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }

@@ -62,6 +62,24 @@ describe('CloudflareClient', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).hashes).toHaveLength(100);
   });
 
+  it('facesUnscanned posts the model, cursor and path prefix and returns the page', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [{ contentHash: 'h1', path: '/a/1.jpg' }], nextCursor: 9 }), { status: 200 })
+    );
+
+    const page = await client.facesUnscanned('buffalo_l', { cursor: 3, pathPrefix: '/a/' });
+
+    expect(page).toEqual({ items: [{ contentHash: 'h1', path: '/a/1.jpg' }], nextCursor: 9 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/faces/unscanned');
+    expect(JSON.parse(init.body)).toEqual({ model: 'buffalo_l', cursor: 3, pathPrefix: '/a/' });
+  });
+
+  it('facesUnscanned throws on a failed response', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
+    await expect(client.facesUnscanned('buffalo_l')).rejects.toThrow('500');
+  });
+
   it('ingestFaces posts the faces and returns true', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ stored: 1, kept: 0, matched: 0 }), { status: 200 }));
     const faces = [{ bbox: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, detScore: 0.9, embedding: 'e' }];

@@ -6,6 +6,13 @@ import { autoMatchFaces } from '../people/autoMatch';
 
 type Box = { x: number; y: number; w: number; h: number };
 
+const unscannedSchema = z.object({
+  model: z.string().min(1),
+  cursor: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(500).default(200),
+  pathPrefix: z.string().min(1).max(1024).optional(),
+});
+
 const pendingSchema = z.object({
   hashes: z.array(z.string().min(1)).max(5000),
   model: z.string().min(1),
@@ -64,6 +71,43 @@ export async function pendingFacesRoute(c: Context<{ Bindings: Env }>) {
   const pending = new Set(results.map((r) => r.content_hash));
   // Preserve request order and drop duplicates.
   return c.json({ pending: [...new Set(hashes)].filter((h) => pending.has(h)) });
+}
+
+/**
+ * Local photos that are indexed but not yet face-scanned with this model, with the
+ * path the agent indexed them from, so a backfill follows the index instead of
+ * walking folders. Paged by rowid; `pathPrefix` limits it to one folder.
+ */
+export async function unscannedFacesRoute(c: Context<{ Bindings: Env }>) {
+  const body = await readJson(c);
+  if (body === undefined) return c.json({ error: 'Invalid JSON body' }, 400);
+  const parsed = unscannedSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const { model, cursor = 0, limit, pathPrefix } = parsed.data;
+
+  const params: (string | number)[] = [model, cursor];
+  let prefixClause = '';
+  if (pathPrefix) {
+    // Escape LIKE wildcards so a folder name containing % or _ matches literally.
+    prefixClause = ` AND path LIKE ? ESCAPE '\\'`;
+    params.push(`${pathPrefix.replace(/[\\%_]/g, '\\$&')}%`);
+  }
+  params.push(limit);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT rowid AS cursor, content_hash, path FROM photos
+     WHERE source = 'local' AND path IS NOT NULL
+       AND (faces_scanned_model IS NULL OR faces_scanned_model != ?)
+       AND rowid > ?${prefixClause}
+     ORDER BY rowid LIMIT ?`
+  )
+    .bind(...params)
+    .all<{ cursor: number; content_hash: string; path: string }>();
+
+  return c.json({
+    items: results.map((r) => ({ contentHash: r.content_hash, path: r.path })),
+    nextCursor: results.length === limit ? results[results.length - 1].cursor : null,
+  });
 }
 
 /**

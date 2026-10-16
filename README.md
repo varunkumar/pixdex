@@ -86,10 +86,14 @@ detect faces after each photo (a sidecar failure is logged and never fails the
 photo). To scan photos that were indexed earlier:
 
 ```bash
-cd agent && npm run dev -- backfill-faces "/path/to/folder"
+cd agent && npm run dev -- backfill-faces                       # every indexed local photo not yet scanned
+cd agent && npm run dev -- backfill-faces "/path/to/folder"     # only photos indexed from that folder
 ```
 
-It is resumable: a re-run skips photos already scanned. Faces can be named or corrected on each
+It follows the index, not the disk: the Worker lists the local photos still unscanned (with the path each was
+indexed from), so folders are never walked or hashed. Photos whose file is not on disk right now (a drive that is
+not mounted) are counted as "File missing" and picked up on a later run. It is resumable: a re-run only does what
+is left. Faces can be named or corrected on each
 photo's page. The People page (`/people`) lists named people and groups of similar unnamed faces: name a
 group or add it to an existing person, and the app then looks for that person's other faces. A person's
 page (`/people/:id`) shows their photos, lets you rename or delete them, review suggested matches, and

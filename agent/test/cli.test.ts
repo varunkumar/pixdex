@@ -80,11 +80,27 @@ describe('runCli', () => {
       INGEST_TOKEN: 'secret-token',
       FACE_SIDECAR_URL: 'http://127.0.0.1:8799',
     });
-    backfillFacesMock.mockReset().mockResolvedValue({ total: 2, scanned: 1, faces: 3, skipped: 0, notIndexed: 0, failed: 1 });
+    backfillFacesMock.mockReset().mockResolvedValue({ total: 2, scanned: 1, faces: 3, missing: 0, notIndexed: 0, failed: 1 });
     vi.spyOn(console, 'log').mockImplementation(() => {});
     expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(1);
-    backfillFacesMock.mockResolvedValue({ total: 2, scanned: 2, faces: 3, skipped: 0, notIndexed: 0, failed: 0 });
+    backfillFacesMock.mockResolvedValue({ total: 2, scanned: 2, faces: 3, missing: 0, notIndexed: 0, failed: 0 });
     expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(0);
+  });
+
+  it('backfill-faces runs from the index with no folder, and scopes by path prefix when given one', async () => {
+    loadConfigMock.mockReturnValue({
+      CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
+      INGEST_TOKEN: 'secret-token',
+      FACE_SIDECAR_URL: 'http://127.0.0.1:8799',
+    });
+    backfillFacesMock.mockReset().mockResolvedValue({ total: 0, scanned: 0, faces: 0, missing: 0, notIndexed: 0, failed: 0 });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(await runCli(['backfill-faces'])).toBe(0);
+    expect(backfillFacesMock.mock.calls[0][0].pathPrefix).toBeUndefined();
+
+    expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(0);
+    expect(backfillFacesMock.mock.calls[1][0].pathPrefix).toBe('/tmp/photos/');
   });
 
   it('backfill-faces exits 1 when FACE_SIDECAR_URL is not set', async () => {

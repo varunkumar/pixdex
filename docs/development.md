@@ -96,16 +96,15 @@ cd agent
 npm run dev -- index-local "/path/to/folder"
 npm run dev -- index-batch <roots...>   # resumable, see README
 npm run dev -- index-status
-npm run dev -- backfill-faces <folder>    # needs the face sidecar, see agent/sidecar/README.md
+npm run dev -- backfill-faces [folder]    # follows the index; needs the face sidecar, see agent/sidecar/README.md
 npm run dev -- serve-originals          # needs cloudflared, see agent/cloudflared/README.md
 ```
 
 Face sidecar (optional, only needed for `backfill-faces` and face scanning during indexing):
 
 ```bash
-uv venv --python 3.12 agent/sidecar/.venv
-uv pip install -p agent/sidecar/.venv/bin/python -r agent/sidecar/requirements.txt
-agent/sidecar/.venv/bin/python agent/sidecar/server.py   # 127.0.0.1:8799
+pip install -r agent/sidecar/requirements.txt
+python3 agent/sidecar/server.py   # 127.0.0.1:8799
 ```
 
 Then set `FACE_SIDECAR_URL=http://127.0.0.1:8799` in `agent/.env`. Details and
