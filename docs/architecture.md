@@ -147,9 +147,44 @@ the face as `auto`; `>= SUGGEST_THRESHOLD` (0.4) only surfaces it as a suggestio
 to review. Matching runs automatically at ingest (`autoMatch.ts`) and when a
 group or face is named, and can be re-run from the person's page
 (`POST people/:id/match`). Unnamed faces are grouped by centroid clustering
-(`clusterFaces`) for the People page. Work is paged (`FACE_PAGE_SIZE` 300 faces
-for matching, `GROUPS_PAGE_SIZE` 150 for groups) because both are sized for the
-Workers Free plan's ~10 ms CPU limit; raise them only on a paid plan.
+(`clusterFaces`) for the People page.
+
+"Newest" references means newest by scan time (`faces.created_at`), not by when
+the owner confirmed. `loadReferences` reads them through
+`idx_faces_person_status_created` (migration `0010`), so rows read are bounded
+by people x `REFERENCES_PER_PERSON`.
+
+Limits, chosen for the Workers Free plan (CPU time and about 50 D1 queries per
+invocation):
+
+- Work is paged: `FACE_PAGE_SIZE` 200 faces for matching, `GROUPS_PAGE_SIZE` 100
+  for groups. `apply` and ingest-time matching write with one set-based
+  `UPDATE ... json_each` statement; bulk assign/create use two.
+- Ingest-time matching spends at most `MAX_AUTO_MATCH_MACS` (1,500,000
+  multiply-adds, faces x reference vectors x 512) per request. Faces beyond the
+  budget stay `unassigned` and are counted in the `skipped` field of the
+  `/ingest/faces` response (at least one face is always scored). Re-run matching
+  from the person's page to catch them.
+- `/ingest/faces` accepts at most 50 faces per request (400 above); the agent
+  keeps the 50 largest by box area.
+- Embeddings are read as a `Float32Array` view (little-endian, as on Workers/D1)
+  and must be exactly 512 floats.
+- CPU evidence: a reviewer micro-benchmark on Apple silicon (decode and scoring
+  only, excluding D1 and JSON) measured about 5-9 ms for match 300x30, 6-10 ms
+  for groups 150 and 8-12 ms for ingest of 10 faces x 50 people x 30 refs, before
+  these limits were tightened. Real Worker CPU has not been measured: before
+  relying on these constants, measure on a deployed preview (`wrangler tail` or
+  the dashboard) and tune them. This is a to-do for the owner at merge.
+
+Known limits: matching ignores `faces.embedding_model`. After a face model
+change, faces must be re-scanned and re-confirmed (phase A does not mix models).
+"Remove name" in the UI is soft: it only unassigns a confirmed face (an `auto`
+face is corrected with "Not X", which records a rejection) and can be re-matched
+later.
+
+Bounding boxes are stored in the raw (EXIF-unrotated) frame of the thumbnail,
+which is what the UI draws over. The agent detects on an upright image and maps
+each box back through the photo's EXIF orientation before posting.
 
 Licence: InsightFace pretrained weights are non-commercial, personal use only.
 

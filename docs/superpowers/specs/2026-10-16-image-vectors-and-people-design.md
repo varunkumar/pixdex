@@ -31,6 +31,11 @@ on demand, on a bounded candidate set.
 - "Person A and Person B together" is a filter on the search and album pages.
 - Works from desktop and mobile (the browser only talks to the Worker).
 
+## Deliberate cuts (phase A)
+
+- "Together" search does not rank photos with the confirmed face first.
+- There is no people filter on the album page.
+
 ## Non-goals
 
 - No Cloudflare Vectorize, Workers AI, Queues or any paid feature.
@@ -130,7 +135,7 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
   not that person". Persisted so a correction survives re-matching.
 - Indexes on `faces(photo_id)`, `faces(person_id)`, `faces(assign_status)`.
 
-`0010_image_embeddings.sql` (phase B)
+`0011_image_embeddings.sql` (phase B; `0010` is the faces reference index added in phase A)
 
 - `photos.image_embedding BLOB` (768 float32, 3 KB) and
   `photos.image_embedding_model TEXT` (e.g. `siglip2-b16-256`). Scoring only
@@ -194,7 +199,7 @@ docs must be updated.** Embeddings never leave the Worker: responses carry
 face ids, bboxes, person ids and scores only.
 
 - `GET /people`: persons with confirmed counts and a cover face.
-- `GET /people/groups`: unnamed groups. Takes a page of up to 150 `unassigned`
+- `GET /people/groups`: unnamed groups. Takes a page of up to 100 `unassigned`
   faces, clusters them greedily (link when similarity to an existing member is
   at least the suggestion threshold), returns groups with face ids. Paged by
   cursor so the cap is respected.
@@ -205,7 +210,7 @@ face ids, bboxes, person ids and scores only.
   to `unassigned`, so it is never auto-matched to that person again.
 - `POST /faces/:id/unassign`: back to `unassigned`.
 - `POST /people/:id/match` body `{ apply?, cursor? }`: scores one page of up to
-  300 `unassigned` faces (and `auto` faces of other people, taken only on a
+  200 `unassigned` faces (and `auto` faces of other people, taken only on a
   higher score) against the person's reference faces and returns those at or
   above the suggestion floor, excluding rejected pairs. With `apply: true`
   faces at or above the auto threshold are saved as `auto`; faces between the
@@ -266,7 +271,7 @@ faces return to `unassigned` and its rejections are dropped.
   (about 0.77 M at 1,000, about 0.15 M at 200). At 30,000 photos the library
   total (90 MB of image vectors) fits free D1 storage, and the cap keeps
   per-click cost flat as the library grows.
-- Faces: matching is bounded to 300 faces per request (x 512-d, about 0.15 M per reference, up to 30 references) and groups to 150 faces per page. The Workers Free CPU limit (~10 ms) drove these sizes.
+- Faces: matching is bounded to 200 faces per request (x 512-d, about 0.1 M per reference, up to 30 references) and groups to 100 faces per page, ingest-time matching to 1.5 M multiply-adds per request and ingest to 50 faces per request. The Workers Free CPU limit (~10 ms) and D1's per-invocation query limit drove these sizes; real CPU is still to be measured on a deployed preview.
 - Verify the actual CPU time with a Worker test or a local `wrangler dev`
   benchmark at 1,000 candidates before shipping. If a request is too slow,
   lower the cap (down to 200 is acceptable to the owner) or move scoring to the
@@ -277,7 +282,7 @@ faces return to `unassigned` and its rejections are dropped.
 A. **Faces and people** (migration 0009): face detection in the sidecar,
    `/ingest/faces`, `backfill-faces`, naming from a photo and from the People
    page, matching, corrections, "together".
-B. **Image vectors and find-similar** (migration 0010): `open_clip` added to the
+B. **Image vectors and find-similar** (migration 0011): `open_clip` added to the
    sidecar, embedding in the indexing pass, `backfill-vectors`,
    `/photos/:id/similar`, and the button.
 
@@ -321,7 +326,7 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
   persist.
 - Automatic matching uses at most the 30 newest confirmed faces per person as
   references (revisit if children's older ages stop matching).
-- The matching route is paged at 300 faces per request and People groups at 150 (the Workers Free CPU limit, ~10 ms,
+- The matching route is paged at 200 faces per request and People groups at 100 (the Workers Free CPU limit, ~10 ms,
   drove this; groups clusters against one running centroid per cluster).
 - Two migrations and two PRs, faces and people first (the owner's order).
 - Sidecar is Python (open_clip and insightface), because Ollama does not appear

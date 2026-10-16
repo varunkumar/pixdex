@@ -59,7 +59,7 @@ Notes:
     transient: wait about a minute and retry the build.
   - You can still apply one by hand beforehand with
     `cd worker && npx wrangler d1 migrations apply DB --remote`.
-- Migration `0009_people.sql` (faces and people) is additive and auto-applies on merge.
+- Migrations `0009_people.sql` (faces and people) and `0010_faces_person_status_created_idx.sql` (an index) are additive and auto-apply on merge.
 - The agent is not deployed; it runs on your Mac.
 
 ## Keeping docs current

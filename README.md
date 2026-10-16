@@ -95,7 +95,7 @@ group or add it to an existing person, and the app then looks for that person's 
 page (`/people/:id`) shows their photos, lets you rename or delete them, review suggested matches, and
 re-run matching. Once someone is named, new faces are matched to them automatically at ingest. Matching
 is also automatic when you name a group or face. Lower-confidence matches (score 0.4 to 0.5) land in a
-"Review suggestions" queue on the person's page. "Not X" on a face rejects that match permanently.
+"Review suggestions" queue on the person's page. "Not X" on a face rejects that match permanently. "Remove name" (confirmed faces only) is soft: it just unassigns the face. `FACE_SIDECAR_URL` must be a loopback address (127.0.0.1, localhost or [::1]).
 The app can also filter search by up to 5 people. The browser writes involved are `PATCH`/`DELETE
 people/:id` and `POST` to `people`, `people/:id/faces`, `people/:id/match` and
 `faces/:id/assign|reject|unassign`, all through the Pages proxy. Licence: the InsightFace weights are
