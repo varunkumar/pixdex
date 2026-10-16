@@ -74,7 +74,8 @@ Rules learned from that:
   next to a status filter made D1 scan every unassigned face (about 1,500 reads for a handful of ids).
 - Per-photo queries on `faces` write `+assign_status` so the low-selectivity status index is not used.
 - `UPDATE ... FROM <cte>` scans the table; update by `id IN (...)` with correlated lookups instead.
-- The albums page aggregates once, then ranks covers only for the 12 albums on the page.
+- The albums page aggregates once, then ranks covers only for the 12 albums on the page, both from the covering
+  index `idx_photos_album` (migration `0013`) so the wide photo rows are never read.
 - The frontend keeps list data fresh for two minutes (`staleTime`), mutations invalidate what they change.
 
 ## Keeping docs current

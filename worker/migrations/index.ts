@@ -165,6 +165,8 @@ END;`,
   'ALTER TABLE persons ADD COLUMN cover_face_id TEXT;',
   // Mirrors 0012_face_crop.sql.
   'ALTER TABLE faces ADD COLUMN crop_key TEXT;',
+  // Mirrors 0013_photos_album_idx.sql.
+  'CREATE INDEX IF NOT EXISTS idx_photos_album ON photos (album, date_time, last_indexed, user_rating, aesthetic_score, id, content_hash);',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];
