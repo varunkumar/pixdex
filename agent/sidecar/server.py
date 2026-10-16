@@ -15,6 +15,7 @@ import numpy as np
 from insightface.app import FaceAnalysis
 
 MODEL = "buffalo_l"
+MAX_BYTES = 50 * 1024 * 1024
 PORT = int(os.environ.get("PIXDEX_SIDECAR_PORT", "8799"))
 
 app = FaceAnalysis(name=MODEL, providers=["CoreMLExecutionProvider", "CPUExecutionProvider"])
@@ -40,12 +41,26 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/faces":
             return self._send(404, {"error": "not found"})
-        raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-        img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            length = 0
+        if length <= 0:
+            return self._send(400, {"error": "missing or invalid Content-Length"})
+        if length > MAX_BYTES:
+            return self._send(413, {"error": "body too large"})
+        raw = self.rfile.read(length)
+        try:
+            img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        except cv2.error:
+            img = None
         if img is None:
             return self._send(400, {"error": "invalid image"})
-        with lock:
-            found = app.get(img)
+        try:
+            with lock:
+                found = app.get(img)
+        except Exception as e:
+            return self._send(500, {"error": f"detection failed: {e}"})
         faces = [
             {
                 "bbox": [float(v) for v in f.bbox],
