@@ -22,8 +22,9 @@ bounded candidate set.
   face inside a photo and from a People page of unnamed groups.
 - **Find similar** photos (built second), behind a button on the photo page,
   computed on demand, never against more than a fixed cap of candidates
-  (1,000, tunable down to 200), narrowed first by text, tags, subjects, colours
-  and season. Not by date, location or album.
+  (1,000, tunable down to 200). The candidates are chosen from the photo
+  itself: its own subjects, tags, colours and season. No user-entered filters,
+  and nothing from date, location or album.
 - **Correcting wrong matches** is a first-class action, and a correction is
   never overwritten by later matching.
 - "Person A and Person B together" is a filter on the search and album pages.
@@ -97,9 +98,10 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
   No vector database.
 - Similar photos are on demand behind a button. Each request scores at most a
   fixed cap of candidate photos (**1,000**, and it may be lowered to **200** if
-  the CPU measurement requires it), and the user narrows the candidates by
-  text, tags, subjects, colours and season. Not by date, location or album.
-  This is a design rule from day one.
+  the CPU measurement requires it). The candidates are derived from the photo
+  itself (its subjects, tags, colours and season), so a tiger photo is compared
+  with tiger-like photos. There are no user-entered filters, and nothing comes
+  from date, location or album. This is a design rule from day one.
 - Build order: **faces and people first (phase A), find-similar second
   (phase B).**
 - Face matching is on demand, with a way to correct wrong matches.
@@ -154,25 +156,26 @@ thumbnail and crop face tiles without sending embeddings.
 
 ### Worker: similar photos (phase B)
 
-`GET /photos/:id/similar` with optional filters: `q` (FTS text, reuses the
-tiered query expansion), `tags`, `subjects`, `colors`, `season`, and `limit`
-(default 24). There are deliberately no date, location, album or rating
-filters.
+`GET /photos/:id/similar` takes only `limit` (default 24). The filters are not
+supplied by the user. The Worker reads the query photo's own fields and builds
+the candidate set from them.
 
-- The Worker builds the **candidate set** with a normal SQL query (FTS and
-  column filters), then **caps it at `SIMILAR_CANDIDATE_CAP`** (default 1,000,
-  one constant, tunable down to 200), then loads those rows' vectors and scores
-  them against the query photo by cosine similarity (vectors are
-  L2-normalised, so it is a dot product).
-- **No filters given:** the Worker derives them from the query photo itself:
-  photos sharing its subjects (falling back to its tags, then its colours),
-  ranked by bm25, best N kept. So "find similar" on a tiger photo scores other
-  tiger-like photos, not the whole library. Designer's call.
-- Cap rule when a filtered set is still larger than the cap: keep the best by
-  bm25 when there is text, otherwise the most recently indexed.
+- **Candidate query:** an FTS5 OR query built from the photo's own text fields.
+  Subjects are the strongest terms (weighted like the existing `search_primary`
+  column, so a tiger photo is matched to photos whose subjects include tiger),
+  with tags, colours and season as additional terms. The owner's corrected
+  values (`user_*`) are used when set, the same as search. The existing synonym
+  and word-family expansion (leopard and panthera pardus, etc.) applies, so
+  related labels count. Ranking is bm25.
+- If the photo has no usable text fields, the candidates fall back to the most
+  recently indexed photos that have an embedding.
+- The Worker keeps at most **`SIMILAR_CANDIDATE_CAP`** candidates (default 1,000,
+  one constant, tunable down to 200), loads their vectors, and scores them
+  against the query photo by cosine similarity (vectors are L2-normalised, so it
+  is a dot product). Final order is by vector similarity.
 - The response includes `candidate_count`, `scored_count` and `capped: true`
-  when the cap applied, so the UI can say "searched 1,000 of 4,320 matching
-  photos, narrow with a filter to see more". Excludes the query photo itself.
+  when the cap applied, so the UI can say "compared with the 1,000 closest
+  matches by subject and tags". The query photo itself is excluded.
 - The scorer lives in one shared module so the cap is in one place
   (`worker/src/search/similarity.ts`).
 
@@ -219,8 +222,8 @@ faces return to `unassigned` and its rejections are dropped.
 
 - **Photo page:** face boxes drawn over the photo; click a face to name it, pick
   an existing person, or reject a wrong match (phase A). A "Find similar" button
-  opens a panel with filter chips (text, tags, subjects, colours, season) and
-  the results grid, with the "searched N of M" note when capped (phase B).
+  opens the results grid, with a note on how many photos were compared when
+  capped (phase B). It has no filter controls.
 - **People page:** groups of unnamed faces (face tiles), name a whole group
   at once, plus named persons with counts. Per person: their photos, a "Find
   more photos of {name}" action (runs `matches`), and a review queue for
@@ -247,7 +250,7 @@ A. **Faces and people** (migration 0009): face detection in the sidecar,
    page, matching, corrections, "together".
 B. **Image vectors and find-similar** (migration 0010): `open_clip` added to the
    sidecar, embedding in the indexing pass, `backfill-vectors`,
-   `/photos/:id/similar`, the button and filters.
+   `/photos/:id/similar`, and the button.
 
 Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
 `docs/architecture.md`).
@@ -255,12 +258,12 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
 ## Testing
 
 - Worker: the scoring module (known vectors, ties, ordering), the candidate cap
-  and `capped` flag, filter combinations, rejection persistence, "confirmed is never
+  and `capped` flag, candidate derivation from subjects, tags, colours and season, rejection persistence, "confirmed is never
   overwritten" for both ingest and matching, together-queries, schema tests for
   both migrations.
 - Agent: a fake sidecar, backfill resume, and that the agent never writes
   `person_id` or `assign_status`.
-- Frontend: Find similar panel (filters, capped note), face naming and rejection
+- Frontend: Find similar results (capped note), face naming and rejection
   flows, People page.
 - Matching quality is judged on the owner's real photos (reference faces across
   ages), not unit tests. Keep a small fixture of vectors for thresholds.
@@ -276,8 +279,9 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
 
 ## Calls the designer made (owner to check)
 
-- With no filters, find-similar derives them from the query photo's own
-  subjects, then tags, then colours (ranked by bm25), up to the cap.
+- Find-similar derives its candidates from the query photo's own subjects, tags,
+  colours and season (OR query, bm25 ranked), up to the cap. Subjects weigh
+  most.
 - Cap defaults to 1,000 and is one constant that can drop to 200.
 - Auto-attach threshold 0.5 and suggestion floor 0.4 (from the spike, a
   starting point).
