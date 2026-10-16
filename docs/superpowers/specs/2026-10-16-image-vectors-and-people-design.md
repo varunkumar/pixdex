@@ -17,12 +17,13 @@ bounded candidate set.
 
 ## Goals
 
-- **Find similar** photos, behind a button on the photo page, computed on
-  demand, never against more than 1,000 candidates, with filters (text, tags,
-  subjects, album, date, rating) that narrow the candidates first.
-- **People**: the owner names a face once and the matching attaches that name to
-  the same person in other photos. Naming works both by clicking a face inside a
-  photo and from a People page of unnamed groups.
+- **People** (built first): the owner names a face once and the matching attaches
+  that name to the same person in other photos. Naming works both by clicking a
+  face inside a photo and from a People page of unnamed groups.
+- **Find similar** photos (built second), behind a button on the photo page,
+  computed on demand, never against more than a fixed cap of candidates
+  (1,000, tunable down to 200), narrowed first by text, tags, subjects, colours
+  and season. Not by date, location or album.
 - **Correcting wrong matches** is a first-class action, and a correction is
   never overwritten by later matching.
 - "Person A and Person B together" is a filter on the search and album pages.
@@ -67,6 +68,10 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
   (0.11 to 0.17). Conclusion: one reference face is not enough for a child, the
   suggestion floor must sit below the auto-attach threshold, and every confirmed
   face widens coverage.
+- InsightFace is the toolkit, ArcFace is the method. `buffalo_l` bundles an
+  SCRFD face detector with a recognition network trained with the ArcFace loss
+  (ResNet-50, 512-d). "ArcFace embeddings via InsightFace" means that one
+  recognition model.
 - Models and licences to re-verify before building: SigLIP 2 checkpoints are
   listed as Apache-2.0 by third parties (check the official card). InsightFace
   pretrained weights are non-commercial, which is fine for a personal library.
@@ -90,9 +95,13 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
 
 - D1 stores the vectors, and similarity is computed on demand by the Worker.
   No vector database.
-- Similar photos are on demand behind a button. Each request scores at most
-  **1,000** candidate photos, and the user can filter by tags or other text
-  fields to choose them. This is a design rule from day one.
+- Similar photos are on demand behind a button. Each request scores at most a
+  fixed cap of candidate photos (**1,000**, and it may be lowered to **200** if
+  the CPU measurement requires it), and the user narrows the candidates by
+  text, tags, subjects, colours and season. Not by date, location or album.
+  This is a design rule from day one.
+- Build order: **faces and people first (phase A), find-similar second
+  (phase B).**
 - Face matching is on demand, with a way to correct wrong matches.
 - Naming works both ways: click a face in a photo, and a People page of groups.
 - Face recognition is a primary feature alongside find-similar.
@@ -101,14 +110,7 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
 
 ### Data model (two migrations, both additive)
 
-`0009_image_embeddings.sql`
-
-- `photos.image_embedding BLOB` (768 float32, 3 KB) and
-  `photos.image_embedding_model TEXT` (e.g. `siglip2-b16-256`). Scoring only
-  compares vectors with the same model value, so a model swap means re-embedding
-  and nothing silently mixes.
-
-`0010_people.sql`
+`0009_people.sql` (phase A)
 
 - `persons(id, name, created_at)`. Names are the owner's text.
 - `faces(id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding BLOB,
@@ -120,6 +122,13 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
   not that person". Persisted so a correction survives re-matching.
 - Indexes on `faces(photo_id)`, `faces(person_id)`, `faces(assign_status)`.
 
+`0010_image_embeddings.sql` (phase B)
+
+- `photos.image_embedding BLOB` (768 float32, 3 KB) and
+  `photos.image_embedding_model TEXT` (e.g. `siglip2-b16-256`). Scoring only
+  compares vectors with the same model value, so a model swap means re-embedding
+  and nothing silently mixes.
+
 `confirmed` faces are the only reference vectors for a person. `auto` matches
 never become references (no drift). Confirming an `auto` match upgrades it to a
 reference. Face bounding boxes are stored so the UI can draw them over the
@@ -127,40 +136,45 @@ thumbnail and crop face tiles without sending embeddings.
 
 ### Agent
 
-- `agent/sidecar/` (Python, `open_clip` for SigLIP 2, `insightface` for faces),
-  a small local HTTP or stdio service. The Node agent sends it an image and
-  receives the image vector plus detected faces (bbox, score, vector). Qwen
-  captioning stays in Ollama, unchanged.
+- `agent/sidecar/` (Python), a small local HTTP or stdio service. Phase A uses
+  `insightface`; phase B adds `open_clip` for SigLIP 2. The Node agent sends it
+  an image and receives the detected faces (bbox, score, vector), and in phase B
+  the image vector too. Qwen captioning stays in Ollama, unchanged.
 - Embedding runs in the same pass as captioning, from the same resized image,
   so each photo is read and decoded once. Face detection needs more pixels than
   a small thumbnail (the spike used 1280 px); builder to confirm the working
   size.
-- New CLI command `backfill-vectors <folder>` (resumable, like `backfill-exif`)
-  for the existing library. `index-batch` and `index-local` call the same code
-  for new photos.
-- New ingest routes: `POST /ingest/embedding` and `POST /ingest/faces`, behind
-  `INGEST_TOKEN`, not in the Pages allowlist. Re-ingest of a photo replaces its
+- New CLI commands (resumable, like `backfill-exif`) for the existing library:
+  `backfill-faces <folder>` in phase A and `backfill-vectors <folder>` in phase
+  B. `index-batch` and `index-local` call the same code for new photos.
+- New ingest routes: `POST /ingest/faces` (phase A) and
+  `POST /ingest/embedding` (phase B), behind `INGEST_TOKEN`, not in the Pages
+  allowlist. Re-ingest of a photo replaces its
   `unassigned` and `auto` faces but never deletes or edits `confirmed` ones.
 
-### Worker: similar photos
+### Worker: similar photos (phase B)
 
 `GET /photos/:id/similar` with optional filters: `q` (FTS text, reuses the
-tiered query expansion), `tags`, `subjects`, `album`, `from`/`to` (capture
-date), `min_rating`, and `limit` (default 24).
+tiered query expansion), `tags`, `subjects`, `colors`, `season`, and `limit`
+(default 24). There are deliberately no date, location, album or rating
+filters.
 
 - The Worker builds the **candidate set** with a normal SQL query (FTS and
-  column filters), then **caps it at 1,000**, then loads those rows' vectors and
-  scores them against the query photo by cosine similarity (vectors are
+  column filters), then **caps it at `SIMILAR_CANDIDATE_CAP`** (default 1,000,
+  one constant, tunable down to 200), then loads those rows' vectors and scores
+  them against the query photo by cosine similarity (vectors are
   L2-normalised, so it is a dot product).
-- Cap rule when there are more than 1,000 candidates: with `q`, keep the best
-  1,000 by bm25. Without `q`, keep the 1,000 closest in capture time to the
-  query photo, same album first (**builder-level call by the designer**, see
-  below).
+- **No filters given:** the Worker derives them from the query photo itself:
+  photos sharing its subjects (falling back to its tags, then its colours),
+  ranked by bm25, best N kept. So "find similar" on a tiger photo scores other
+  tiger-like photos, not the whole library. Designer's call.
+- Cap rule when a filtered set is still larger than the cap: keep the best by
+  bm25 when there is text, otherwise the most recently indexed.
 - The response includes `candidate_count`, `scored_count` and `capped: true`
   when the cap applied, so the UI can say "searched 1,000 of 4,320 matching
   photos, narrow with a filter to see more". Excludes the query photo itself.
-- The scorer lives in one shared module so thresholds and the cap are in one
-  place (`worker/src/search/similarity.ts`).
+- The scorer lives in one shared module so the cap is in one place
+  (`worker/src/search/similarity.ts`).
 
 ### Worker: people
 
@@ -203,10 +217,10 @@ faces return to `unassigned` and its rejections are dropped.
 
 ### Frontend
 
-- **Photo page:** a "Find similar" button opens a panel with filter chips
-  (text, tags, subjects, album, date, min rating) and the results grid. It shows
-  the "searched N of M" note when capped. Face boxes drawn over the photo; click
-  a face to name it, pick an existing person, or reject a wrong match.
+- **Photo page:** face boxes drawn over the photo; click a face to name it, pick
+  an existing person, or reject a wrong match (phase A). A "Find similar" button
+  opens a panel with filter chips (text, tags, subjects, colours, season) and
+  the results grid, with the "searched N of M" note when capped (phase B).
 - **People page:** groups of unnamed faces (face tiles), name a whole group
   at once, plus named persons with counts. Per person: their photos, a "Find
   more photos of {name}" action (runs `matches`), and a review queue for
@@ -216,30 +230,32 @@ faces return to `unassigned` and its rejections are dropped.
 
 ### Free-tier cost sketch (to be measured, not promised)
 
-- Similar: at most 1,000 rows read and 1,000 x 768 multiply-adds per click
-  (about 0.77 M). At 30,000 photos the library total (90 MB of image vectors)
-  fits free D1 storage, and the cap keeps per-click cost flat as the library
-  grows.
+- Similar: at most the cap in rows read and cap x 768 multiply-adds per click
+  (about 0.77 M at 1,000, about 0.15 M at 200). At 30,000 photos the library
+  total (90 MB of image vectors) fits free D1 storage, and the cap keeps
+  per-click cost flat as the library grows.
 - Faces: similar per-request bound of 1,000 faces x 512-d (about 0.5 M).
 - Verify the actual CPU time with a Worker test or a local `wrangler dev`
   benchmark at 1,000 candidates before shipping. If a request is too slow,
-  lower the cap or move scoring to the agent behind the tunnel.
+  lower the cap (down to 200 is acceptable to the owner) or move scoring to the
+  agent behind the tunnel.
 
 ## Phasing
 
-1. **Image vectors and find-similar** (migration 0009): sidecar, embedding in
-   the indexing pass, `backfill-vectors`, `/photos/:id/similar`, the button and
-   filters. Ships on its own.
-2. **Faces and people** (migration 0010): face detection in the sidecar,
-   `/ingest/faces`, naming, People page, matching, corrections, "together".
+A. **Faces and people** (migration 0009): face detection in the sidecar,
+   `/ingest/faces`, `backfill-faces`, naming from a photo and from the People
+   page, matching, corrections, "together".
+B. **Image vectors and find-similar** (migration 0010): `open_clip` added to the
+   sidecar, embedding in the indexing pass, `backfill-vectors`,
+   `/photos/:id/similar`, the button and filters.
 
 Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
 `docs/architecture.md`).
 
 ## Testing
 
-- Worker: the scoring module (known vectors, ties, ordering), the 1,000 cap and
-  `capped` flag, filter combinations, rejection persistence, "confirmed is never
+- Worker: the scoring module (known vectors, ties, ordering), the candidate cap
+  and `capped` flag, filter combinations, rejection persistence, "confirmed is never
   overwritten" for both ingest and matching, together-queries, schema tests for
   both migrations.
 - Agent: a fake sidecar, backfill resume, and that the agent never writes
@@ -260,8 +276,9 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
 
 ## Calls the designer made (owner to check)
 
-- Cap rule without text: same album first, then closest capture time, up to
-  1,000.
+- With no filters, find-similar derives them from the query photo's own
+  subjects, then tags, then colours (ranked by bm25), up to the cap.
+- Cap defaults to 1,000 and is one constant that can drop to 200.
 - Auto-attach threshold 0.5 and suggestion floor 0.4 (from the spike, a
   starting point).
 - Only `confirmed` faces are references.
@@ -269,7 +286,7 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
   and not stored. Only `auto` and `confirmed` rows persist.
 - The matching and People groups routes are paged at 1,000 faces per request,
   mirroring the similar-photos cap.
-- Two migrations and two PRs, image vectors first.
+- Two migrations and two PRs, faces and people first (the owner's order).
 - Sidecar is Python (open_clip and insightface), because Ollama does not appear
   to serve SigLIP or ArcFace.
 
