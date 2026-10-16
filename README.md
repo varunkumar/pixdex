@@ -89,8 +89,8 @@ photo). To scan photos that were indexed earlier:
 cd agent && npm run dev -- backfill-faces "/path/to/folder"
 ```
 
-It is resumable: a re-run skips photos already scanned. Naming people happens in
-the People page; once someone is named, new faces are matched to them
+It is resumable: a re-run skips photos already scanned. Faces can be named or corrected on each
+photo's page, and people are managed in the People page; once someone is named, new faces are matched to them
 automatically at ingest.
 
 ## Indexing many folders (resumable)

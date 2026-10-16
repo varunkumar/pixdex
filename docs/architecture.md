@@ -28,7 +28,8 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 ### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
 
 - `components/` - Search, Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
-  and AI overrides), Dashboard,
+  and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
+  page), Dashboard,
   DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
 - `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
   It calls same-origin `/api/*`.

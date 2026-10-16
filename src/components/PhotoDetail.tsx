@@ -23,6 +23,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import Lightbox from './Lightbox';
+import PhotoFaces from './PhotoFaces';
 import PhotoReview from './PhotoReview';
 
 function formatBytes(bytes: number | null | undefined): string | null {
@@ -226,6 +227,8 @@ const PhotoDetail = () => {
           <Section title="Patterns" items={photo.patterns} variant="outline" />
         </Stack>
       </Card>
+
+      <PhotoFaces photoId={photo.id} thumbnailUrl={thumbnail} />
 
       {(photo.suggestedCaption || photo.suggestedHashtags.length > 0) && (
         <Card withBorder>
