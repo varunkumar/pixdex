@@ -45,12 +45,20 @@ Notes:
   the reverse).
 - Pages secrets: `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`,
   `ORIGINALS_TOKEN`. Worker secrets: `READ_TOKEN`, `INGEST_TOKEN`.
-- D1 migrations are manual. The Worker build ships code only. Apply them with
-  wrangler **before** pushing code that needs the new schema, so the deployed
-  Worker never runs against a missing column:
-  `cd worker && npx wrangler d1 migrations apply DB --remote`
-  Keep migrations additive (new columns/tables) so the old Worker still runs
-  against the new schema until the push lands.
+- D1 migrations are applied by the Worker build. Its deploy command is
+  `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`, so
+  merging a migration to `main` runs it on production, then deploys the code.
+  Wrangler records applied migrations in D1, so each runs once and a retried
+  build is harmless. If a migration fails, the deploy step does not run and the
+  old Worker keeps serving.
+  - Keep migrations additive (new columns/tables) so the old Worker still runs
+    against the new schema between the migration and the deploy.
+  - Review a destructive migration (a DROP or rebuild) carefully in the PR, and
+    note a restore point first: `cd worker && npx wrangler d1 time-travel info DB`.
+  - A build failing with Cloudflare API code 971 (rate limit) or 7403 is
+    transient: wait about a minute and retry the build.
+  - You can still apply one by hand beforehand with
+    `cd worker && npx wrangler d1 migrations apply DB --remote`.
 - The agent is not deployed; it runs on your Mac.
 
 ## Keeping docs current

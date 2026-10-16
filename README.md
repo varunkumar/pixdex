@@ -120,9 +120,10 @@ There is no GitHub Actions pipeline. `.githooks/pre-commit` (enabled by
 Cloudflare builds and deploys both the frontend (with `functions/`) and the
 Worker from `main` via its GitHub integration (Pages for the frontend, Workers
 Builds for `worker/`). Frontend build command is
-`npm run build`, output `dist`. D1 migrations are not applied by the deploy:
-run `cd worker && npx wrangler d1 migrations apply DB --remote` before pushing
-code that needs a new schema. See `docs/development.md` for deploy notes.
+`npm run build`, output `dist`. The Worker's deploy command also applies pending D1
+migrations (`npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`), so
+a merged migration runs on production before the new code goes live. See
+`docs/development.md` for deploy notes.
 
 ## Testing
 

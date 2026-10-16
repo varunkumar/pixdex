@@ -28,8 +28,9 @@ A pre-commit hook runs the suites touched by staged changes; do not bypass it.
 
 Pushing to `main` deploys both the frontend (Pages) and the Worker via
 Cloudflare's GitHub integration. There is no CI test gate, so verify locally first.
-D1 migrations are NOT applied by the deploy: run
-`cd worker && npx wrangler d1 migrations apply DB --remote` before pushing. Details in `docs/development.md`.
+The Worker build deploy command is `npx wrangler d1 migrations apply DB --remote && npx wrangler deploy`,
+so pending D1 migrations are applied automatically on merge, before the new code goes live.
+Keep them additive; for a destructive one, take a Time Travel bookmark first. Details in `docs/development.md`.
 
 ## Rules
 
