@@ -67,6 +67,70 @@ describe('face ingest routes', () => {
     expect((await post('', stored, {})).status).toBe(401);
   });
 
+  describe('unscanned', () => {
+    const addLocal = async (n: number, path: string | undefined, source: 'local' | 'google_drive' = 'local') => {
+      const res = await SELF.fetch('https://example.com/ingest/photo', {
+        method: 'POST',
+        headers: ingestHeaders(),
+        body: JSON.stringify({
+          ...photo,
+          id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+          contentHash: `unscanned-${n}`,
+          filename: `p${n}.jpg`,
+          source,
+          ...(path ? { path } : {}),
+          ...(source === 'google_drive' ? { driveFileId: `drive-${n}` } : {}),
+        }),
+      });
+      expect(res.status).toBe(201);
+    };
+
+    beforeEach(async () => {
+      await env.DB.prepare('DELETE FROM photos').run();
+    });
+
+    it('lists unscanned local photos with their paths and skips scanned, drive and path-less ones', async () => {
+      await addLocal(1, '/Volumes/T9/A/Processed/1.jpg');
+      await addLocal(2, '/Volumes/T9/A/Processed/2.jpg');
+      await addLocal(3, '/Volumes/T9/B/Processed/3.jpg');
+      await addLocal(4, undefined);
+      await addLocal(5, undefined, 'google_drive');
+      await post('', { contentHash: 'unscanned-2', model: MODEL, faces: [] });
+
+      const res = await post('/unscanned', { model: MODEL });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { items: { contentHash: string; path: string }[]; nextCursor: number | null };
+      expect(body.items.map((i) => i.contentHash)).toEqual(['unscanned-1', 'unscanned-3']);
+      expect(body.items[0].path).toBe('/Volumes/T9/A/Processed/1.jpg');
+      expect(body.nextCursor).toBeNull();
+    });
+
+    it('treats a photo scanned with a different model as unscanned', async () => {
+      await addLocal(1, '/x/1.jpg');
+      await post('', { contentHash: 'unscanned-1', model: 'old_model', faces: [] });
+      const body = (await (await post('/unscanned', { model: MODEL })).json()) as { items: unknown[] };
+      expect(body.items).toHaveLength(1);
+    });
+
+    it('pages with a cursor and filters by path prefix without treating % or _ as wildcards', async () => {
+      for (let i = 1; i <= 5; i++) await addLocal(i, `/Volumes/T9/A_1/${i}.jpg`);
+      await addLocal(6, '/Volumes/T9/AX1/6.jpg');
+      await addLocal(7, '/Volumes/T9/B/7.jpg');
+
+      const first = (await (await post('/unscanned', { model: MODEL, limit: 2, pathPrefix: '/Volumes/T9/A_1/' })).json()) as any;
+      expect(first.items).toHaveLength(2);
+      expect(first.nextCursor).not.toBeNull();
+      const second = (await (await post('/unscanned', { model: MODEL, limit: 10, cursor: first.nextCursor, pathPrefix: '/Volumes/T9/A_1/' })).json()) as any;
+      expect(second.items.map((i: any) => i.contentHash)).toEqual(['unscanned-3', 'unscanned-4', 'unscanned-5']);
+      expect(second.nextCursor).toBeNull();
+    });
+
+    it('requires the ingest token and a model', async () => {
+      expect((await post('/unscanned', { model: MODEL }, {})).status).toBe(401);
+      expect((await post('/unscanned', {})).status).toBe(400);
+    });
+  });
+
   it('pending lists only indexed, unscanned hashes', async () => {
     await SELF.fetch('https://example.com/ingest/photo', {
       method: 'POST',

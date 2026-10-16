@@ -24,10 +24,9 @@ Root, `worker/`, and `agent/` are separate npm packages.
 - Frontend: `npm run dev`, `npm test`, `npm run lint`, `npm run build`
 - Worker: `cd worker && npm test && npm run typecheck`
 - Agent: `cd agent && npm test && npm run typecheck`
-- Face sidecar (Python, optional): `uv venv --python 3.12 agent/sidecar/.venv`, then
-  `uv pip install -p agent/sidecar/.venv/bin/python -r agent/sidecar/requirements.txt`,
-  then `agent/sidecar/.venv/bin/python agent/sidecar/server.py`. InsightFace weights are
-  non-commercial, personal use only.
+- Face sidecar (Python, optional): `pip install -r agent/sidecar/requirements.txt`, then
+  `python3 agent/sidecar/server.py` (no virtualenv; use a Python 3.11 or 3.12 that has pip).
+  InsightFace weights are non-commercial, personal use only.
 
 A pre-commit hook runs the suites touched by staged changes; do not bypass it.
 

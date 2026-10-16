@@ -128,7 +128,10 @@ Flow: after the Ollama analysis, the agent posts the image to the local sidecar
 (`FACE_SIDECAR_URL`, `POST /faces`) and sends the faces (normalised bbox,
 `det_score`, 512-d L2-normalised embedding, model name) to `/ingest/faces`.
 A sidecar failure is logged and never fails the photo. `backfill-faces` does the
-same for already indexed photos and is resumable via `photos.faces_scanned_model`.
+same for already indexed photos and is resumable via `photos.faces_scanned_model`. It is driven by the
+index: `POST /ingest/faces/unscanned` pages (by rowid) through local photos not yet scanned with the
+sidecar's model and returns each one's content hash and source path (optionally limited by a path prefix),
+so the agent never walks or hashes folders; files missing from disk are counted and retried later.
 The owner then names faces in the UI; the Worker matches the rest.
 
 Tables (migration `0009_people.sql`, additive): `persons`, `faces` (embedding BLOB,

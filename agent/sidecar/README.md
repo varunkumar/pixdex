@@ -6,19 +6,22 @@ standard library `http.server` (no web framework).
 
 ## Setup
 
-Requires [uv](https://docs.astral.sh/uv/). From the repo root:
+Needs Python 3.11 or 3.12 with pip (the pinned `insightface` builds a small C extension, so
+the Xcode command line tools must be installed). No virtualenv: from the repo root,
 
 ```sh
-uv venv --python 3.12 agent/sidecar/.venv
-uv pip install -p agent/sidecar/.venv/bin/python -r agent/sidecar/requirements.txt
+pip install -r agent/sidecar/requirements.txt
 ```
+
+This installs into that Python, so use one you are happy to add `numpy`, `onnxruntime`,
+`opencv-python-headless` and `insightface` to.
 
 The first run downloads the `buffalo_l` weights to `~/.insightface/models/`.
 
 ## Run
 
 ```sh
-agent/sidecar/.venv/bin/python agent/sidecar/server.py
+python3 agent/sidecar/server.py
 ```
 
 Listens on `127.0.0.1` only (never exposed on the network). Port comes from

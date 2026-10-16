@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { requireIngestToken, requireReadToken } from './auth';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
-import { ingestFacesRoute, pendingFacesRoute } from './routes/ingest-faces';
+import { ingestFacesRoute, pendingFacesRoute, unscannedFacesRoute } from './routes/ingest-faces';
 import { ingestExifRoute } from './routes/ingest-exif';
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
@@ -35,6 +35,7 @@ app.post('/ingest/check-hashes', checkHashesRoute);
 app.post('/ingest/photo', ingestPhotoRoute);
 app.post('/ingest/exif', ingestExifRoute);
 app.post('/ingest/faces/pending', pendingFacesRoute);
+app.post('/ingest/faces/unscanned', unscannedFacesRoute);
 app.post('/ingest/faces', ingestFacesRoute);
 app.post('/ingest/rating', ingestRatingRoute);
 app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);

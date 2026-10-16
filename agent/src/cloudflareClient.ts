@@ -103,6 +103,22 @@ export class CloudflareClient {
     return pending;
   }
 
+  /** One page of indexed local photos not yet face-scanned with this model (content hash and source path). */
+  async facesUnscanned(
+    model: string,
+    opts: { cursor?: number; pathPrefix?: string; limit?: number } = {}
+  ): Promise<{ items: { contentHash: string; path: string }[]; nextCursor: number | null }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces/unscanned`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ model, ...opts }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/faces/unscanned failed: ${response.status}`);
+    }
+    return (await response.json()) as { items: { contentHash: string; path: string }[]; nextCursor: number | null };
+  }
+
   /** Replaces a photo's detected faces (an empty list marks it scanned); false if the hash is unknown. */
   async ingestFaces(contentHash: string, model: string, faces: FacePayload[]): Promise<boolean> {
     const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces`, {
