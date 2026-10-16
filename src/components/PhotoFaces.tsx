@@ -3,6 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { errorMessage, SEARCH_KEYS } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
 
@@ -11,15 +12,6 @@ const STATUS_LABEL: Record<SerializedFace['status'], string> = {
   confirmed: 'Confirmed',
   unassigned: 'Unnamed',
 };
-
-// Naming faces changes what searches and listings return.
-const SEARCH_KEYS = ['search', 'album-photos', 'albums-page', 'dailyPick', 'recent-photos'];
-
-function errorMessage(err: unknown, naming: boolean): string {
-  const message = err instanceof Error ? err.message : '';
-  if (message.includes('409')) return 'That name already exists';
-  return naming ? 'Could not save the name' : 'Something went wrong, try again';
-}
 
 const FaceRow = ({
   face,

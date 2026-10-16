@@ -29,7 +29,9 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 - `components/` - Search, Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
   and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
-  page), Dashboard,
+  page), People (`/people`: named people plus unnamed face groups to name) and
+  PersonPage (`/people/:id`: photos, rename/delete, suggestion review, re-run
+  matching), Dashboard,
   DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
 - `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
   It calls same-origin `/api/*`.

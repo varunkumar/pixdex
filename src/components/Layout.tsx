@@ -12,7 +12,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import type { IconType } from 'react-icons';
-import { MdAlbum, MdDarkMode, MdHome, MdLightMode, MdLogout, MdPhoto, MdSearch } from 'react-icons/md';
+import { MdAlbum, MdDarkMode, MdHome, MdLightMode, MdLogout, MdPeople, MdPhoto, MdSearch } from 'react-icons/md';
 import { Link, Outlet, useMatch } from 'react-router-dom';
 import { BRAND, HEADER_GRADIENT } from '../theme';
 
@@ -27,6 +27,7 @@ const LINKS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: MdHome, end: true },
   { to: '/albums', label: 'Albums', icon: MdAlbum, end: false },
   { to: '/search', label: 'Search', icon: MdSearch, end: false },
+  { to: '/people', label: 'People', icon: MdPeople, end: false },
   { to: '/daily', label: 'Daily Pick', icon: MdPhoto, end: false },
 ];
 

@@ -90,8 +90,10 @@ cd agent && npm run dev -- backfill-faces "/path/to/folder"
 ```
 
 It is resumable: a re-run skips photos already scanned. Faces can be named or corrected on each
-photo's page, and people are managed in the People page; once someone is named, new faces are matched to them
-automatically at ingest.
+photo's page. The People page (`/people`) lists named people and groups of similar unnamed faces: name a
+group or add it to an existing person, and the app then looks for that person's other faces. A person's
+page (`/people/:id`) shows their photos, lets you rename or delete them, review suggested matches, and
+re-run matching. Once someone is named, new faces are matched to them automatically at ingest.
 
 ## Indexing many folders (resumable)
 
