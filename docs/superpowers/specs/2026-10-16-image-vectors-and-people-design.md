@@ -156,7 +156,7 @@ thumbnail and crop face tiles without sending embeddings.
 
 ### Worker: similar photos (phase B)
 
-`GET /photos/:id/similar` takes only `limit` (default 24). The filters are not
+`GET /photos/:id/similar` takes no parameters and returns only the **3 to 4 closest photos** (a constant, 4 by default). The filters are not
 supplied by the user. The Worker reads the query photo's own fields and builds
 the candidate set from them.
 
@@ -172,7 +172,7 @@ the candidate set from them.
 - The Worker keeps at most **`SIMILAR_CANDIDATE_CAP`** candidates (default 1,000,
   one constant, tunable down to 200), loads their vectors, and scores them
   against the query photo by cosine similarity (vectors are L2-normalised, so it
-  is a dot product). Final order is by vector similarity.
+  is a dot product). Final order is by vector similarity, and only the top 4 are returned.
 - The response includes `candidate_count`, `scored_count` and `capped: true`
   when the cap applied, so the UI can say "compared with the 1,000 closest
   matches by subject and tags". The query photo itself is excluded.
