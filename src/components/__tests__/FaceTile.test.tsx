@@ -21,10 +21,10 @@ const face: SerializedFace = {
 };
 
 describe('FaceTile', () => {
-  it('draws the face as a circle', () => {
+  it('draws the face as a rounded square', () => {
     renderWithProviders(<FaceTile face={face} size={80} />);
     const tile = screen.getByTestId('face-tile');
-    expect(tile.style.borderRadius).toBe('50%');
+    expect(tile.style.borderRadius).toBe('var(--mantine-radius-md)');
     expect(tile.style.width).toBe('80px');
     expect(tile.style.height).toBe('80px');
   });
