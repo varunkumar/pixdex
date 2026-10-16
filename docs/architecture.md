@@ -68,7 +68,7 @@ photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
-- `routes/search.ts` + `search/synonyms.ts` - FTS5 search with query-time
+- `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces) with query-time
   synonym expansion; no re-index is needed to change it. Category words
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
   word families (`search/word-families.json`: "hard" nouns/places, "soft"
