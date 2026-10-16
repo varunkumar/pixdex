@@ -54,10 +54,16 @@ const FaceRow = ({
     onSuccess: onChanged,
   });
 
+  const setCover = useMutation({
+    mutationFn: (personId: string) => workerApiClient.setPersonCover(personId, face.id),
+    onSuccess: onChanged,
+  });
+
   const naming = (assign.error ?? create.error) != null;
-  const error = assign.error ?? create.error ?? reject.error ?? unassign.error;
+  const error = assign.error ?? create.error ?? reject.error ?? unassign.error ?? setCover.error;
   const named = face.personId != null && face.status !== 'unassigned';
-  const busy = assign.isPending || create.isPending || reject.isPending || unassign.isPending;
+  const busy = assign.isPending || create.isPending || reject.isPending || unassign.isPending || setCover.isPending;
+  const isCover = named && people.find((p) => p.id === face.personId)?.cover?.id === face.id;
 
   return (
     <Group data-testid="face-row" align="flex-start" wrap="nowrap" gap="md">
@@ -83,6 +89,20 @@ const FaceRow = ({
             >
               Not {face.personName}
             </Button>
+            {isCover ? (
+              <Badge size="sm" variant="light" color="teal">
+                Cover
+              </Badge>
+            ) : (
+              <Button
+                size="xs"
+                variant="light"
+                disabled={busy}
+                onClick={() => setCover.mutate(face.personId as string)}
+              >
+                Set as cover
+              </Button>
+            )}
             {/* Soft: an auto face is already corrected with "Not X"; Remove name is for confirmed faces. */}
             {face.status === 'confirmed' && (
               <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate()}>

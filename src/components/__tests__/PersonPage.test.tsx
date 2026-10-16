@@ -16,6 +16,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     assignFace: vi.fn(),
     rejectFace: vi.fn(),
     renamePerson: vi.fn(),
+    setPersonCover: vi.fn(),
     deletePerson: vi.fn(),
     thumbnailUrl: vi.fn((f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`),
   },
@@ -75,6 +76,30 @@ describe('PersonPage', () => {
     expect(await screen.findByText('Auto')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Not Asha' }));
     await waitFor(() => expect(workerApiClient.rejectFace).toHaveBeenCalledWith('a1', 'pe1'));
+  });
+
+  it('Set as cover offers the largest face of the person in the photo and marks the current cover', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face('small', { personId: 'pe1', personName: 'Asha', status: 'confirmed', bbox: { x: 0, y: 0, w: 0.1, h: 0.1 } }),
+      face('big', { personId: 'pe1', personName: 'Asha', status: 'confirmed', bbox: { x: 0.4, y: 0, w: 0.4, h: 0.4 } }),
+      face('other', { personId: 'pe2', personName: 'Ravi', status: 'confirmed', bbox: { x: 0.7, y: 0, w: 0.9, h: 0.9 } }),
+    ]);
+    vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Set as cover' }));
+    await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'big'));
+  });
+
+  it('shows a Cover badge instead of the button when this photo holds the cover face', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: face('c9', { personId: 'pe1' }) },
+    ]);
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face('c9', { personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
+    ]);
+    show();
+    expect(await screen.findByText('Cover')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set as cover' })).toBeNull();
   });
 
   it('Review suggestions shows only the suggestion band', async () => {

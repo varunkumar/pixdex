@@ -11,7 +11,7 @@ never leave local disk or Google Drive.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (also
   forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
-  `people/:id/match`, `faces/:id/assign|reject|unassign`)
+  `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI and originals server
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README

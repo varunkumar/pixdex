@@ -13,6 +13,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     assignFace: vi.fn(),
     rejectFace: vi.fn(),
     unassignFace: vi.fn(),
+    setPersonCover: vi.fn(),
     matchPersonAll: vi.fn(),
     thumbnailUrl: vi.fn((f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`),
   },
@@ -99,6 +100,36 @@ describe('PhotoFaces', () => {
     fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
     fireEvent.click(await screen.findByRole('option', { name: 'Asha' }));
     await waitFor(() => expect(workerApiClient.assignFace).toHaveBeenCalledWith('f1', 'pe1'));
+  });
+
+  it('Set as cover calls setPersonCover for a named face, and a cover face shows a badge', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face({ personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
+    ]);
+    vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Set as cover' }));
+    await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'f1'));
+  });
+
+  it('shows Cover instead of the button when the face is already the cover', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      { ...people[0], cover: face({ personId: 'pe1', personName: 'Asha', status: 'confirmed' }) },
+      people[1],
+    ]);
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face({ personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
+    ]);
+    show();
+    expect(await screen.findByText('Cover')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set as cover' })).toBeNull();
+  });
+
+  it('does not offer Set as cover for an unnamed face', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face()]);
+    show();
+    await screen.findByText('Unnamed');
+    expect(screen.queryByRole('button', { name: 'Set as cover' })).toBeNull();
   });
 
   it('Not X calls rejectFace and the row refreshes', async () => {

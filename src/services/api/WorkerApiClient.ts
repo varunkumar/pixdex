@@ -179,6 +179,11 @@ export class WorkerApiClient {
     await this.sendJson('POST', `/people/${encodeURIComponent(personId)}/faces`, { faceIds });
   }
 
+  /** Makes one of the person's own faces their cover (avatar). */
+  async setPersonCover(personId: string, faceId: string): Promise<void> {
+    await this.sendJson('POST', `/people/${encodeURIComponent(personId)}/cover`, { faceId });
+  }
+
   async assignFace(faceId: string, personId: string): Promise<SerializedFace> {
     const response = await this.sendJson('POST', `/faces/${encodeURIComponent(faceId)}/assign`, { personId });
     return (await response.json()) as SerializedFace;

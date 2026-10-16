@@ -67,9 +67,12 @@ const GroupCard = ({
     <Card withBorder data-testid="face-group">
       <Stack gap="sm">
         <Group gap="xs">
-          {group.faces.slice(0, GROUP_TILES).map((f) => (
-            <FaceTile key={f.id} face={f} size={64} />
-          ))}
+          {[...group.faces]
+            .sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)
+            .slice(0, GROUP_TILES)
+            .map((f) => (
+              <FaceTile key={f.id} face={f} size={64} />
+            ))}
         </Group>
         <Text size="xs" c="dimmed">
           {plural(group.faces.length, 'face')}

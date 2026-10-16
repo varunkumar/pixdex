@@ -11,6 +11,7 @@ type Ctx = Context<{ Bindings: Env }>;
 const nameField = z.string().trim().min(1).max(60);
 const createBody = z.object({ name: nameField, faceIds: z.array(z.string().min(1)).max(200).optional() });
 const renameBody = z.object({ name: nameField });
+const coverBody = z.object({ faceId: z.string().min(1) });
 const bulkBody = z.object({ faceIds: z.array(z.string().min(1)).min(1).max(200) });
 
 const isUniqueViolation = (err: unknown) => err instanceof Error && /UNIQUE|constraint/i.test(`${err.message} ${(err as any).cause?.message ?? ''}`);
@@ -32,12 +33,22 @@ export async function listPeopleRoute(c: Ctx) {
        GROUP BY p.id
        ORDER BY face_count DESC, p.name COLLATE NOCASE, p.id`
     ).all<{ id: string; name: string; face_count: number; photo_count: number }>(),
+    // Cover: the owner's pick while that face is still assigned to the person, otherwise the
+    // biggest confirmed face (a larger box means more pixels in the 400 px thumbnail), then the
+    // most certain detection.
     c.env.DB.prepare(
       `SELECT * FROM (
-         ${FACE_SELECT.replace('SELECT f.id,', 'SELECT ROW_NUMBER() OVER (PARTITION BY f.person_id ORDER BY f.det_score DESC, f.id) AS rn, f.id,')}
-         WHERE f.assign_status = 'confirmed' AND f.person_id IS NOT NULL
+         ${FACE_SELECT.replace(
+           'SELECT f.id,',
+           `SELECT ROW_NUMBER() OVER (
+              PARTITION BY f.person_id
+              ORDER BY (f.id = p.cover_face_id) DESC, (f.assign_status = 'confirmed') DESC,
+                       f.bbox_w * f.bbox_h DESC, f.det_score DESC, f.id
+            ) AS rn, f.id,`
+         )}
+         WHERE f.assign_status IN ('confirmed', 'auto') AND f.person_id IS NOT NULL
        ) WHERE rn = 1`
-    ).all<FaceWithJoins>(),
+        ).all<FaceWithJoins>(),
   ]);
   const coverByPerson = new Map(covers.results.map((r) => [r.person_id as string, serializeFace(r)]));
   return c.json({
@@ -49,6 +60,26 @@ export async function listPeopleRoute(c: Ctx) {
       cover: coverByPerson.get(p.id) ?? null,
     })),
   });
+}
+
+/** Sets the person's cover to one of their own faces (confirmed or auto). */
+export async function setPersonCoverRoute(c: Ctx) {
+  const id = c.req.param('id');
+  const parsed = coverBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const { faceId } = parsed.data;
+
+  const person = await c.env.DB.prepare('SELECT id FROM persons WHERE id = ?').bind(id).first();
+  if (!person) return c.json({ error: 'Person not found' }, 404);
+  const face = await c.env.DB.prepare(
+    "SELECT id FROM faces WHERE id = ? AND person_id = ? AND assign_status IN ('confirmed', 'auto')"
+  )
+    .bind(faceId, id)
+    .first();
+  if (!face) return c.json({ error: 'Face is not assigned to this person' }, 404);
+
+  await c.env.DB.prepare('UPDATE persons SET cover_face_id = ? WHERE id = ?').bind(faceId, id).run();
+  return c.json({ coverFaceId: faceId });
 }
 
 export async function createPersonRoute(c: Ctx) {
