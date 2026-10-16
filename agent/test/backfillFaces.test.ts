@@ -31,7 +31,7 @@ describe('backfillFaces', () => {
     const sidecar = sidecarWith([{ bbox: [5, 5, 25, 25], detScore: 0.9, embedding: 'e' }]);
     const cloudflareClient = {
       facesUnscanned: vi.fn().mockResolvedValue({ items: [{ contentHash: 'hA', path: fileA }], nextCursor: null }),
-      ingestFaces: vi.fn().mockResolvedValue(true),
+      ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }),
     };
 
     const result = await backfillFaces({ cloudflareClient: cloudflareClient as any, sidecar: sidecar as any });
@@ -49,7 +49,7 @@ describe('backfillFaces', () => {
         .fn()
         .mockResolvedValueOnce({ items: [{ contentHash: 'hA', path: fileA }], nextCursor: 7 })
         .mockResolvedValueOnce({ items: [{ contentHash: 'hB', path: fileB }], nextCursor: null }),
-      ingestFaces: vi.fn().mockResolvedValue(true),
+      ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }),
     };
 
     const result = await backfillFaces({
@@ -89,7 +89,7 @@ describe('backfillFaces', () => {
         ],
         nextCursor: null,
       }),
-      ingestFaces: vi.fn().mockResolvedValue(false),
+      ingestFaces: vi.fn().mockResolvedValue(null),
     };
 
     const result = await backfillFaces({ cloudflareClient: cloudflareClient as any, sidecar: sidecar as any });

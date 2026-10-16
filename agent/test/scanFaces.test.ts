@@ -40,7 +40,7 @@ describe('scanFaces', () => {
         ],
       }),
     };
-    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }) };
 
     const count = await scanFaces(file, 'hash1', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
 
@@ -56,7 +56,7 @@ describe('scanFaces', () => {
 
   it('posts an empty list for a photo with no faces', async () => {
     const sidecar = { detect: vi.fn().mockResolvedValue({ model: 'buffalo_l', width: 1280, height: 640, faces: [] }) };
-    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }) };
 
     const count = await scanFaces(file, 'hash2', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
 
@@ -95,7 +95,7 @@ describe('scanFaces', () => {
         faces: [{ bbox: [10, 40, 30, 100], detScore: 0.9, embedding: 'e' }],
       }),
     };
-    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }) };
     await scanFaces(rotated, 'h', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
     near(cloudflareClient.ingestFaces.mock.calls[0][2][0].bbox, { x: 0.2, y: 0.7, w: 0.3, h: 0.2 });
   });
@@ -107,7 +107,7 @@ describe('scanFaces', () => {
       embedding: `e${i}`,
     }));
     const sidecar = { detect: vi.fn().mockResolvedValue({ model: 'm', width: 1280, height: 640, faces }) };
-    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }) };
     const count = await scanFaces(file, 'h', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
     expect(count).toBe(MAX_FACES_PER_PHOTO);
     const sent = cloudflareClient.ingestFaces.mock.calls[0][2];
@@ -116,7 +116,33 @@ describe('scanFaces', () => {
     expect(sent.some((f: any) => f.embedding === `e${MAX_FACES_PER_PHOTO + 4}`)).toBe(true);
   });
 
-  it('posts a 192 px square crop with each face, cut from the original', async () => {
+  it('uploads a 192 px square crop per stored face after ingest, not inside the ingest body', async () => {
+    const sidecar = {
+      detect: vi.fn().mockResolvedValue({
+        model: 'buffalo_l',
+        width: 1280,
+        height: 640,
+        faces: [
+          { bbox: [128, 64, 384, 320], detScore: 0.95, embedding: 'emb1' },
+          { bbox: [640, 64, 768, 192], detScore: 0.9, embedding: 'emb2' },
+        ],
+      }),
+    };
+    const cloudflareClient = {
+      ingestFaces: vi.fn().mockResolvedValue({ faceIds: ['fa', 'fb'] }),
+      putFaceCrop: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await scanFaces(file, 'hash3', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
+
+    const [, , faces] = cloudflareClient.ingestFaces.mock.calls[0];
+    expect(faces.every((f: any) => !('crop' in f))).toBe(true);
+    expect(cloudflareClient.putFaceCrop.mock.calls.map((c) => c[0])).toEqual(['fa', 'fb']);
+    const meta = await sharp(cloudflareClient.putFaceCrop.mock.calls[0][1]).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(['jpeg', 192, 192]);
+  });
+
+  it('still succeeds when a crop upload fails', async () => {
     const sidecar = {
       detect: vi.fn().mockResolvedValue({
         model: 'buffalo_l',
@@ -125,13 +151,13 @@ describe('scanFaces', () => {
         faces: [{ bbox: [128, 64, 384, 320], detScore: 0.95, embedding: 'emb1' }],
       }),
     };
-    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
-
-    await scanFaces(file, 'hash3', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
-
-    const [, , faces] = cloudflareClient.ingestFaces.mock.calls[0];
-    const meta = await sharp(Buffer.from(faces[0].crop, 'base64')).metadata();
-    expect([meta.format, meta.width, meta.height]).toEqual(['jpeg', 192, 192]);
+    const cloudflareClient = {
+      ingestFaces: vi.fn().mockResolvedValue({ faceIds: ['fa'] }),
+      putFaceCrop: vi.fn().mockRejectedValue(new Error('ingest/faces/crop failed: 503')),
+    };
+    await expect(
+      scanFaces(file, 'hash4', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any })
+    ).resolves.toBe(1);
   });
 
   it('keeps the crop square and inside the image for a face at the edge', async () => {

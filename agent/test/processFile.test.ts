@@ -130,7 +130,7 @@ describe('processFile', () => {
     const cloudflareClient = {
       uploadThumbnail: vi.fn().mockResolvedValue(undefined),
       ingestPhoto: vi.fn().mockImplementation(async () => void calls.push('ingestPhoto')),
-      ingestFaces: vi.fn().mockImplementation(async () => (calls.push('ingestFaces'), true)),
+      ingestFaces: vi.fn().mockImplementation(async () => (calls.push('ingestFaces'), { faceIds: [] })),
     };
     const ollamaClient = { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) };
     const faceSidecar = { detect: vi.fn().mockResolvedValue({ model: 'buffalo_l', width: 100, height: 100, faces: [] }) };

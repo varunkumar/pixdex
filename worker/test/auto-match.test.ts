@@ -91,7 +91,7 @@ describe('automatic matching at ingest', () => {
       { x: 0.1, v: vec(0.95), det: 0.3 },
       { x: 0.5, v: vec(0.95), w: 0.01 },
     ]);
-    expect(r).toEqual({ stored: 2, kept: 0, matched: 0, skipped: 0 });
+    expect(r).toMatchObject({ stored: 2, kept: 0, matched: 0, skipped: 0 });
     expect((await rowAt(0.1)).assign_status).toBe('unassigned');
     expect((await rowAt(0.5)).assign_status).toBe('unassigned');
   });
@@ -139,7 +139,7 @@ describe('automatic matching at ingest', () => {
     expect(await autoMatchFaces(spy, [])).toEqual({ matched: 0, skipped: 0 });
     expect(queries.filter((q) => q.includes('confirmed'))).toEqual([]);
     expect(queries).toEqual([]);
-    expect(await ingest([])).toEqual({ stored: 0, kept: 0, matched: 0, skipped: 0 });
+    expect(await ingest([])).toMatchObject({ stored: 0, kept: 0, matched: 0, skipped: 0 });
   });
 
   it('only the newest 30 confirmed faces per person are used', async () => {
@@ -152,7 +152,7 @@ describe('automatic matching at ingest', () => {
   });
 
   it('ingest response includes matched', async () => {
-    expect(await ingest([{ x: 0.1, v: vec(0.9) }, { x: 0.5, v: vec(0.2) }])).toEqual({ stored: 2, kept: 0, matched: 1, skipped: 0 });
+    expect(await ingest([{ x: 0.1, v: vec(0.9) }, { x: 0.5, v: vec(0.2) }])).toMatchObject({ stored: 2, kept: 0, matched: 1, skipped: 0 });
   });
 
   it('skips matchable faces beyond the work budget and reports them', async () => {

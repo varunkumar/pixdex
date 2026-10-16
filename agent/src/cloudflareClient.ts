@@ -7,8 +7,6 @@ export interface FacePayload {
   bbox: { x: number; y: number; w: number; h: number };
   detScore: number;
   embedding: string;
-  /** Base64 JPEG of a padded square crop of the face, cut from the original. */
-  crop?: string;
 }
 
 export interface IngestPhotoPayload {
@@ -121,18 +119,33 @@ export class CloudflareClient {
     return (await response.json()) as { items: { contentHash: string; path: string }[]; nextCursor: number | null };
   }
 
-  /** Replaces a photo's detected faces (an empty list marks it scanned); false if the hash is unknown. */
-  async ingestFaces(contentHash: string, model: string, faces: FacePayload[]): Promise<boolean> {
+  /**
+   * Replaces a photo's detected faces (an empty list marks it scanned). Returns the id each posted
+   * face was stored under (a kept confirmed face keeps its own id), or null if the hash is unknown.
+   */
+  async ingestFaces(contentHash: string, model: string, faces: FacePayload[]): Promise<{ faceIds: string[] } | null> {
     const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces`, {
       method: 'POST',
       headers: this.authHeaders('application/json'),
       body: JSON.stringify({ contentHash, model, faces }),
     });
-    if (response.status === 404) return false;
+    if (response.status === 404) return null;
     if (!response.ok) {
       throw new Error(`ingest/faces failed: ${response.status}`);
     }
-    return true;
+    const body = (await response.json()) as { faceIds?: string[] };
+    return { faceIds: body.faceIds ?? [] };
+  }
+
+  /** Uploads the sharp crop (JPEG bytes) of one stored face. */
+  async putFaceCrop(faceId: string, jpeg: Buffer): Promise<void> {
+    const response = await this.fetchFn(
+      `${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces/${encodeURIComponent(faceId)}/crop`,
+      { method: 'PUT', headers: this.authHeaders('image/jpeg'), body: jpeg }
+    );
+    if (!response.ok) {
+      throw new Error(`ingest/faces/crop failed: ${response.status}`);
+    }
   }
 
   async ingestPhoto(payload: IngestPhotoPayload): Promise<void> {

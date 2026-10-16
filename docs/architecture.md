@@ -152,11 +152,12 @@ group or face is named, and can be re-run from the person's page
 (`POST people/:id/match`). Unnamed faces are grouped by centroid clustering
 (`clusterFaces`) for the People page.
 
-Each ingested face may carry a `crop` (base64 JPEG, a padded 192 px square cut from the original by the agent).
-The Worker stores it in R2 at `faces/<faceId>.jpg` (`faces.crop_key`, migration `0012_face_crop.sql`, additive),
+`POST /ingest/faces` answers with `faceIds` (the id each posted face was stored under; a kept confirmed face keeps
+its own). The agent then sends each face's crop (a padded 192 px square cut from the original) as raw JPEG bytes
+to `PUT /ingest/faces/:faceId/crop`, one small request per face, because decoding base64 crops inside the ingest
+request exceeded the free tier's CPU limit (HTTP 503). The Worker stores it in R2 at `faces/<faceId>.jpg` (`faces.crop_key`, migration `0012_face_crop.sql`, additive),
 serves it at `GET /faces/:id/crop` (read token; the Pages proxy caches it for a day) and exposes it as
-`cropUrl`. A re-scan deletes the crops of the faces it replaces and gives an overlapping confirmed face the new
-crop without touching its name. `backfill-faces --recrop` (`missingCrops` on `/ingest/faces/unscanned`) re-scans
+`cropUrl`. A re-scan deletes the crops of the faces it replaces; a kept confirmed face can take a new crop without touching its name. `backfill-faces --recrop` (`missingCrops` on `/ingest/faces/unscanned`) re-scans
 photos that have a crop-less face.
 
 A person's cover (`persons.cover_face_id`, migration `0011_person_cover.sql`, additive) is the
