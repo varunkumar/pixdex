@@ -128,4 +128,121 @@ describe('WorkerApiClient', () => {
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
     await expect(client.getDailyPick()).rejects.toThrow(/\/daily-pick.*Failed to fetch/);
   });
+
+  describe('people and faces', () => {
+    const ok = (body: unknown) => ({ ok: true, type: 'basic', status: 200, json: async () => body });
+    const face = { id: 'f1', personId: null };
+    const jsonInit = (method: string, body: unknown) => ({
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    it('getPeople unwraps the people list', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ people: [{ id: 'a' }] }), { status: 200 }));
+      await expect(client.getPeople()).resolves.toEqual([{ id: 'a' }]);
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/people');
+    });
+
+    it('getFaceGroups sends the cursor', async () => {
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ groups: [], scanned: 3, nextCursor: '9' }), { status: 200 })
+      );
+      const res = await client.getFaceGroups('5');
+      expect(res).toEqual({ groups: [], scanned: 3, nextCursor: '9' });
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/people/groups?cursor=5');
+    });
+
+    it('getFaceGroups without a cursor sends none', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ groups: [], scanned: 0, nextCursor: null })));
+      await client.getFaceGroups();
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/people/groups');
+    });
+
+    it('getPhotoFaces unwraps the faces', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ faces: [face] }), { status: 200 }));
+      await expect(client.getPhotoFaces('p 1')).resolves.toEqual([face]);
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/photos/p%201/faces');
+    });
+
+    it('createPerson POSTs the name and face ids', async () => {
+      fetchMock.mockResolvedValue(ok({ id: 'n1', name: 'Asha' }));
+      await expect(client.createPerson('Asha', ['f1'])).resolves.toEqual({ id: 'n1', name: 'Asha' });
+      expect(fetchMock).toHaveBeenCalledWith('/api/people', jsonInit('POST', { name: 'Asha', faceIds: ['f1'] }));
+    });
+
+    it('renamePerson PATCHes the name', async () => {
+      fetchMock.mockResolvedValue(ok({ id: 'n1', name: 'B' }));
+      await client.renamePerson('n1', 'B');
+      expect(fetchMock).toHaveBeenCalledWith('/api/people/n1', jsonInit('PATCH', { name: 'B' }));
+    });
+
+    it('deletePerson DELETEs and tolerates an empty 204 body', async () => {
+      fetchMock.mockResolvedValue({ ok: true, type: 'basic', status: 204 });
+      await expect(client.deletePerson('n1')).resolves.toBeUndefined();
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/people/n1');
+      expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('assignFaces POSTs the face ids to the person', async () => {
+      fetchMock.mockResolvedValue(ok({ personId: 'n1', assigned: 2 }));
+      await client.assignFaces('n1', ['f1', 'f2']);
+      expect(fetchMock).toHaveBeenCalledWith('/api/people/n1/faces', jsonInit('POST', { faceIds: ['f1', 'f2'] }));
+    });
+
+    it('assignFace POSTs the person id and returns the face', async () => {
+      fetchMock.mockResolvedValue(ok(face));
+      await expect(client.assignFace('f1', 'n1')).resolves.toEqual(face);
+      expect(fetchMock).toHaveBeenCalledWith('/api/faces/f1/assign', jsonInit('POST', { personId: 'n1' }));
+    });
+
+    it('rejectFace POSTs the person id and returns the face', async () => {
+      fetchMock.mockResolvedValue(ok(face));
+      await expect(client.rejectFace('f1', 'n1')).resolves.toEqual(face);
+      expect(fetchMock).toHaveBeenCalledWith('/api/faces/f1/reject', jsonInit('POST', { personId: 'n1' }));
+    });
+
+    it('unassignFace POSTs and returns the face', async () => {
+      fetchMock.mockResolvedValue(ok(face));
+      await expect(client.unassignFace('f1')).resolves.toEqual(face);
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/faces/f1/unassign');
+      expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('matchPerson POSTs apply and cursor', async () => {
+      const res = { auto: [], suggestions: [], scanned: 1, nextCursor: null };
+      fetchMock.mockResolvedValue(ok(res));
+      await expect(client.matchPerson('n1', { apply: true, cursor: '7' })).resolves.toEqual(res);
+      expect(fetchMock).toHaveBeenCalledWith('/api/people/n1/match', jsonInit('POST', { apply: true, cursor: '7' }));
+    });
+
+    it('matchPersonAll follows the cursor until it is null and sums the matches', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok({ auto: [face, face], suggestions: [], scanned: 300, nextCursor: '300' }))
+        .mockResolvedValueOnce(ok({ auto: [face], suggestions: [], scanned: 40, nextCursor: null }));
+      const onPage = vi.fn();
+      await expect(client.matchPersonAll('n1', onPage)).resolves.toEqual({ matched: 3, truncated: false });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ apply: true });
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ apply: true, cursor: '300' });
+      expect(onPage).toHaveBeenNthCalledWith(1, 300, 2);
+      expect(onPage).toHaveBeenNthCalledWith(2, 340, 3);
+    });
+
+    it('matchPersonAll stops after 150 pages and reports it was truncated', async () => {
+      fetchMock.mockResolvedValue(ok({ auto: [], suggestions: [], scanned: 1, nextCursor: 'more' }));
+      await expect(client.matchPersonAll('n1')).resolves.toEqual({ matched: 0, truncated: true });
+      expect(fetchMock).toHaveBeenCalledTimes(150);
+    });
+
+    it('search sends people as a comma list', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ results: [], total: 0 })));
+      await client.search({ people: ['a', 'b'] });
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/search?people=a%2Cb');
+    });
+
+    it('a failed write throws with the status', async () => {
+      fetchMock.mockResolvedValue({ ok: false, status: 409 });
+      await expect(client.renamePerson('n1', 'B')).rejects.toThrow('409');
+    });
+  });
 });

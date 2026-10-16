@@ -6,7 +6,12 @@ import { renderWithRouter } from '../../test/renderWithProviders';
 import PhotoDetail from '../PhotoDetail';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
-  workerApiClient: { getPhoto: vi.fn(), thumbnailUrl: vi.fn(() => '/api/thumbnails/h1') },
+  workerApiClient: {
+    getPhoto: vi.fn(),
+    getPhotoFaces: vi.fn(() => Promise.resolve([])),
+    getPeople: vi.fn(() => Promise.resolve([])),
+    thumbnailUrl: vi.fn(() => '/api/thumbnails/h1'),
+  },
 }));
 
 const originals = vi.hoisted(() => ({

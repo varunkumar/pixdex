@@ -17,6 +17,7 @@ describe('Layout', () => {
     expect(hrefFor('Dashboard')).toContain('/');
     expect(hrefFor('Albums')).toContain('/albums');
     expect(hrefFor('Search')).toContain('/search');
+    expect(hrefFor('People')).toContain('/people');
     expect(hrefFor('Daily Pick')).toContain('/daily');
   });
 

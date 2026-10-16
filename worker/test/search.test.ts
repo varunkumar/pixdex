@@ -254,3 +254,71 @@ describe('GET /search', () => {
   });
 
 });
+
+describe('GET /search people filter', () => {
+  async function face(id: string, photoId: string, personId: string | null, status: string) {
+    await env.DB.prepare(
+      `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, person_id, assign_status, created_at)
+       VALUES (?,?,0,0,0.1,0.1,0.9,x'00','m',?,?,'t')`
+    )
+      .bind(id, photoId, personId, status)
+      .run();
+  }
+
+  async function get(qs: string): Promise<{ results: { id: string }[]; total: number }> {
+    const response = await SELF.fetch(`https://example.com/search?${qs}`, {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
+    return (await response.json()) as any;
+  }
+
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM photos').run();
+    await env.DB.prepare('DELETE FROM faces').run();
+    await env.DB.prepare('DELETE FROM persons').run();
+    await env.DB.prepare(
+      "INSERT INTO persons (id, name, created_at) VALUES ('p1','Asha','t'), ('p2','Ravi','t')"
+    ).run();
+    await seed('both', 'h-both', ['leopard'], 'leopard forest', 'Kanha');
+    await seed('only-p1', 'h-p1', ['leopard'], 'leopard forest', 'Kaziranga');
+    await seed('only-p2', 'h-p2', ['elephant'], 'elephant grassland', 'Kanha');
+    await face('f1', 'both', 'p1', 'auto');
+    await face('f2', 'both', 'p2', 'confirmed');
+    await face('f3', 'only-p1', 'p1', 'confirmed');
+    await face('f4', 'only-p2', 'p2', 'auto');
+  });
+
+  it('people filter keeps photos containing all listed persons', async () => {
+    expect((await get('people=p1,p2')).results.map((r) => r.id)).toEqual(['both']);
+    expect((await get('people=p1')).results.map((r) => r.id).sort()).toEqual(['both', 'only-p1']);
+  });
+
+  it('people filter counts auto and confirmed faces but not unassigned', async () => {
+    await face('f5', 'only-p1', 'p2', 'unassigned');
+    expect((await get('people=p1,p2')).results.map((r) => r.id)).toEqual(['both']);
+  });
+
+  it('people filter combines with q and album', async () => {
+    expect((await get('people=p1&q=leopard&album=Kaziranga')).results.map((r) => r.id)).toEqual(['only-p1']);
+    expect((await get('people=p1&q=elephant')).results).toEqual([]);
+    expect((await get('people=p2&album=Kanha&sort=name')).results.map((r) => r.id)).toEqual(['both', 'only-p2']);
+  });
+
+  it('an unknown person id returns no results', async () => {
+    const body = await get('people=nope');
+    expect(body.results).toEqual([]);
+    expect(body.total).toBe(0);
+    expect((await get('people=p1,nope')).results).toEqual([]);
+  });
+
+  it('total reflects the filter', async () => {
+    expect((await get('people=p1&limit=1')).total).toBe(2);
+    expect((await get('people=p1,p2')).total).toBe(1);
+    expect((await get('people=p1&q=leopard')).total).toBe(2);
+  });
+
+  it('ignores an empty people param and duplicate ids', async () => {
+    expect((await get('people=')).total).toBe(3);
+    expect((await get('people=p1,p1')).total).toBe(2);
+  });
+});

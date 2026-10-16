@@ -7,6 +7,7 @@ captions, ratings, thumbnails) lives in the cloud.
 ```
 Your Mac
   ├─ Ollama (vision + text generation, local)
+  ├─ agent/sidecar/  (Python InsightFace service: face detection + embeddings, optional)
   ├─ agent/  (Node/TS CLI: index photos, serve originals)
   └─ cloudflared tunnel (originals on demand only)
 
@@ -27,8 +28,11 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 ### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
 
-- `components/` - Search, Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
-  and AI overrides), Dashboard,
+- `components/` - Search (People filter kept in the URL as `people=<id>,<id>`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
+  and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
+  page), People (`/people`: named people plus unnamed face groups to name) and
+  PersonPage (`/people/:id`: photos, rename/delete, suggestion review, re-run
+  matching), Dashboard,
   DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
 - `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
   It calls same-origin `/api/*`.
@@ -41,11 +45,15 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 Same-origin read proxy. Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `albums`,
-`daily-pick`, `photos/:id`, `thumbnails/:hash`) plus `originals/:id`, which goes
+`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `people`,
+`people/groups`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
-`no-cache`. The only writes the browser can make are `PUT albums/cover` and
-`PATCH photos/:id` (JSON only), both forwarded with the read token.
+`no-cache`. The only writes the browser can make are `PUT albums/cover`,
+`PATCH photos/:id`, `PATCH`/`DELETE people/:id`, and `POST` to `people`,
+`people/:id/faces`, `people/:id/match` and `faces/:id/assign|reject|unassign`
+(bodies JSON only, DELETE has none), all forwarded with the read token through
+one shared helper with per-method allowlists.
 
 ### Human review (HITL)
 
@@ -68,7 +76,7 @@ photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
-- `routes/search.ts` + `search/synonyms.ts` - FTS5 search with query-time
+- `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces) with query-time
   synonym expansion; no re-index is needed to change it. Category words
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
   word families (`search/word-families.json`: "hard" nouns/places, "soft"
@@ -95,7 +103,7 @@ photo qualifies.
 
 - `cli.ts` is the entry point. Commands: `index-local`, `index-drive`,
   `index-batch`, `index-status`, `backfill-exif`, `backfill-ratings`,
-  `serve-originals`.
+  `backfill-faces`, `serve-originals`.
 - Pipeline per photo (`processFile.ts`): hash content, skip if already indexed
   (`check-hashes`), read EXIF, make a thumbnail (sharp), ask Ollama for a
   description/tags/caption/quality rating, then push to the Worker.
@@ -114,12 +122,78 @@ photo qualifies.
 4. "View Original": browser -> `/api/originals/:id` -> tunnel -> agent server
    (local files) or a Drive deep-link (Drive files).
 
+## Faces and people
+
+Flow: after the Ollama analysis, the agent posts the image to the local sidecar
+(`FACE_SIDECAR_URL`, `POST /faces`) and sends the faces (normalised bbox,
+`det_score`, 512-d L2-normalised embedding, model name) to `/ingest/faces`.
+A sidecar failure is logged and never fails the photo. `backfill-faces` does the
+same for already indexed photos and is resumable via `photos.faces_scanned_model`.
+The owner then names faces in the UI; the Worker matches the rest.
+
+Tables (migration `0009_people.sql`, additive): `persons`, `faces` (embedding BLOB,
+`person_id`, `assign_status` of `unassigned|auto|confirmed`, `match_score`) and
+`face_rejections` ("Not X" corrections, so a rejected pair is never re-matched),
+plus `photos.faces_scanned_model`. Re-ingesting a photo replaces only its
+`unassigned` and `auto` faces and carries over rejections by bbox overlap;
+`confirmed` faces are kept. Ingest bodies cannot set `person_id` or `assign_status`.
+
+Matching (`worker/src/people/`): each named person is represented by up to
+`REFERENCES_PER_PERSON` (30) reference embeddings (the newest confirmed faces; people with none are skipped); a
+face's score is its best dot product against a person's references. Only faces
+with `det_score >= MIN_DET_SCORE` (0.6) and both sides `>= MIN_FACE_SIDE` (0.03,
+fraction of the image) are matchable. A score `>= AUTO_THRESHOLD` (0.5) attaches
+the face as `auto`; `>= SUGGEST_THRESHOLD` (0.4) only surfaces it as a suggestion
+to review. Matching runs automatically at ingest (`autoMatch.ts`) and when a
+group or face is named, and can be re-run from the person's page
+(`POST people/:id/match`). Unnamed faces are grouped by centroid clustering
+(`clusterFaces`) for the People page.
+
+"Newest" references means newest by scan time (`faces.created_at`), not by when
+the owner confirmed. `loadReferences` reads them through
+`idx_faces_person_status_created` (migration `0010`), so rows read are bounded
+by people x `REFERENCES_PER_PERSON`.
+
+Limits, chosen for the Workers Free plan (CPU time and about 50 D1 queries per
+invocation):
+
+- Work is paged: `FACE_PAGE_SIZE` 200 faces for matching, `GROUPS_PAGE_SIZE` 100
+  for groups. `apply` and ingest-time matching write with one set-based
+  `UPDATE ... json_each` statement; bulk assign/create use two.
+- Ingest-time matching spends at most `MAX_AUTO_MATCH_MACS` (1,500,000
+  multiply-adds, faces x reference vectors x 512) per request. Faces beyond the
+  budget stay `unassigned` and are counted in the `skipped` field of the
+  `/ingest/faces` response (at least one face is always scored). Re-run matching
+  from the person's page to catch them.
+- `/ingest/faces` accepts at most 10 faces per request (400 above); the agent
+  keeps the 10 largest by box area, which keeps a crowd photo under D1 Free per-invocation query limit.
+- Embeddings are read as a `Float32Array` view (little-endian, as on Workers/D1)
+  and must be exactly 512 floats.
+- CPU evidence: a reviewer micro-benchmark on Apple silicon (decode and scoring
+  only, excluding D1 and JSON) measured about 5-9 ms for match 300x30, 6-10 ms
+  for groups 150 and 8-12 ms for ingest of 10 faces x 50 people x 30 refs, before
+  these limits were tightened. Real Worker CPU has not been measured: before
+  relying on these constants, measure on a deployed preview (`wrangler tail` or
+  the dashboard) and tune them. This is a to-do for the owner at merge.
+
+Known limits: matching ignores `faces.embedding_model`. After a face model
+change, faces must be re-scanned and re-confirmed (phase A does not mix models).
+"Remove name" in the UI is soft: it only unassigns a confirmed face (an `auto`
+face is corrected with "Not X", which records a rejection) and can be re-matched
+later.
+
+Bounding boxes are stored in the raw (EXIF-unrotated) frame of the thumbnail,
+which is what the UI draws over. The agent detects on an upright image and maps
+each box back through the photo's EXIF orientation before posting.
+
+Licence: InsightFace pretrained weights are non-commercial, personal use only.
+
 ## Config and secrets
 
 | Where | Variables |
 | --- | --- |
 | Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET` |
-| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN` |
+| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
 | Worker secrets | `READ_TOKEN`, `INGEST_TOKEN` |
 
 Never prefix server-side secrets with `VITE_`.

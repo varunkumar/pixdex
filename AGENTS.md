@@ -9,9 +9,12 @@ never leave local disk or Google Drive.
 
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`)
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (also
-  forwards the two browser writes: `PUT albums/cover`, `PATCH photos/:id`)
+  forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,
+  `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
+  `people/:id/match`, `faces/:id/assign|reject|unassign`)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI and originals server
+- `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
 - `docs/` - internal docs, plus `superpowers/` plans and specs
 
 ## Commands
@@ -21,6 +24,10 @@ Root, `worker/`, and `agent/` are separate npm packages.
 - Frontend: `npm run dev`, `npm test`, `npm run lint`, `npm run build`
 - Worker: `cd worker && npm test && npm run typecheck`
 - Agent: `cd agent && npm test && npm run typecheck`
+- Face sidecar (Python, optional): `uv venv --python 3.12 agent/sidecar/.venv`, then
+  `uv pip install -p agent/sidecar/.venv/bin/python -r agent/sidecar/requirements.txt`,
+  then `agent/sidecar/.venv/bin/python agent/sidecar/server.py`. InsightFace weights are
+  non-commercial, personal use only.
 
 A pre-commit hook runs the suites touched by staged changes; do not bypass it.
 
@@ -40,6 +47,10 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - Owner edits (`user_*` columns) are never written by the agent or ingest
   routes; ranking uses `worker/src/db/rating.ts` (combined score), not
   `aesthetic_score` directly.
+- `faces.person_id` and `faces.assign_status` are owner/Worker decisions: the agent
+  and ingest request bodies never set them (unknown keys are dropped). The Worker's
+  own matching only ever writes `auto`; `confirmed` comes from the owner via the
+  browser writes. Rejections live in `face_rejections`.
 - DB changes go in a new numbered file in `worker/migrations/`.
 - After every feature or change, update `README.md` and this file (and `docs/`
   if architecture, config or workflow changed) in the same commit.

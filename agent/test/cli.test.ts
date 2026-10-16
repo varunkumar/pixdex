@@ -4,12 +4,18 @@ const loadConfigMock = vi.fn();
 const indexLocalFolderMock = vi.fn();
 const runIndexDriveMock = vi.fn();
 const runServeOriginalsMock = vi.fn();
+const backfillFacesMock = vi.fn();
 
 vi.mock('../src/config', () => ({ loadConfig: loadConfigMock }));
 vi.mock('../src/indexLocalFolder', () => ({ indexLocalFolder: indexLocalFolderMock }));
 vi.mock('../src/cloudflareClient', () => ({ CloudflareClient: vi.fn() }));
 vi.mock('../src/ollama/client', () => ({ OllamaClient: vi.fn() }));
 vi.mock('../src/driveCli', () => ({ runIndexDrive: runIndexDriveMock }));
+vi.mock('../src/backfillFaces', () => ({ backfillFaces: backfillFacesMock }));
+vi.mock('../src/faces/sidecarClient', () => ({
+  FaceSidecarClient: vi.fn(),
+  createFaceSidecar: (config: { FACE_SIDECAR_URL?: string }) => (config.FACE_SIDECAR_URL ? {} : undefined),
+}));
 vi.mock('../src/originalsCli', () => ({ runServeOriginals: runServeOriginalsMock }));
 
 const { runCli } = await import('../src/cli');
@@ -66,5 +72,26 @@ describe('runCli', () => {
     const code = await runCli(['serve-originals']);
     expect(code).toBe(0);
     expect(runServeOriginalsMock).toHaveBeenCalledWith(expect.any(Object));
+  });
+
+  it('backfill-faces exits 1 on a failure', async () => {
+    loadConfigMock.mockReturnValue({
+      CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
+      INGEST_TOKEN: 'secret-token',
+      FACE_SIDECAR_URL: 'http://127.0.0.1:8799',
+    });
+    backfillFacesMock.mockReset().mockResolvedValue({ total: 2, scanned: 1, faces: 3, skipped: 0, notIndexed: 0, failed: 1 });
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(1);
+    backfillFacesMock.mockResolvedValue({ total: 2, scanned: 2, faces: 3, skipped: 0, notIndexed: 0, failed: 0 });
+    expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(0);
+  });
+
+  it('backfill-faces exits 1 when FACE_SIDECAR_URL is not set', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    backfillFacesMock.mockReset();
+    expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(1);
+    expect(backfillFacesMock).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });

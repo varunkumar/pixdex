@@ -45,6 +45,42 @@ describe('CloudflareClient', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).hashes).toHaveLength(100);
   });
 
+  it('facesPending batches 500 and unions the pending hashes', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ pending: ['hash-1'] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ pending: ['hash-550'] }), { status: 200 }));
+    const hashes = Array.from({ length: 600 }, (_, i) => `hash-${i}`);
+
+    const pending = await client.facesPending(hashes, 'buffalo_l');
+
+    expect(pending).toEqual(new Set(['hash-1', 'hash-550']));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/faces/pending');
+    expect(JSON.parse(init.body).model).toBe('buffalo_l');
+    expect(JSON.parse(init.body).hashes).toHaveLength(500);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).hashes).toHaveLength(100);
+  });
+
+  it('ingestFaces posts the faces and returns true', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ stored: 1, kept: 0, matched: 0 }), { status: 200 }));
+    const faces = [{ bbox: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, detScore: 0.9, embedding: 'e' }];
+    await expect(client.ingestFaces('h1', 'buffalo_l', faces)).resolves.toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/faces');
+    expect(JSON.parse(init.body)).toEqual({ contentHash: 'h1', model: 'buffalo_l', faces });
+  });
+
+  it('ingestFaces returns false on 404', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await expect(client.ingestFaces('h1', 'buffalo_l', [])).resolves.toBe(false);
+  });
+
+  it('ingestFaces throws on other errors', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
+    await expect(client.ingestFaces('h1', 'buffalo_l', [])).rejects.toThrow(/500/);
+  });
+
   it('ingestPhoto posts the payload and resolves on 201', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
     const payload: IngestPhotoPayload = {

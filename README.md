@@ -64,7 +64,7 @@ them. Your stars are blended with the model's aesthetic score (70% yours, 30%
 the model's, on a 1-10 scale; the model's alone when you have not rated). That
 combined score drives "Best rated" on the search and album pages, album average
 ratings and the daily pick. The search page has a "Sort by" control (best match
-by default). The description and suggested caption are not editable.
+by default) and a "People" filter (up to 5 named people; photos containing all selected people). The description and suggested caption are not editable.
 
 ## Camera details
 
@@ -76,6 +76,30 @@ vision pass:
 ```bash
 cd agent && npm run dev -- backfill-exif "/path/to/folder"
 ```
+
+## Faces
+
+Face scanning is optional and runs locally. Start the InsightFace sidecar
+(setup and run commands are in `agent/sidecar/README.md`), set
+`FACE_SIDECAR_URL=http://127.0.0.1:8799` in `agent/.env`, and indexing will
+detect faces after each photo (a sidecar failure is logged and never fails the
+photo). To scan photos that were indexed earlier:
+
+```bash
+cd agent && npm run dev -- backfill-faces "/path/to/folder"
+```
+
+It is resumable: a re-run skips photos already scanned. Faces can be named or corrected on each
+photo's page. The People page (`/people`) lists named people and groups of similar unnamed faces: name a
+group or add it to an existing person, and the app then looks for that person's other faces. A person's
+page (`/people/:id`) shows their photos, lets you rename or delete them, review suggested matches, and
+re-run matching. Once someone is named, new faces are matched to them automatically at ingest. Matching
+is also automatic when you name a group or face. Lower-confidence matches (score 0.4 to 0.5) land in a
+"Review suggestions" queue on the person's page. "Not X" on a face rejects that match permanently. "Remove name" (confirmed faces only) is soft: it just unassigns the face. `FACE_SIDECAR_URL` must be a loopback address (127.0.0.1, localhost or [::1]).
+The app can also filter search by up to 5 people. The browser writes involved are `PATCH`/`DELETE
+people/:id` and `POST` to `people`, `people/:id/faces`, `people/:id/match` and
+`faces/:id/assign|reject|unassign`, all through the Pages proxy. Licence: the InsightFace weights are
+non-commercial, so this is for personal use only.
 
 ## Indexing many folders (resumable)
 
@@ -144,6 +168,7 @@ npm run build
 - `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
   and helpers, API types
 - `functions/api` - Pages Function: same-origin proxy that adds the read token
+  (read routes plus the album cover, photo review and people/face writes)
 - `worker/` - Cloudflare Worker (Hono, D1, R2) and its migrations
 - `agent/` - local indexing CLI and originals server
 - `docs/` - [architecture](docs/architecture.md),

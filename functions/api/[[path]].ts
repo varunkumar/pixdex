@@ -27,6 +27,9 @@ const ALLOWED_PATHS = [
   /^daily-pick$/,
   /^photos\/[^/]+$/,
   /^thumbnails\/[^/]+$/,
+  /^people$/,
+  /^people\/groups$/,
+  /^photos\/[^/]+\/faces$/,
 ];
 
 // Full-resolution local-disk originals, served by the agent through a tunnel.
@@ -95,48 +98,49 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
   return out;
 };
 
-// The one write the browser may make: choosing an album's cover. JSON only, so a
-// cross-origin form post cannot trigger it (it would need a CORS preflight).
-export const onRequestPut = async ({ request, env }: Context): Promise<Response> => {
-  const path = new URL(request.url).pathname.replace(/^\/api\//, '');
-  if (path !== 'albums/cover') return new Response('Not found', { status: 404 });
-  if (!request.headers.get('content-type')?.startsWith('application/json')) {
-    return new Response('Unsupported media type', { status: 415 });
-  }
-  if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
-
-  let response: Response;
-  try {
-    response = await fetch(`${env.WORKER_URL.replace(/\/$/, '')}/albums/cover`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' },
-      body: await request.text(),
-    });
-  } catch {
-    return new Response('Upstream unavailable', { status: 502 });
-  }
-  const out = new Response(response.body, response);
-  out.headers.delete('set-cookie');
-  out.headers.set('Cache-Control', 'no-store');
-  return out;
+// Browser writes. Each method has its own narrow allowlist. Bodies are JSON only,
+// so a cross-origin form post cannot trigger them (it would need a CORS preflight).
+const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
+  // Choosing an album's cover.
+  PUT: [/^albums\/cover$/],
+  // Creating people, assigning faces to people, and face review.
+  POST: [
+    /^people$/,
+    /^people\/[^/]+\/faces$/,
+    /^people\/[^/]+\/match$/,
+    /^faces\/[^/]+\/(assign|reject|unassign)$/,
+  ],
+  // Human review of one photo (rating, title, subjects, tags); renaming a person.
+  PATCH: [/^photos\/[^/]+$/, /^people\/[^/]+$/],
+  DELETE: [/^people\/[^/]+$/],
 };
 
-// Human review of one photo (rating, title, subjects, tags). JSON only, same
-// CORS-preflight reasoning as the cover write above; only photos/<id> is reachable.
-export const onRequestPatch = async ({ request, env }: Context): Promise<Response> => {
+// Forward one allowed browser write to the Worker with the server-side token.
+// Client headers (cookies, Authorization) are never forwarded; upstream cookies
+// are never relayed; responses are never cached.
+async function forwardWrite(
+  method: keyof typeof WRITE_PATHS,
+  { request, env }: Context
+): Promise<Response> {
   const path = new URL(request.url).pathname.replace(/^\/api\//, '');
-  if (!/^photos\/[^/]+$/.test(path)) return new Response('Not found', { status: 404 });
-  if (!request.headers.get('content-type')?.startsWith('application/json')) {
+  if (!WRITE_PATHS[method].some((pattern) => pattern.test(path))) {
+    return new Response('Not found', { status: 404 });
+  }
+  const hasBody = method !== 'DELETE';
+  if (hasBody && !request.headers.get('content-type')?.startsWith('application/json')) {
     return new Response('Unsupported media type', { status: 415 });
   }
   if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
+
+  const headers: Record<string, string> = { Authorization: `Bearer ${env.READ_TOKEN}` };
+  if (hasBody) headers['Content-Type'] = 'application/json';
 
   let response: Response;
   try {
     response = await fetch(`${env.WORKER_URL.replace(/\/$/, '')}/${path}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' },
-      body: await request.text(),
+      method,
+      headers,
+      ...(hasBody ? { body: await request.text() } : {}),
     });
   } catch {
     return new Response('Upstream unavailable', { status: 502 });
@@ -145,4 +149,9 @@ export const onRequestPatch = async ({ request, env }: Context): Promise<Respons
   out.headers.delete('set-cookie');
   out.headers.set('Cache-Control', 'no-store');
   return out;
-};
+}
+
+export const onRequestPut = (ctx: Context): Promise<Response> => forwardWrite('PUT', ctx);
+export const onRequestPost = (ctx: Context): Promise<Response> => forwardWrite('POST', ctx);
+export const onRequestPatch = (ctx: Context): Promise<Response> => forwardWrite('PATCH', ctx);
+export const onRequestDelete = (ctx: Context): Promise<Response> => forwardWrite('DELETE', ctx);

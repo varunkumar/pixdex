@@ -60,4 +60,17 @@ describe('loadConfig', () => {
     });
     expect(withToken.READ_TOKEN).toBe('read-secret');
   });
+
+  it('accepts and omits FACE_SIDECAR_URL', () => {
+    const base = { CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev', INGEST_TOKEN: 't' };
+    expect(loadConfig(base).FACE_SIDECAR_URL).toBeUndefined();
+    expect(loadConfig({ ...base, FACE_SIDECAR_URL: 'http://127.0.0.1:8799' }).FACE_SIDECAR_URL).toBe(
+      'http://127.0.0.1:8799'
+    );
+    expect(() => loadConfig({ ...base, FACE_SIDECAR_URL: 'nope' })).toThrow();
+    for (const ok of ['http://localhost:8799', 'http://[::1]:8799']) {
+      expect(loadConfig({ ...base, FACE_SIDECAR_URL: ok }).FACE_SIDECAR_URL).toBe(ok);
+    }
+    expect(() => loadConfig({ ...base, FACE_SIDECAR_URL: 'http://192.168.1.5:8799' })).toThrow(/loopback/);
+  });
 });

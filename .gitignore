@@ -85,3 +85,7 @@ agent/.index-state/
 
 # graphify output (regenerate with `graphify update .`)
 graphify-out/
+
+# Face sidecar virtualenv and bytecode
+agent/sidecar/.venv/
+__pycache__/

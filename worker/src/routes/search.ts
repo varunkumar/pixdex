@@ -8,6 +8,16 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
   const q = c.req.query('q');
   const album = c.req.query('album');
   const sort = c.req.query('sort');
+  // "Together": photos with a visible face for every listed person. Deduped and
+  // capped at 5 ids; ids are always bound, never interpolated.
+  const people = [
+    ...new Set(
+      (c.req.query('people') ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    ),
+  ].slice(0, 5);
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 20, 1), 100);
   const offset = Math.max(Number(c.req.query('offset')) || 0, 0);
 
@@ -23,6 +33,10 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
     if (album) {
       from += ` AND album = ?`;
       params.push(album);
+    }
+    if (people.length > 0) {
+      from += ` AND photos.id IN (SELECT photo_id FROM faces WHERE person_id IN (${people.map(() => '?').join(',')}) AND assign_status IN ('auto','confirmed') GROUP BY photo_id HAVING COUNT(DISTINCT person_id) = ?)`;
+      params.push(...people, people.length);
     }
 
     // Album pages sort by date (newest first), name (file name) or rating (best first).

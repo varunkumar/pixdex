@@ -59,6 +59,7 @@ Notes:
     transient: wait about a minute and retry the build.
   - You can still apply one by hand beforehand with
     `cd worker && npx wrangler d1 migrations apply DB --remote`.
+- Migrations `0009_people.sql` (faces and people) and `0010_faces_person_status_created_idx.sql` (an index) are additive and auto-apply on merge.
 - The agent is not deployed; it runs on your Mac.
 
 ## Keeping docs current
@@ -82,7 +83,8 @@ New env vars go in the matching `.env.example` and the config table in
   it in `worker/migrations/index.ts`; add a test in `worker/test/schema.test.ts`
   when relevant.
 - New Worker read route: add it to `worker/src/index.ts` with `requireReadToken`,
-  and to the `ALLOWED_PATHS` allowlist in `functions/api/[[path]].ts`.
+  and to the `ALLOWED_PATHS` allowlist in `functions/api/[[path]].ts`. A new
+  browser write goes in that file's `WRITE_PATHS` for its method instead.
 - Ingest routes stay out of the proxy allowlist.
 - Plans and specs live in `docs/superpowers/plans` and `docs/superpowers/specs`.
 - Backlog is `TODO.todo`.
@@ -94,8 +96,20 @@ cd agent
 npm run dev -- index-local "/path/to/folder"
 npm run dev -- index-batch <roots...>   # resumable, see README
 npm run dev -- index-status
+npm run dev -- backfill-faces <folder>    # needs the face sidecar, see agent/sidecar/README.md
 npm run dev -- serve-originals          # needs cloudflared, see agent/cloudflared/README.md
 ```
+
+Face sidecar (optional, only needed for `backfill-faces` and face scanning during indexing):
+
+```bash
+uv venv --python 3.12 agent/sidecar/.venv
+uv pip install -p agent/sidecar/.venv/bin/python -r agent/sidecar/requirements.txt
+agent/sidecar/.venv/bin/python agent/sidecar/server.py   # 127.0.0.1:8799
+```
+
+Then set `FACE_SIDECAR_URL=http://127.0.0.1:8799` in `agent/.env`. Details and
+licence note in `agent/sidecar/README.md`.
 
 Requires Ollama running locally. See `README.md` for the batch indexer details,
 EXIF backfill, and originals tunnel setup.

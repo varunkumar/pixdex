@@ -87,3 +87,34 @@ export interface DailyPickResponse {
   suggestedCaption: string;
   suggestedHashtags: string[];
 }
+
+export interface SerializedFace {
+  id: string;
+  photoId: string;
+  thumbnailUrl: string;
+  bbox: { x: number; y: number; w: number; h: number };
+  detScore: number;
+  personId: string | null;
+  personName: string | null;
+  status: 'unassigned' | 'auto' | 'confirmed';
+  matchScore: number | null;
+}
+
+export interface PersonSummary {
+  id: string;
+  name: string;
+  faceCount: number;
+  photoCount: number;
+  cover: SerializedFace | null;
+}
+
+export interface FaceGroup {
+  faces: SerializedFace[];
+}
+
+export interface MatchResponse {
+  auto: SerializedFace[];
+  suggestions: SerializedFace[];
+  scanned: number;
+  nextCursor: string | null;
+}

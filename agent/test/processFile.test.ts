@@ -101,4 +101,61 @@ describe('processFile', () => {
     expect(payload.path).toBeUndefined();
     expect(payload.album).toBe('Kanha Trip');
   });
+
+  it('does not fail when the sidecar is down', async () => {
+    const cloudflareClient = {
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+      ingestFaces: vi.fn(),
+    };
+    const ollamaClient = { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) };
+    const faceSidecar = { detect: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED')) };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(
+      processFile(
+        { localPath: filePath, contentHash: 'c'.repeat(64), source: 'local', filename: 'fixture.jpg' },
+        { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, faceSidecar: faceSidecar as any }
+      )
+    ).resolves.toBeUndefined();
+
+    expect(cloudflareClient.ingestPhoto).toHaveBeenCalled();
+    expect(faceSidecar.detect).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('ECONNREFUSED'));
+    warn.mockRestore();
+  });
+
+  it('scans faces after ingesting the photo when a sidecar is configured', async () => {
+    const calls: string[] = [];
+    const cloudflareClient = {
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockImplementation(async () => void calls.push('ingestPhoto')),
+      ingestFaces: vi.fn().mockImplementation(async () => (calls.push('ingestFaces'), true)),
+    };
+    const ollamaClient = { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) };
+    const faceSidecar = { detect: vi.fn().mockResolvedValue({ model: 'buffalo_l', width: 100, height: 100, faces: [] }) };
+
+    await processFile(
+      { localPath: filePath, contentHash: 'd'.repeat(64), source: 'local', filename: 'fixture.jpg' },
+      { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, faceSidecar: faceSidecar as any }
+    );
+
+    expect(calls).toEqual(['ingestPhoto', 'ingestFaces']);
+  });
+
+  it('skips scanning when no sidecar is configured', async () => {
+    const cloudflareClient = {
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+      ingestFaces: vi.fn(),
+    };
+    const ollamaClient = { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) };
+
+    await processFile(
+      { localPath: filePath, contentHash: 'e'.repeat(64), source: 'local', filename: 'fixture.jpg' },
+      { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config }
+    );
+
+    expect(cloudflareClient.ingestFaces).not.toHaveBeenCalled();
+  });
 });

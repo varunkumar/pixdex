@@ -7,6 +7,8 @@ import { generateText } from './ollama/generateText';
 import type { OllamaClient } from './ollama/client';
 import { CloudflareClient, type IngestPhotoPayload } from './cloudflareClient';
 import type { AgentConfig } from './config';
+import { scanFaces } from './faces/scanFaces';
+import type { FaceSidecarClient } from './faces/sidecarClient';
 
 export interface ProcessFileInput {
   localPath: string;
@@ -22,6 +24,8 @@ export interface ProcessFileDeps {
   cloudflareClient: CloudflareClient;
   ollamaClient: OllamaClient;
   config: AgentConfig;
+  /** Face scanning runs after ingest when set; a failure never fails the photo. */
+  faceSidecar?: FaceSidecarClient;
 }
 
 export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps): Promise<void> {
@@ -70,6 +74,17 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
   // create the metadata row until we know the thumbnail landed.
   await cloudflareClient.uploadThumbnail(input.contentHash, thumbnail);
   await cloudflareClient.ingestPhoto(payload);
+
+  if (deps.faceSidecar) {
+    try {
+      await scanFaces(input.localPath, input.contentHash, { sidecar: deps.faceSidecar, cloudflareClient });
+    } catch (error) {
+      // The photo is already indexed; `backfill-faces` will pick this one up.
+      console.warn(
+        `Face scan failed: ${input.filename} (${error instanceof Error ? error.message : String(error)})`
+      );
+    }
+  }
 }
 
 function buildCaptionPrompt(analysis: ImageAnalysisResult): string {

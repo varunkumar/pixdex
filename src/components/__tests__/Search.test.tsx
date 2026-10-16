@@ -9,6 +9,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
     searchPage: vi.fn(),
     getAlbums: vi.fn(),
+    getPeople: vi.fn(),
     thumbnailUrl: vi.fn((p: { thumbnailUrl?: string }) => `/api${p.thumbnailUrl}`),
   },
 }));
@@ -23,6 +24,10 @@ describe('Search', () => {
     vi.clearAllMocks();
     vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: page(10), total: 56 });
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, cover: null },
+      { id: 'b2', name: 'Ravi', faceCount: 2, photoCount: 2, cover: null },
+    ]);
   });
 
   it('sorts by rating when asked in the URL and leaves relevance as the default', async () => {
@@ -106,5 +111,41 @@ describe('Search', () => {
     vi.mocked(workerApiClient.searchPage).mockRejectedValue(new Error('Request to /search failed: 500'));
     renderWithProviders(<Search />, { route: '/search?q=lion' });
     expect(await screen.findByText('Request to /search failed: 500')).toBeInTheDocument();
+  });
+
+  it('selecting two people puts both ids in the URL and the request', async () => {
+    const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion&page=2']);
+    const input = await screen.findByPlaceholderText('Anyone');
+    fireEvent.click(input);
+    fireEvent.click(await screen.findByRole('option', { name: 'Asha' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
+
+    await waitFor(() => expect(router.state.location.search).toBe('?q=lion&people=a1%2Cb2'));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ people: ['a1', 'b2'] }))
+    );
+  });
+
+  it('people filter is restored from the URL and searches without a term', async () => {
+    renderWithProviders(<Search />, { route: '/search?people=a1,b2' });
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ people: ['a1', 'b2'] }))
+    );
+    expect(await screen.findByText('Asha')).toBeInTheDocument();
+    expect(screen.getByText('Ravi')).toBeInTheDocument();
+  });
+
+  it('clearing the filter removes the param', async () => {
+    const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion&people=a1']);
+    await screen.findByText('Asha');
+    fireEvent.keyDown(screen.getAllByLabelText('People')[0], { key: 'Backspace' });
+    await waitFor(() => expect(router.state.location.search).toBe('?q=lion'));
+  });
+
+  it('hides the control when nobody is named', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([]);
+    renderWithProviders(<Search />, { route: '/search?q=lion' });
+    await screen.findByLabelText('Select photo album');
+    expect(screen.queryByText('People')).not.toBeInTheDocument();
   });
 });
