@@ -11,6 +11,8 @@ const pendingSchema = z.object({
   model: z.string().min(1),
 });
 
+export const MAX_FACES_PER_REQUEST = 50;
+
 const unit = z.number().min(0).max(1);
 const faceSchema = z.object({
   bbox: z.object({ x: unit, y: unit, w: unit, h: unit }),
@@ -22,7 +24,9 @@ const faceSchema = z.object({
 const facesSchema = z.object({
   contentHash: z.string().min(1),
   model: z.string().min(1),
-  faces: z.array(faceSchema).max(200),
+  // D1's free tier allows ~50 queries per invocation and each stored face is one INSERT,
+  // so a request carries at most MAX_FACES_PER_REQUEST faces. The agent keeps the largest.
+  faces: z.array(faceSchema).max(MAX_FACES_PER_REQUEST),
 });
 
 function iou(a: Box, b: Box): number {
@@ -114,6 +118,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   let stored = 0;
   let kept = 0;
   const newIds: string[] = [];
+  const carried: { f: string; p: string }[] = [];
   faces.forEach((f, i) => {
     if (confirmedBoxes.some((b) => iou(b, f.bbox) >= 0.5)) {
       kept++;
@@ -124,9 +129,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
     newIds.push(faceId);
     for (const r of rejections.results) {
       if (iou({ x: r.bbox_x, y: r.bbox_y, w: r.bbox_w, h: r.bbox_h }, f.bbox) >= 0.5) {
-        statements.push(
-          c.env.DB.prepare('INSERT OR IGNORE INTO face_rejections (face_id, person_id) VALUES (?, ?)').bind(faceId, r.person_id)
-        );
+        carried.push({ f: faceId, p: r.person_id });
       }
     }
     statements.push(
@@ -140,12 +143,20 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
       )
     );
   });
+  if (carried.length > 0) {
+    statements.push(
+      c.env.DB.prepare(
+        `INSERT OR IGNORE INTO face_rejections (face_id, person_id)
+         SELECT json_extract(value, '$.f'), json_extract(value, '$.p') FROM json_each(?)`
+      ).bind(JSON.stringify(carried))
+    );
+  }
   statements.push(
     c.env.DB.prepare('UPDATE photos SET faces_scanned_model = ? WHERE id = ?').bind(model, photo.id)
   );
   await c.env.DB.batch(statements);
 
-  const matched = await autoMatchFaces(c.env.DB, newIds);
+  const { matched, skipped } = await autoMatchFaces(c.env.DB, newIds);
 
-  return c.json({ stored, kept, matched });
+  return c.json({ stored, kept, matched, skipped });
 }

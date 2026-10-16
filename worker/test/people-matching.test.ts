@@ -43,6 +43,21 @@ describe('embedding codec', () => {
     expect(Array.from(out)).toEqual(Array.from(v));
   });
 
+  it('embeddingFromBytes rejects the wrong byte length', () => {
+    expect(() => embeddingFromBytes(new Uint8Array(10))).toThrow('invalid embedding');
+    expect(() => embeddingFromBytes(new Uint8Array(EMBEDDING_DIM * 4 + 4))).toThrow('invalid embedding');
+  });
+
+  it('embeddingFromBytes decodes a misaligned view', () => {
+    const v = unit(7);
+    const raw = embeddingToBytes(v);
+    const padded = new Uint8Array(raw.length + 1);
+    padded.set(raw, 1);
+    const view = padded.subarray(1);
+    expect(view.byteOffset % 4).not.toBe(0);
+    expect(Array.from(embeddingFromBytes(view))).toEqual(Array.from(v));
+  });
+
   it('rejects a vector of the wrong length', () => {
     expect(() => embeddingFromBase64(toB64(new Float32Array(10)))).toThrow('invalid embedding');
   });

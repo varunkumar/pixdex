@@ -8,18 +8,28 @@ export interface PersonReferences {
 
 /**
  * For each person (or one, via `opts.personId`), the REFERENCES_PER_PERSON
- * newest confirmed faces' vectors. People with no confirmed faces are omitted.
+ * newest confirmed faces' vectors. "Newest" means newest by scan time
+ * (faces.created_at), not by when the owner confirmed the face. People with no
+ * confirmed faces are omitted.
+ *
+ * Rows read are bounded by people x REFERENCES_PER_PERSON: the per-person
+ * subquery walks idx_faces_person_status_created (person_id, assign_status,
+ * created_at) backwards and stops after the limit; CROSS JOIN pins persons as
+ * the outer loop so faces are only fetched by rowid for the chosen ones.
  */
 export async function loadReferences(db: D1Database, opts: { personId?: string } = {}): Promise<PersonReferences[]> {
-  const where = opts.personId ? "AND person_id = ?" : '';
+  const where = opts.personId ? 'WHERE p.id = ?' : '';
   const stmt = db.prepare(
-    `SELECT person_id, embedding FROM (
-       SELECT person_id, embedding,
-         ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY created_at DESC, rowid DESC) AS rn
-       FROM faces
-       WHERE assign_status = 'confirmed' AND person_id IS NOT NULL ${where}
-     ) WHERE rn <= ${REFERENCES_PER_PERSON}
-     ORDER BY person_id, rn`
+    `SELECT p.id AS person_id, f.embedding
+     FROM persons p
+     CROSS JOIN faces f ON f.rowid IN (
+       SELECT f2.rowid FROM faces f2
+       WHERE f2.person_id = p.id AND f2.assign_status = 'confirmed'
+       ORDER BY f2.created_at DESC, f2.rowid DESC
+       LIMIT ${REFERENCES_PER_PERSON}
+     )
+     ${where}
+     ORDER BY p.id, f.created_at DESC, f.rowid DESC`
   );
   const { results } = await (opts.personId ? stmt.bind(opts.personId) : stmt).all<{
     person_id: string;

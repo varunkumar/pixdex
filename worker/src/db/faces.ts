@@ -47,22 +47,31 @@ export function serializeFace(row: FaceRow & { person_name: string | null; conte
 
 export type FaceWithJoins = FaceRow & { person_name: string | null; content_hash: string };
 
-/** Statement that confirms one face for a person (clears the match score). */
-export const confirmFaceStmt = (db: D1Database, faceId: string, personId: string) =>
-  db
-    .prepare("UPDATE faces SET person_id = ?, assign_status = 'confirmed', match_score = NULL WHERE id = ?")
-    .bind(personId, faceId);
+/**
+ * Set-based statement that confirms every given face for a person (clears the
+ * match score) and one that drops that person's rejections of those faces.
+ * Two statements regardless of how many faces, to stay inside D1's per-invocation query limit.
+ */
+export const confirmFacesStmts = (db: D1Database, faceIds: string[], personId: string): D1PreparedStatement[] => {
+  const ids = JSON.stringify(faceIds);
+  return [
+    db
+      .prepare(
+        "UPDATE faces SET person_id = ?, assign_status = 'confirmed', match_score = NULL WHERE id IN (SELECT value FROM json_each(?))"
+      )
+      .bind(personId, ids),
+    db
+      .prepare('DELETE FROM face_rejections WHERE person_id = ? AND face_id IN (SELECT value FROM json_each(?))')
+      .bind(personId, ids),
+  ];
+};
 
-/** Returns the ids from `ids` that have no row in faces (chunked for D1's bound-parameter limit). */
+/** Returns the ids from `ids` that have no row in faces, in one query. */
 export async function missingFaceIds(db: D1Database, ids: string[]): Promise<string[]> {
-  const found = new Set<string>();
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50);
-    const rows = await db
-      .prepare(`SELECT id FROM faces WHERE id IN (${chunk.map(() => '?').join(',')})`)
-      .bind(...chunk)
-      .all<{ id: string }>();
-    for (const r of rows.results) found.add(r.id);
-  }
-  return ids.filter((id) => !found.has(id));
+  if (ids.length === 0) return [];
+  const rows = await db
+    .prepare('SELECT value AS id FROM json_each(?) WHERE value NOT IN (SELECT id FROM faces)')
+    .bind(JSON.stringify(ids))
+    .all<{ id: string }>();
+  return rows.results.map((r) => r.id);
 }

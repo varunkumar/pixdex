@@ -4,7 +4,7 @@ import type { Env } from '../types';
 import { embeddingFromBytes } from '../people/embedding';
 import { loadReferences } from '../people/references';
 import { FACE_PAGE_SIZE, GROUPS_PAGE_SIZE, MATCHABLE_SQL, bestScore, classify, clusterFaces } from '../people/matching';
-import { FACE_SELECT, confirmFaceStmt, missingFaceIds, serializeFace, type FaceWithJoins } from '../db/faces';
+import { FACE_SELECT, confirmFacesStmts, missingFaceIds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
 
@@ -64,7 +64,7 @@ export async function createPersonRoute(c: Ctx) {
   try {
     await c.env.DB.batch([
       c.env.DB.prepare('INSERT INTO persons (id, name, created_at) VALUES (?, ?, ?)').bind(id, name, new Date().toISOString()),
-      ...(faceIds ?? []).map((fid) => confirmFaceStmt(c.env.DB, fid, id)),
+      ...(faceIds && faceIds.length ? confirmFacesStmts(c.env.DB, [...new Set(faceIds)], id) : []),
     ]);
   } catch (err) {
     if (isUniqueViolation(err)) return c.json({ error: 'A person with this name already exists' }, 409);
@@ -114,10 +114,7 @@ export async function assignFacesRoute(c: Ctx) {
   const faceIds = [...new Set(parsed.data.faceIds)];
   const missing = await missingFaceIds(c.env.DB, faceIds);
   if (missing.length) return c.json({ error: `Unknown face ids: ${missing.join(', ')}` }, 404);
-  await c.env.DB.batch([
-    ...faceIds.map((fid) => confirmFaceStmt(c.env.DB, fid, id)),
-    ...faceIds.map((fid) => c.env.DB.prepare('DELETE FROM face_rejections WHERE face_id = ? AND person_id = ?').bind(fid, id)),
-  ]);
+  await c.env.DB.batch(confirmFacesStmts(c.env.DB, faceIds, id));
   return c.json({ personId: id, assigned: faceIds.length });
 }
 
@@ -197,14 +194,19 @@ export async function matchPersonRoute(c: Ctx) {
   }
 
   if (parsed.data.apply) {
-    for (let i = 0; i < auto.length; i += 100) {
-      await c.env.DB.batch(
-        auto.slice(i, i + 100).map((m) =>
-          c.env.DB.prepare(
-            "UPDATE faces SET person_id = ?, assign_status = 'auto', match_score = ? WHERE id = ? AND assign_status != 'confirmed'"
-          ).bind(id, m.score, m.id)
-        )
-      );
+    // One statement for the whole page. Re-checks the rules at write time: never touch a
+    // confirmed face or a rejected pair, and take another person's auto face only on a higher score.
+    if (auto.length > 0) {
+      await c.env.DB.prepare(
+        `WITH x AS (SELECT json_extract(value, '$.id') AS id, json_extract(value, '$.score') AS s FROM json_each(?))
+         UPDATE faces SET person_id = ?, assign_status = 'auto', match_score = x.s
+         FROM x
+         WHERE faces.id = x.id AND faces.assign_status != 'confirmed'
+           AND (faces.assign_status = 'unassigned' OR faces.match_score IS NULL OR x.s > faces.match_score)
+           AND NOT EXISTS (SELECT 1 FROM face_rejections r WHERE r.face_id = faces.id AND r.person_id = ?)`
+      )
+        .bind(JSON.stringify(auto.map((m) => ({ id: m.id, score: m.score }))), id, id)
+        .run();
     }
   }
 

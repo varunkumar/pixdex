@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../types';
-import { FACE_SELECT, confirmFaceStmt, serializeFace, type FaceWithJoins } from '../db/faces';
+import { FACE_SELECT, confirmFacesStmts, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
 
@@ -20,10 +20,7 @@ export async function assignFaceRoute(c: Ctx) {
   const { personId } = parsed.data;
   if (!(await loadFace(c, id)) || !(await personExists(c, personId))) return c.text('Not Found', 404);
 
-  await c.env.DB.batch([
-    confirmFaceStmt(c.env.DB, id, personId),
-    c.env.DB.prepare('DELETE FROM face_rejections WHERE face_id = ? AND person_id = ?').bind(id, personId),
-  ]);
+  await c.env.DB.batch(confirmFacesStmts(c.env.DB, [id], personId));
   return c.json(serializeFace((await loadFace(c, id))!));
 }
 

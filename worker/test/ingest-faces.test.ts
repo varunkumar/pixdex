@@ -88,7 +88,7 @@ describe('face ingest routes', () => {
   it('stores faces unassigned and marks the photo scanned', async () => {
     const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [face(0.1, 1), face(0.6, 2)] });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ stored: 2, kept: 0, matched: 0 });
+    expect(await res.json()).toEqual({ stored: 2, kept: 0, matched: 0, skipped: 0 });
 
     const { results } = await faceRows();
     expect(results).toHaveLength(2);
@@ -122,7 +122,7 @@ describe('face ingest routes', () => {
 
   it('a photo with no faces is marked scanned and no longer pending', async () => {
     const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [] });
-    expect(await res.json()).toEqual({ stored: 0, kept: 0, matched: 0 });
+    expect(await res.json()).toEqual({ stored: 0, kept: 0, matched: 0, skipped: 0 });
     const pending = await post('/pending', { hashes: [photo.contentHash], model: MODEL });
     expect(await pending.json()).toEqual({ pending: [] });
   });
@@ -132,7 +132,7 @@ describe('face ingest routes', () => {
     await env.DB.prepare("UPDATE faces SET assign_status = 'auto', match_score = 0.7 WHERE bbox_x = 0.6").run();
 
     const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [face(0.3, 3)] });
-    expect(await res.json()).toEqual({ stored: 1, kept: 0, matched: 0 });
+    expect(await res.json()).toEqual({ stored: 1, kept: 0, matched: 0, skipped: 0 });
     const { results } = await faceRows();
     expect(results).toHaveLength(1);
     expect(results[0].bbox_x).toBe(0.3);
@@ -151,7 +151,7 @@ describe('face ingest routes', () => {
       model: MODEL,
       faces: [face(0.12, 1), face(0.7, 4)],
     });
-    expect(await res.json()).toEqual({ stored: 1, kept: 1, matched: 0 });
+    expect(await res.json()).toEqual({ stored: 1, kept: 1, matched: 0, skipped: 0 });
     const { results } = await faceRows();
     expect(results.map((r: any) => r.bbox_x)).toEqual([0.1, 0.7]);
     expect(results[0]).toMatchObject({ assign_status: 'confirmed', person_id: 'p1' });
@@ -181,5 +181,11 @@ describe('face ingest routes', () => {
   it('404 for an unknown content hash', async () => {
     const res = await post('', { contentHash: 'nope', model: MODEL, faces: [face()] });
     expect(res.status).toBe(404);
+  });
+
+  it('rejects more than 50 faces in one request', async () => {
+    const faces = Array.from({ length: 51 }, (_, i) => face(0.1, i + 1));
+    const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces });
+    expect(res.status).toBe(400);
   });
 });

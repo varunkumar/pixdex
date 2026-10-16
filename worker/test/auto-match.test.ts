@@ -36,7 +36,7 @@ async function ingest(faces: F[]) {
     }),
   });
   expect(res.status).toBe(200);
-  return (await res.json()) as { stored: number; kept: number; matched: number };
+  return (await res.json()) as { stored: number; kept: number; matched: number; skipped: number };
 }
 const rowAt = (x: number) =>
   env.DB.prepare('SELECT * FROM faces WHERE photo_id = ? AND abs(bbox_x - ?) < 0.001').bind(PHOTO, x).first<any>();
@@ -91,7 +91,7 @@ describe('automatic matching at ingest', () => {
       { x: 0.1, v: vec(0.95), det: 0.3 },
       { x: 0.5, v: vec(0.95), w: 0.01 },
     ]);
-    expect(r).toEqual({ stored: 2, kept: 0, matched: 0 });
+    expect(r).toEqual({ stored: 2, kept: 0, matched: 0, skipped: 0 });
     expect((await rowAt(0.1)).assign_status).toBe('unassigned');
     expect((await rowAt(0.5)).assign_status).toBe('unassigned');
   });
@@ -136,10 +136,10 @@ describe('automatic matching at ingest', () => {
         return env.DB.prepare(sql);
       },
     } as unknown as D1Database;
-    expect(await autoMatchFaces(spy, [])).toBe(0);
+    expect(await autoMatchFaces(spy, [])).toEqual({ matched: 0, skipped: 0 });
     expect(queries.filter((q) => q.includes('confirmed'))).toEqual([]);
     expect(queries).toEqual([]);
-    expect(await ingest([])).toEqual({ stored: 0, kept: 0, matched: 0 });
+    expect(await ingest([])).toEqual({ stored: 0, kept: 0, matched: 0, skipped: 0 });
   });
 
   it('only the newest 30 confirmed faces per person are used', async () => {
@@ -152,6 +152,28 @@ describe('automatic matching at ingest', () => {
   });
 
   it('ingest response includes matched', async () => {
-    expect(await ingest([{ x: 0.1, v: vec(0.9) }, { x: 0.5, v: vec(0.2) }])).toEqual({ stored: 2, kept: 0, matched: 1 });
+    expect(await ingest([{ x: 0.1, v: vec(0.9) }, { x: 0.5, v: vec(0.2) }])).toEqual({ stored: 2, kept: 0, matched: 1, skipped: 0 });
+  });
+
+  it('skips matchable faces beyond the work budget and reports them', async () => {
+    // 1 person x 1 reference: budget is floor(1.5M / 512) = 2929 faces; use many refs to shrink it.
+    for (let i = 0; i < 29; i++) await addConfirmed('p1', vec(1, 2 + i), `2026-01-${String(i + 2).padStart(2, '0')}`);
+    // 30 refs -> 15360 MACs per face -> 97 faces within MAX_AUTO_MATCH_MACS.
+    const ids: string[] = [];
+    const stmts = [];
+    for (let i = 0; i < 100; i++) {
+      const id = `bulk${i}`;
+      ids.push(id);
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, created_at)
+           VALUES (?, ?, 0.1, 0.1, 0.2, 0.2, 0.9, ?, 'buffalo_l', '2026-02-01')`
+        ).bind(id, PHOTO, embeddingToBytes(vec(1, 2)).buffer)
+      );
+    }
+    await env.DB.batch(stmts);
+    expect(await autoMatchFaces(env.DB, ids)).toEqual({ matched: 97, skipped: 3 });
+    const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM faces WHERE id LIKE 'bulk%' AND assign_status = 'unassigned'").first<{ n: number }>();
+    expect(left?.n).toBe(3);
   });
 });

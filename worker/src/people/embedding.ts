@@ -31,10 +31,14 @@ export function embeddingToBytes(v: Float32Array): Uint8Array {
   return out;
 }
 
+/**
+ * Reinterprets 512 stored float32 values as a Float32Array (a view when the bytes
+ * are 4-byte aligned, a copy otherwise). Typed arrays use platform byte order;
+ * Workers and D1 run on little-endian hardware, matching embeddingToBytes.
+ */
 export function embeddingFromBytes(b: ArrayBuffer | Uint8Array): Float32Array {
   const bytes = b instanceof Uint8Array ? b : new Uint8Array(b);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const out = new Float32Array(Math.floor(bytes.byteLength / 4));
-  for (let i = 0; i < out.length; i++) out[i] = view.getFloat32(i * 4, true);
-  return out;
+  if (bytes.byteLength !== EMBEDDING_DIM * 4) throw new Error('invalid embedding');
+  if (bytes.byteOffset % 4 === 0) return new Float32Array(bytes.buffer, bytes.byteOffset, EMBEDDING_DIM);
+  return new Float32Array(bytes.slice().buffer);
 }

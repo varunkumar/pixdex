@@ -1,8 +1,10 @@
 export const AUTO_THRESHOLD = 0.5;
 export const SUGGEST_THRESHOLD = 0.4;
-export const FACE_PAGE_SIZE = 300;
-export const GROUPS_PAGE_SIZE = 150;
+export const FACE_PAGE_SIZE = 200;
+export const GROUPS_PAGE_SIZE = 100;
 export const REFERENCES_PER_PERSON = 30;
+/** Cap on multiply-adds (faces x total reference vectors x 512) one auto-match call may spend. */
+export const MAX_AUTO_MATCH_MACS = 1_500_000;
 export const MIN_DET_SCORE = 0.6;
 export const MIN_FACE_SIDE = 0.03;
 
