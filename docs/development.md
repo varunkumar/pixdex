@@ -59,6 +59,7 @@ Notes:
     transient: wait about a minute and retry the build.
   - You can still apply one by hand beforehand with
     `cd worker && npx wrangler d1 migrations apply DB --remote`.
+- Migration `0009_people.sql` (faces and people) is additive and auto-applies on merge.
 - The agent is not deployed; it runs on your Mac.
 
 ## Keeping docs current
@@ -98,6 +99,17 @@ npm run dev -- index-status
 npm run dev -- backfill-faces <folder>    # needs the face sidecar, see agent/sidecar/README.md
 npm run dev -- serve-originals          # needs cloudflared, see agent/cloudflared/README.md
 ```
+
+Face sidecar (optional, only needed for `backfill-faces` and face scanning during indexing):
+
+```bash
+uv venv --python 3.12 agent/sidecar/.venv
+uv pip install -p agent/sidecar/.venv/bin/python -r agent/sidecar/requirements.txt
+agent/sidecar/.venv/bin/python agent/sidecar/server.py   # 127.0.0.1:8799
+```
+
+Then set `FACE_SIDECAR_URL=http://127.0.0.1:8799` in `agent/.env`. Details and
+licence note in `agent/sidecar/README.md`.
 
 Requires Ollama running locally. See `README.md` for the batch indexer details,
 EXIF backfill, and originals tunnel setup.

@@ -7,6 +7,7 @@ captions, ratings, thumbnails) lives in the cloud.
 ```
 Your Mac
   ├─ Ollama (vision + text generation, local)
+  ├─ agent/sidecar/  (Python InsightFace service: face detection + embeddings, optional)
   ├─ agent/  (Node/TS CLI: index photos, serve originals)
   └─ cloudflared tunnel (originals on demand only)
 
@@ -120,6 +121,37 @@ photo qualifies.
 3. Browser -> Pages `/api/*` -> Pages Function adds token -> Worker read route.
 4. "View Original": browser -> `/api/originals/:id` -> tunnel -> agent server
    (local files) or a Drive deep-link (Drive files).
+
+## Faces and people
+
+Flow: after the Ollama analysis, the agent posts the image to the local sidecar
+(`FACE_SIDECAR_URL`, `POST /faces`) and sends the faces (normalised bbox,
+`det_score`, 512-d L2-normalised embedding, model name) to `/ingest/faces`.
+A sidecar failure is logged and never fails the photo. `backfill-faces` does the
+same for already indexed photos and is resumable via `photos.faces_scanned_model`.
+The owner then names faces in the UI; the Worker matches the rest.
+
+Tables (migration `0009_people.sql`, additive): `persons`, `faces` (embedding BLOB,
+`person_id`, `assign_status` of `unassigned|auto|confirmed`, `match_score`) and
+`face_rejections` ("Not X" corrections, so a rejected pair is never re-matched),
+plus `photos.faces_scanned_model`. Re-ingesting a photo replaces only its
+`unassigned` and `auto` faces and carries over rejections by bbox overlap;
+`confirmed` faces are kept. Ingest bodies cannot set `person_id` or `assign_status`.
+
+Matching (`worker/src/people/`): each named person is represented by up to
+`REFERENCES_PER_PERSON` (30) reference embeddings (the newest confirmed faces; people with none are skipped); a
+face's score is its best dot product against a person's references. Only faces
+with `det_score >= MIN_DET_SCORE` (0.6) and both sides `>= MIN_FACE_SIDE` (0.03,
+fraction of the image) are matchable. A score `>= AUTO_THRESHOLD` (0.5) attaches
+the face as `auto`; `>= SUGGEST_THRESHOLD` (0.4) only surfaces it as a suggestion
+to review. Matching runs automatically at ingest (`autoMatch.ts`) and when a
+group or face is named, and can be re-run from the person's page
+(`POST people/:id/match`). Unnamed faces are grouped by centroid clustering
+(`clusterFaces`) for the People page. Work is paged (`FACE_PAGE_SIZE` 300 faces
+for matching, `GROUPS_PAGE_SIZE` 150 for groups) because both are sized for the
+Workers Free plan's ~10 ms CPU limit; raise them only on a paid plan.
+
+Licence: InsightFace pretrained weights are non-commercial, personal use only.
 
 ## Config and secrets
 
