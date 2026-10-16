@@ -1,43 +1,24 @@
-import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Group,
-  Image,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-  Title,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { workerApiClient } from "../services/api/WorkerApiClient";
-import type { PersonSummary, SerializedFace } from "../types/api";
-import FaceTile from "./FaceTile";
+import { Badge, Box, Button, Card, Group, Image, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { workerApiClient } from '../services/api/WorkerApiClient';
+import type { PersonSummary, SerializedFace } from '../types/api';
+import FaceTile from './FaceTile';
 
-const STATUS_LABEL: Record<SerializedFace["status"], string> = {
-  auto: "Auto-matched",
-  confirmed: "Confirmed",
-  unassigned: "Unnamed",
+const STATUS_LABEL: Record<SerializedFace['status'], string> = {
+  auto: 'Auto-matched',
+  confirmed: 'Confirmed',
+  unassigned: 'Unnamed',
 };
 
 // Naming faces changes what searches and listings return.
-const SEARCH_KEYS = [
-  "search",
-  "album-photos",
-  "albums-page",
-  "dailyPick",
-  "recent-photos",
-];
+const SEARCH_KEYS = ['search', 'album-photos', 'albums-page', 'dailyPick', 'recent-photos'];
 
-function errorMessage(err: unknown): string {
-  const message = err instanceof Error ? err.message : "";
-  return message.includes("409")
-    ? "That name already exists"
-    : "Could not save the name";
+function errorMessage(err: unknown, naming: boolean): string {
+  const message = err instanceof Error ? err.message : '';
+  if (message.includes('409')) return 'That name already exists';
+  return naming ? 'Could not save the name' : 'Something went wrong, try again';
 }
 
 const FaceRow = ({
@@ -54,7 +35,7 @@ const FaceRow = ({
   onChanged: () => void;
 }) => {
   const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
 
   const assign = useMutation({
     mutationFn: async (personId: string) => {
@@ -69,12 +50,11 @@ const FaceRow = ({
     },
     onSuccess: () => {
       setCreating(false);
-      setName("");
+      setName('');
     },
   });
   const reject = useMutation({
-    mutationFn: (personId: string) =>
-      workerApiClient.rejectFace(face.id, personId),
+    mutationFn: (personId: string) => workerApiClient.rejectFace(face.id, personId),
     onSuccess: onChanged,
   });
   const unassign = useMutation({
@@ -82,13 +62,10 @@ const FaceRow = ({
     onSuccess: onChanged,
   });
 
+  const naming = (assign.error ?? create.error) != null;
   const error = assign.error ?? create.error ?? reject.error ?? unassign.error;
-  const named = face.personId != null && face.status !== "unassigned";
-  const busy =
-    assign.isPending ||
-    create.isPending ||
-    reject.isPending ||
-    unassign.isPending;
+  const named = face.personId != null && face.status !== 'unassigned';
+  const busy = assign.isPending || create.isPending || reject.isPending || unassign.isPending;
 
   return (
     <Group data-testid="face-row" align="flex-start" wrap="nowrap" gap="md">
@@ -96,7 +73,7 @@ const FaceRow = ({
         <Badge size="sm" circle>
           {index + 1}
         </Badge>
-        <FaceTile face={face} />
+        <FaceTile face={face} index={index} />
       </Stack>
       <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
         <Text size="sm" fw={500}>
@@ -114,12 +91,7 @@ const FaceRow = ({
             >
               Not {face.personName}
             </Button>
-            <Button
-              size="xs"
-              variant="subtle"
-              disabled={busy}
-              onClick={() => unassign.mutate()}
-            >
+            <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate()}>
               Remove name
             </Button>
           </Group>
@@ -135,16 +107,12 @@ const FaceRow = ({
             <Button
               size="xs"
               loading={create.isPending}
-              disabled={name.trim() === ""}
+              disabled={name.trim() === ''}
               onClick={() => create.mutate(name.trim())}
             >
               Save name
             </Button>
-            <Button
-              size="xs"
-              variant="subtle"
-              onClick={() => setCreating(false)}
-            >
+            <Button size="xs" variant="subtle" onClick={() => setCreating(false)}>
               Cancel
             </Button>
           </Group>
@@ -168,7 +136,7 @@ const FaceRow = ({
 
         {error && (
           <Text size="xs" c="red">
-            {errorMessage(error)}
+            {errorMessage(error, naming)}
           </Text>
         )}
       </Stack>
@@ -177,28 +145,21 @@ const FaceRow = ({
 };
 
 /** Faces found in a photo, with controls to name them and correct automatic matches. */
-const PhotoFaces = ({
-  photoId,
-  thumbnailUrl,
-}: {
-  photoId: string;
-  thumbnailUrl: string;
-}) => {
+const PhotoFaces = ({ photoId, thumbnailUrl }: { photoId: string; thumbnailUrl: string }) => {
   const queryClient = useQueryClient();
   const { data: faces = [] } = useQuery({
-    queryKey: ["photo-faces", photoId],
+    queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
   });
   const { data: people = [] } = useQuery({
-    queryKey: ["people"],
+    queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
   });
 
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ["photo-faces", photoId] });
-    void queryClient.invalidateQueries({ queryKey: ["people"] });
-    for (const key of SEARCH_KEYS)
-      void queryClient.invalidateQueries({ queryKey: [key] });
+    void queryClient.invalidateQueries({ queryKey: ['photo-faces', photoId] });
+    void queryClient.invalidateQueries({ queryKey: ['people'] });
+    for (const key of SEARCH_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });
   };
 
   // After naming a face, attach the person's other unnamed faces automatically.
@@ -207,9 +168,12 @@ const PhotoFaces = ({
       const { matched } = await workerApiClient.matchPersonAll(personId);
       if (matched > 0) {
         notifications.show({
-          message: `Matched ${matched} more photo${matched === 1 ? "" : "s"}`,
+          message: `Matched ${matched} more photo${matched === 1 ? '' : 's'}`,
         });
       }
+    } catch {
+      // The face is already named; a failed follow-up search must not read as a naming failure.
+      notifications.show({ message: 'Named, but could not look for more matches' });
     } finally {
       refresh();
     }
@@ -222,33 +186,28 @@ const PhotoFaces = ({
       <Stack gap="md">
         <Title order={5}>Faces</Title>
         <Box pos="relative" w="fit-content" maw="100%">
-          <Image
-            src={thumbnailUrl}
-            alt=""
-            radius="md"
-            mah={400}
-            fit="contain"
-          />
+          <Image src={thumbnailUrl} alt="" radius="md" mah={400} fit="contain" />
           {faces.map((f, i) => (
             <Box
               key={f.id}
               data-testid="face-box"
+              aria-hidden="true"
               pos="absolute"
               style={{
                 left: `${f.bbox.x * 100}%`,
                 top: `${f.bbox.y * 100}%`,
                 width: `${f.bbox.w * 100}%`,
                 height: `${f.bbox.h * 100}%`,
-                border: "2px solid var(--mantine-color-blue-5)",
+                border: '2px solid var(--mantine-color-blue-5)',
                 borderRadius: 4,
-                pointerEvents: "none",
+                pointerEvents: 'none',
               }}
             >
               <Badge
                 data-testid={`face-box-${i + 1}`}
                 size="xs"
                 circle
-                style={{ position: "absolute", top: -8, left: -8 }}
+                style={{ position: 'absolute', top: -8, left: -8 }}
               >
                 {i + 1}
               </Badge>
@@ -257,14 +216,7 @@ const PhotoFaces = ({
         </Box>
         <Stack gap="md">
           {faces.map((f, i) => (
-            <FaceRow
-              key={f.id}
-              face={f}
-              index={i}
-              people={people}
-              onNamed={onNamed}
-              onChanged={refresh}
-            />
+            <FaceRow key={f.id} face={f} index={i} people={people} onNamed={onNamed} onChanged={refresh} />
           ))}
         </Stack>
       </Stack>
