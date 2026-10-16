@@ -92,8 +92,22 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
     .all<{ bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number }>();
   const confirmedBoxes: Box[] = confirmed.results.map((r) => ({ x: r.bbox_x, y: r.bbox_y, w: r.bbox_w, h: r.bbox_h }));
 
+  // Rejections are keyed by face id, and a re-scan replaces the unassigned/auto rows with new ids.
+  // Carry each rejection over to the new face that overlaps its old box (IoU >= 0.5).
+  const rejections = await c.env.DB.prepare(
+    `SELECT r.face_id, r.person_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h
+     FROM face_rejections r JOIN faces f ON f.id = r.face_id
+     WHERE f.photo_id = ? AND f.assign_status IN ('unassigned', 'auto')`
+  )
+    .bind(photo.id)
+    .all<{ face_id: string; person_id: string; bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number }>();
+
   const now = new Date().toISOString();
   const statements = [
+    c.env.DB.prepare(
+      `DELETE FROM face_rejections WHERE face_id IN
+         (SELECT id FROM faces WHERE photo_id = ? AND assign_status IN ('unassigned', 'auto'))`
+    ).bind(photo.id),
     c.env.DB.prepare("DELETE FROM faces WHERE photo_id = ? AND assign_status IN ('unassigned', 'auto')").bind(photo.id),
   ];
   let stored = 0;
@@ -104,13 +118,21 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
       return;
     }
     stored++;
+    const faceId = crypto.randomUUID();
+    for (const r of rejections.results) {
+      if (iou({ x: r.bbox_x, y: r.bbox_y, w: r.bbox_w, h: r.bbox_h }, f.bbox) >= 0.5) {
+        statements.push(
+          c.env.DB.prepare('INSERT OR IGNORE INTO face_rejections (face_id, person_id) VALUES (?, ?)').bind(faceId, r.person_id)
+        );
+      }
+    }
     statements.push(
       c.env.DB.prepare(
         `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score,
            embedding, embedding_model, person_id, assign_status, match_score, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'unassigned', NULL, ?)`
       ).bind(
-        crypto.randomUUID(), photo.id, f.bbox.x, f.bbox.y, f.bbox.w, f.bbox.h, f.detScore,
+        faceId, photo.id, f.bbox.x, f.bbox.y, f.bbox.w, f.bbox.h, f.detScore,
         blobs[i].buffer, model, now
       )
     );

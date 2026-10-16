@@ -12,7 +12,9 @@ import {
   assignFacesRoute,
   createPersonRoute,
   deletePersonRoute,
+  groupsRoute,
   listPeopleRoute,
+  matchPersonRoute,
   renamePersonRoute,
 } from './routes/people';
 import { searchRoute } from './routes/search';
@@ -52,9 +54,11 @@ app.use('/people', requireReadToken);
 app.use('/people/*', requireReadToken);
 app.get('/people', listPeopleRoute);
 app.post('/people', createPersonRoute);
+app.get('/people/groups', groupsRoute);
 app.patch('/people/:id', renamePersonRoute);
 app.delete('/people/:id', deletePersonRoute);
 app.post('/people/:id/faces', assignFacesRoute);
+app.post('/people/:id/match', matchPersonRoute);
 
 app.use('/faces/*', requireReadToken);
 app.post('/faces/:id/assign', assignFaceRoute);
