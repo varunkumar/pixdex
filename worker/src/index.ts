@@ -15,6 +15,7 @@ import {
   groupsRoute,
   listPeopleRoute,
   matchPersonRoute,
+  setPersonCoverRoute,
   renamePersonRoute,
 } from './routes/people';
 import { searchRoute } from './routes/search';
@@ -60,6 +61,7 @@ app.patch('/people/:id', renamePersonRoute);
 app.delete('/people/:id', deletePersonRoute);
 app.post('/people/:id/faces', assignFacesRoute);
 app.post('/people/:id/match', matchPersonRoute);
+app.post('/people/:id/cover', setPersonCoverRoute);
 
 app.use('/faces/*', requireReadToken);
 app.post('/faces/:id/assign', assignFaceRoute);

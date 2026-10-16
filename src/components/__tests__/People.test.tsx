@@ -62,6 +62,23 @@ describe('People', () => {
     expect(await screen.findByRole('button', { name: 'Name this group' })).toBeInTheDocument();
   });
 
+  it('shows the largest faces of a group first', async () => {
+    const sized = (id: string, w: number) => face(id, { personName: id, bbox: { x: 0.1, y: 0.1, w, h: w } });
+    vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
+      groups: [{ faces: [sized('tiny', 0.05), sized('huge', 0.5), sized('mid', 0.2)] }],
+      scanned: 3,
+      nextCursor: null,
+    });
+    show();
+    const btn = await screen.findByRole('button', { name: 'Name this group' });
+    const card = btn.closest('[data-testid="face-group"]') as HTMLElement;
+    expect(within(card).getAllByTestId('face-tile').map((t) => t.getAttribute('aria-label'))).toEqual([
+      'huge',
+      'mid',
+      'tiny',
+    ]);
+  });
+
   it('shows at most 8 face tiles per group', async () => {
     vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
       groups: [group(...Array.from({ length: 12 }, (_, i) => `g${i}`))],

@@ -108,6 +108,7 @@ const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
     /^people$/,
     /^people\/[^/]+\/faces$/,
     /^people\/[^/]+\/match$/,
+    /^people\/[^/]+\/cover$/,
     /^faces\/[^/]+\/(assign|reject|unassign)$/,
   ],
   // Human review of one photo (rating, title, subjects, tags); renaming a person.

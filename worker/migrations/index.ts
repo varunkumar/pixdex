@@ -161,6 +161,8 @@ END;`,
   'ALTER TABLE photos ADD COLUMN faces_scanned_model TEXT;',
   // Mirrors 0010_faces_person_status_created_idx.sql.
   'CREATE INDEX IF NOT EXISTS idx_faces_person_status_created ON faces (person_id, assign_status, created_at);',
+  // Mirrors 0011_person_cover.sql.
+  'ALTER TABLE persons ADD COLUMN cover_face_id TEXT;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

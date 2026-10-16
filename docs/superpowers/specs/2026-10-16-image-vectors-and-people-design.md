@@ -135,7 +135,7 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
   not that person". Persisted so a correction survives re-matching.
 - Indexes on `faces(photo_id)`, `faces(person_id)`, `faces(assign_status)`.
 
-`0011_image_embeddings.sql` (phase B; `0010` is the faces reference index added in phase A)
+`0012_image_embeddings.sql` (phase B; `0010` is the faces reference index and `0011` the person cover column, both phase A)
 
 - `photos.image_embedding BLOB` (768 float32, 3 KB) and
   `photos.image_embedding_model TEXT` (e.g. `siglip2-b16-256`). Scoring only
@@ -282,7 +282,7 @@ faces return to `unassigned` and its rejections are dropped.
 A. **Faces and people** (migration 0009): face detection in the sidecar,
    `/ingest/faces`, `backfill-faces`, naming from a photo and from the People
    page, matching, corrections, "together".
-B. **Image vectors and find-similar** (migration 0011): `open_clip` added to the
+B. **Image vectors and find-similar** (migration 0012): `open_clip` added to the
    sidecar, embedding in the indexing pass, `backfill-vectors`,
    `/photos/:id/similar`, and the button.
 

@@ -256,6 +256,7 @@ describe('/api proxy POST, PATCH people, DELETE', () => {
     '/api/people',
     '/api/people/p1/faces',
     '/api/people/p1/match',
+    '/api/people/p1/cover',
     '/api/faces/f1/assign',
     '/api/faces/f1/reject',
     '/api/faces/f1/unassign',

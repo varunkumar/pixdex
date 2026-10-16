@@ -51,7 +51,7 @@ to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
 `no-cache`. The only writes the browser can make are `PUT albums/cover`,
 `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, and `POST` to `people`,
-`people/:id/faces`, `people/:id/match` and `faces/:id/assign|reject|unassign`
+`people/:id/faces`, `people/:id/match`, `people/:id/cover` and `faces/:id/assign|reject|unassign`
 (bodies JSON only, DELETE has none), all forwarded with the read token through
 one shared helper with per-method allowlists.
 
@@ -151,6 +151,12 @@ to review. Matching runs automatically at ingest (`autoMatch.ts`) and when a
 group or face is named, and can be re-run from the person's page
 (`POST people/:id/match`). Unnamed faces are grouped by centroid clustering
 (`clusterFaces`) for the People page.
+
+A person's cover (`persons.cover_face_id`, migration `0011_person_cover.sql`, additive) is the
+owner's pick via `POST people/:id/cover` while that face is still confirmed or auto-matched to the
+person. Otherwise `GET /people` picks their biggest confirmed face (box area, then detection score).
+There is no foreign key: validity is checked when read, so unassigning the face or deleting it just
+falls back to the default.
 
 "Newest" references means newest by scan time (`faces.created_at`), not by when
 the owner confirmed. `loadReferences` reads them through

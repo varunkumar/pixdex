@@ -190,6 +190,12 @@ describe('WorkerApiClient', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/people/n1/faces', jsonInit('POST', { faceIds: ['f1', 'f2'] }));
     });
 
+    it('setPersonCover POSTs the face id to the person', async () => {
+      fetchMock.mockResolvedValue(ok({ coverFaceId: 'f1' }));
+      await client.setPersonCover('n 1', 'f1');
+      expect(fetchMock).toHaveBeenCalledWith('/api/people/n%201/cover', jsonInit('POST', { faceId: 'f1' }));
+    });
+
     it('assignFace POSTs the person id and returns the face', async () => {
       fetchMock.mockResolvedValue(ok(face));
       await expect(client.assignFace('f1', 'n1')).resolves.toEqual(face);

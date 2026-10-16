@@ -11,43 +11,66 @@ import PhotoGrid from './PhotoGrid';
 
 const PAGE = 24;
 
-/** Shown under each photo: flags an automatic match and lets the owner reject it. */
-const AutoMatchFooter = ({
+/** Shown under each photo: the person's cover control, plus a flag on an automatic match with a way to reject it. */
+const PersonFaceFooter = ({
   photoId,
   personId,
+  coverFaceId,
   onChanged,
 }: {
   photoId: string;
   personId: string;
+  coverFaceId: string | undefined;
   onChanged: () => void;
 }) => {
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
   });
-  const auto = faces.find((f) => f.personId === personId && f.status === 'auto');
+  const mine = faces.filter((f) => f.personId === personId && f.status !== 'unassigned');
+  const auto = mine.find((f) => f.status === 'auto');
+  // Offer the largest of this person's faces in the photo as the cover candidate.
+  const candidate = [...mine].sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)[0];
+  const isCover = coverFaceId != null && mine.some((f) => f.id === coverFaceId);
   const reject = useMutation({
     mutationFn: (faceId: string) => workerApiClient.rejectFace(faceId, personId),
     onSuccess: onChanged,
   });
-  if (!auto) return null;
+  const setCover = useMutation({
+    mutationFn: (faceId: string) => workerApiClient.setPersonCover(personId, faceId),
+    onSuccess: onChanged,
+  });
+  if (!candidate) return null;
   return (
     <Group gap="xs">
-      <Badge size="sm" variant="light" color="grape">
-        Auto
-      </Badge>
-      <Button
-        size="xs"
-        variant="light"
-        color="red"
-        loading={reject.isPending}
-        onClick={() => reject.mutate(auto.id)}
-      >
-        Not {auto.personName}
-      </Button>
-      {reject.error && (
+      {auto && (
+        <>
+          <Badge size="sm" variant="light" color="grape">
+            Auto
+          </Badge>
+          <Button
+            size="xs"
+            variant="light"
+            color="red"
+            loading={reject.isPending}
+            onClick={() => reject.mutate(auto.id)}
+          >
+            Not {auto.personName}
+          </Button>
+        </>
+      )}
+      {isCover ? (
+        <Badge size="sm" variant="light" color="teal">
+          Cover
+        </Badge>
+      ) : (
+        <Button size="xs" variant="light" loading={setCover.isPending} onClick={() => setCover.mutate(candidate.id)}>
+          Set as cover
+        </Button>
+      )}
+      {(reject.error ?? setCover.error) && (
         <Text size="xs" c="red">
-          {errorMessage(reject.error, false)}
+          {errorMessage(reject.error ?? setCover.error, false)}
         </Text>
       )}
     </Group>
@@ -264,7 +287,9 @@ const PersonPage = () => {
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
-          footer={(photo) => <AutoMatchFooter photoId={photo.id} personId={id} onChanged={refresh} />}
+          footer={(photo) => (
+            <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
+          )}
         />
       )}
       {photos && photos.length >= limit && (

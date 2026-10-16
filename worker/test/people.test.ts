@@ -68,6 +68,72 @@ describe('people routes', () => {
     expect(JSON.stringify(body)).not.toContain('embedding');
   });
 
+  describe('cover', () => {
+    const resize = (id: string, w: number, h: number) =>
+      env.DB.prepare('UPDATE faces SET bbox_w = ?, bbox_h = ? WHERE id = ?').bind(w, h, id).run();
+    const coverOf = async (personId: string) => {
+      const body = (await (await call('GET', '/people')).json()) as any;
+      return body.people.find((p: any) => p.id === personId).cover?.id as string | undefined;
+    };
+
+    it('defaults to the biggest confirmed face, not the most certain one', async () => {
+      await addFace('small', 0.1, 0.99);
+      await addFace('big', 0.4, 0.7);
+      await resize('small', 0.05, 0.05);
+      await resize('big', 0.4, 0.4);
+      const a = await createPerson('Anu', ['small', 'big']);
+      expect(await coverOf(a.id)).toBe('big');
+    });
+
+    it('uses the owner pick over the default, including an auto-matched face', async () => {
+      await addFace('f1', 0.1);
+      await addFace('f2', 0.4);
+      await resize('f2', 0.4, 0.4);
+      const a = await createPerson('Anu', ['f1', 'f2']);
+      expect(await coverOf(a.id)).toBe('f2');
+
+      const res = await call('POST', `/people/${a.id}/cover`, { faceId: 'f1' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ coverFaceId: 'f1' });
+      expect(await coverOf(a.id)).toBe('f1');
+
+      await addFace('f3', 0.7, 0.9, a.id, 'auto', 0.6);
+      expect((await call('POST', `/people/${a.id}/cover`, { faceId: 'f3' })).status).toBe(200);
+      expect(await coverOf(a.id)).toBe('f3');
+    });
+
+    it('falls back to the default once the picked face is no longer the person\'s', async () => {
+      await addFace('f1', 0.1);
+      await addFace('f2', 0.4);
+      await resize('f2', 0.4, 0.4);
+      const a = await createPerson('Anu', ['f1', 'f2']);
+      await call('POST', `/people/${a.id}/cover`, { faceId: 'f1' });
+      await call('POST', '/faces/f1/unassign');
+      expect(await coverOf(a.id)).toBe('f2');
+      // Reassigning the same face makes the stored pick valid again.
+      await call('POST', '/faces/f1/assign', { personId: a.id });
+      expect(await coverOf(a.id)).toBe('f1');
+    });
+
+    it('refuses a face that belongs to someone else, an unassigned face or an unknown face', async () => {
+      await addFace('f1', 0.1);
+      await addFace('f2', 0.4);
+      await addFace('f3', 0.7);
+      const a = await createPerson('Anu', ['f1']);
+      await createPerson('Bo', ['f2']);
+      expect((await call('POST', `/people/${a.id}/cover`, { faceId: 'f2' })).status).toBe(404);
+      expect((await call('POST', `/people/${a.id}/cover`, { faceId: 'f3' })).status).toBe(404);
+      expect((await call('POST', `/people/${a.id}/cover`, { faceId: 'ghost' })).status).toBe(404);
+      expect((await call('POST', '/people/ghost/cover', { faceId: 'f1' })).status).toBe(404);
+      expect((await call('POST', `/people/${a.id}/cover`, {})).status).toBe(400);
+      expect(await coverOf(a.id)).toBe('f1');
+    });
+
+    it('requires the read token', async () => {
+      expect((await call('POST', '/people/x/cover', { faceId: 'f' }, {})).status).toBe(401);
+    });
+  });
+
   it('rejects duplicate names case-insensitively', async () => {
     await createPerson('Priya');
     expect((await call('POST', '/people', { name: 'priya' })).status).toBe(409);
