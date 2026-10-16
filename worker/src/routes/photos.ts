@@ -116,8 +116,9 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // when the album has one (newest first), else the most recently indexed.
   // latestDate and the default order use the newest real photo date, falling back
   // to ingest time only for albums with no dated photo at all.
-  // One pass over photos builds the per-album aggregates (agg); only the requested page's albums
-  // are then ranked for their cover, so the window sort covers 12 albums instead of the library.
+  // One pass over photos builds the per-album aggregates (agg). Each of the page's albums then finds
+  // its cover with index-ordered lookups that stop at the first entry (idx_photos_album_cover is
+  // ordered by album, date_time, last_indexed), instead of ranking every photo in those albums.
   const rows = await c.env.DB.prepare(
     `WITH agg AS (
        SELECT album, COUNT(*) AS cnt, MAX(date_time) AS newest_date, MAX(last_indexed) AS newest_indexed,
@@ -127,19 +128,21 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
        GROUP BY album
      ),
      page AS (SELECT album, cnt, newest_date, newest_indexed, avg_score FROM agg ORDER BY ${orderBy} LIMIT ? OFFSET ?),
-     ranked AS (
-       SELECT album AS r_album, id AS r_id, content_hash AS r_hash,
-              ROW_NUMBER() OVER (
-                PARTITION BY album
-                ORDER BY (id = (SELECT photo_id FROM album_covers WHERE album_covers.album = photos.album)) DESC,
-                         date_time IS NULL, date_time DESC, last_indexed DESC, id
-              ) AS rn
-       FROM photos
-       WHERE album IN (SELECT album FROM page)
+     cover AS (
+       SELECT page.*, COALESCE(
+         (SELECT c.photo_id FROM album_covers c
+           WHERE c.album = page.album AND EXISTS (SELECT 1 FROM photos p WHERE p.id = c.photo_id AND p.album = c.album)),
+         (SELECT id FROM photos WHERE album = page.album AND date_time IS NOT NULL
+           ORDER BY date_time DESC, last_indexed DESC LIMIT 1),
+         (SELECT id FROM photos WHERE album = page.album AND date_time IS NULL
+           ORDER BY last_indexed DESC LIMIT 1)
+       ) AS cover_id
+       FROM page
      )
-     SELECT album AS name, cnt AS photo_count, r_id AS cover_photo_id, r_hash AS content_hash,
+     SELECT album AS name, cnt AS photo_count, cover_id AS cover_photo_id,
+            (SELECT content_hash FROM photos WHERE id = cover.cover_id) AS content_hash,
             newest_date AS latest_date, avg_score, (SELECT COUNT(*) FROM agg) AS agg_total
-     FROM page JOIN ranked ON r_album = album AND rn = 1
+     FROM cover
      ORDER BY ${orderBy}`
   )
     .bind(...filterParams, limit, offset)
