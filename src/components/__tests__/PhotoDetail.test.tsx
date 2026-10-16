@@ -71,6 +71,7 @@ describe('PhotoDetail', () => {
     originals.getOriginalUrl.mockReturnValue('/api/originals/p1');
     originals.getOriginalImageUrl.mockReturnValue('/api/originals/p1');
     vi.mocked(workerApiClient.getPhoto).mockResolvedValue(tiger);
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([]);
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -99,6 +100,34 @@ describe('PhotoDetail', () => {
     expect(await screen.findByRole('heading', { name: 'Tiger on a rock' })).toBeInTheDocument();
     expect(screen.getByText('File name')).toBeInTheDocument();
     expect(screen.getByText('DSC_8707-2.jpg')).toBeInTheDocument();
+  });
+
+  it('draws face boxes on the main photo only after the toggle is switched on', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      {
+        id: 'f1',
+        photoId: 'p1',
+        thumbnailUrl: '/thumbnails/h1',
+        bbox: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
+        detScore: 0.99,
+        personId: null,
+        personName: null,
+        status: 'unassigned',
+        matchScore: null,
+      },
+    ]);
+    renderWithRouter(routes, ['/photos/p1']);
+
+    const toggle = await screen.findByRole('switch', { name: 'Show people on photo' });
+    expect(screen.queryByTestId('face-box')).toBeNull();
+    fireEvent.click(toggle);
+    expect(screen.getAllByTestId('face-box')).toHaveLength(1);
+  });
+
+  it('has no face toggle when the photo has no faces', async () => {
+    renderWithRouter(routes, ['/photos/p1']);
+    await screen.findByText('NIKON Z 8');
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('shows the watermark field only when it is known', async () => {

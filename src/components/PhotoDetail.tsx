@@ -10,18 +10,20 @@ import {
   SimpleGrid,
   Skeleton,
   Stack,
+  Switch,
   Text,
   Textarea,
   Title,
   UnstyledButton,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
+import FaceOverlay from './FaceOverlay';
 import Lightbox from './Lightbox';
 import PhotoFaces from './PhotoFaces';
 import PhotoReview from './PhotoReview';
@@ -69,6 +71,13 @@ const PhotoDetail = () => {
   } = useQuery({
     queryKey: ['photo', id],
     queryFn: () => workerApiClient.getPhoto(id),
+    enabled: id !== '',
+  });
+
+  const [showFaces, setShowFaces] = useState(false);
+  const { data: faces = [] } = useQuery({
+    queryKey: ['photo-faces', id],
+    queryFn: () => workerApiClient.getPhotoFaces(id),
     enabled: id !== '',
   });
 
@@ -142,20 +151,35 @@ const PhotoDetail = () => {
 
       <Card withBorder>
         <Group align="flex-start" wrap="wrap" gap="lg">
-          <UnstyledButton
-            onClick={openLightbox}
-            aria-label="Open full-size photo"
-            style={{ cursor: 'zoom-in', flex: '1 1 320px', maxWidth: '100%' }}
-          >
-            <Image
-              src={thumbnail}
-              alt={alt}
-              fit="contain"
-              radius="md"
-              mah={600}
-              bg="var(--mantine-color-default-hover)"
-            />
-          </UnstyledButton>
+          <Stack gap="xs" style={{ flex: '1 1 320px', maxWidth: '100%' }}>
+            <UnstyledButton
+              onClick={openLightbox}
+              aria-label="Open full-size photo"
+              style={{ cursor: 'zoom-in', maxWidth: '100%' }}
+            >
+              <Box pos="relative" display="inline-block" maw="100%" style={{ verticalAlign: 'top' }}>
+                <Image
+                  src={thumbnail}
+                  alt={alt}
+                  fit="contain"
+                  radius="md"
+                  mah={600}
+                  w="auto"
+                  maw="100%"
+                  bg="var(--mantine-color-default-hover)"
+                />
+                {showFaces && <FaceOverlay faces={faces} />}
+              </Box>
+            </UnstyledButton>
+            {faces.length > 0 && (
+              <Switch
+                size="xs"
+                label="Show people on photo"
+                checked={showFaces}
+                onChange={(e) => setShowFaces(e.currentTarget.checked)}
+              />
+            )}
+          </Stack>
 
           <Stack gap="md" style={{ flex: '1 1 280px' }}>
             <Title order={3}>{photo.shortCaption ?? photo.filename ?? 'Photo'}</Title>
@@ -228,7 +252,7 @@ const PhotoDetail = () => {
         </Stack>
       </Card>
 
-      <PhotoFaces photoId={photo.id} thumbnailUrl={thumbnail} />
+      <PhotoFaces photoId={photo.id} />
 
       {(photo.suggestedCaption || photo.suggestedHashtags.length > 0) && (
         <Card withBorder>

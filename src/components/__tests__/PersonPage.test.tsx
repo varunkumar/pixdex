@@ -9,7 +9,7 @@ import PersonPage from '../PersonPage';
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
     getPeople: vi.fn(),
-    search: vi.fn(),
+    searchPage: vi.fn(),
     getPhotoFaces: vi.fn(),
     matchPerson: vi.fn(),
     matchPersonAll: vi.fn(),
@@ -47,7 +47,7 @@ describe('PersonPage', () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: null },
     ]);
-    vi.mocked(workerApiClient.search).mockResolvedValue([makePhoto({ id: 'p1' })]);
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto({ id: 'p1' })], total: 1 });
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([]);
     vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
     vi.mocked(workerApiClient.matchPerson).mockResolvedValue({
@@ -62,7 +62,7 @@ describe('PersonPage', () => {
     show();
     expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument();
     await waitFor(() =>
-      expect(workerApiClient.search).toHaveBeenCalledWith(expect.objectContaining({ people: ['pe1'] }))
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ people: ['pe1'] }))
     );
     expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
   });
@@ -179,5 +179,18 @@ describe('PersonPage', () => {
     expect(workerApiClient.deletePerson).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
     await waitFor(() => expect(workerApiClient.deletePerson).toHaveBeenCalledWith('pe1'));
+  });
+
+  it('pages the person\'s photos instead of loading more', async () => {
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto({ id: 'p1' })], total: 30 });
+    show();
+    expect(await screen.findByText('Showing 1-24 of 30')).toBeInTheDocument();
+    expect(screen.queryByText('Show more photos')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(
+        expect.objectContaining({ people: ['pe1'], limit: 24, offset: 24 })
+      )
+    );
   });
 });

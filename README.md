@@ -88,15 +88,20 @@ photo). To scan photos that were indexed earlier:
 ```bash
 cd agent && npm run dev -- backfill-faces                       # every indexed local photo not yet scanned
 cd agent && npm run dev -- backfill-faces "/path/to/folder"     # only photos indexed from that folder
+cd agent && npm run dev -- backfill-faces --recrop              # also re-scan photos whose faces have no sharp crop yet
 ```
+
+Each face is uploaded with a sharp, padded 192 px square crop cut from the original (only the crop leaves your
+disk, stored in R2 and cached for a day), which is what the People grid, covers and group tiles show. Faces
+scanned before crops existed fall back to a cut of the 400 px thumbnail until `--recrop` re-scans their photos.
+Grouping and matching ignore faces under a detection score of 0.7 or a side under 5% of the photo.
 
 It follows the index, not the disk: the Worker lists the local photos still unscanned (with the path each was
 indexed from), so folders are never walked or hashed. Photos whose file is not on disk right now (a drive that is
 not mounted) are counted as "File missing" and picked up on a later run. It is resumable: a re-run only does what
-is left. Faces can be named or corrected on each
-photo's page. The People page (`/people`) lists named people (cover face and name) and groups of similar unnamed faces, both paged like the other lists (page size and page in the URL for people; the groups load from the Worker a page at a time as you move through them). Faces are drawn as rounded squares everywhere: name a
+is left. The "People" card on each photo's page names or corrects its faces, and a "Show people on photo" switch draws numbered boxes over the main photo. The People page (`/people`) lists named people (cover face and name) and groups of similar unnamed faces, both paged like the other lists (page size and page in the URL for people; the groups load from the Worker a page at a time as you move through them). Faces are drawn as rounded squares everywhere: name a
 group or add it to an existing person, and the app then looks for that person's other faces. A person's
-page (`/people/:id`) shows their photos, lets you rename or delete them, review suggested matches, and
+page (`/people/:id`) shows their photos (paged like the other lists), lets you rename or delete them, review suggested matches, and
 re-run matching. Once someone is named, new faces are matched to them automatically at ingest. Matching
 is also automatic when you name a group or face. Lower-confidence matches (score 0.4 to 0.5) land in a
 "Review suggestions" queue on the person's page. "Not X" on a face rejects that match permanently. "Remove name" (confirmed faces only) is soft: it just unassigns the face. `FACE_SIDECAR_URL` must be a loopback address (127.0.0.1, localhost or [::1]).

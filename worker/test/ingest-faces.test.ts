@@ -252,4 +252,59 @@ describe('face ingest routes', () => {
     const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces });
     expect(res.status).toBe(400);
   });
+
+  describe('face crops', () => {
+    const crop = btoa('fake-jpeg-bytes');
+    const readCrop = (faceId: string) =>
+      SELF.fetch(`https://example.com/faces/${faceId}/crop`, { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+
+    it('stores an uploaded crop and serves it', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(), crop }] });
+      const { results } = await faceRows();
+      expect(results[0].crop_key).toBe(`faces/${results[0].id}.jpg`);
+      const res = await readCrop(results[0].id);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('image/jpeg');
+      expect(await res.text()).toBe('fake-jpeg-bytes');
+    });
+
+    it('404s for a face with no crop', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [face()] });
+      const { results } = await faceRows();
+      expect(results[0].crop_key).toBeNull();
+      expect((await readCrop(results[0].id)).status).toBe(404);
+    });
+
+    it('removes the old crop when a re-scan replaces the face', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(), crop }] });
+      const oldKey = (await faceRows()).results[0].crop_key;
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(), crop }] });
+      expect(await env.THUMBNAILS.get(oldKey)).toBeNull();
+      expect((await faceRows()).results).toHaveLength(1);
+    });
+
+    it('gives a confirmed face the new crop without touching its name', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [face()] });
+      const id = (await faceRows()).results[0].id;
+      await env.DB.prepare("INSERT INTO persons (id, name, created_at) VALUES ('pe1', 'Asha', 'now')").run();
+      await env.DB.prepare("UPDATE faces SET person_id = 'pe1', assign_status = 'confirmed' WHERE id = ?").bind(id).run();
+
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(), crop }] });
+      const { results } = await faceRows();
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ id, person_id: 'pe1', assign_status: 'confirmed', crop_key: `faces/${id}.jpg` });
+      await env.DB.prepare('DELETE FROM persons').run();
+    });
+
+    it('lists scanned photos with a crop-less face when missingCrops is set', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [face()] });
+      const list = async (extra = {}) =>
+        ((await (await post('/unscanned', { model: MODEL, ...extra })).json()) as any).items.map((i: any) => i.contentHash);
+      await env.DB.prepare("UPDATE photos SET source = 'local', path = '/p/a.jpg'").run();
+      expect(await list()).toEqual([]);
+      expect(await list({ missingCrops: true })).toEqual([photo.contentHash]);
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(), crop }] });
+      expect(await list({ missingCrops: true })).toEqual([]);
+    });
+  });
 });

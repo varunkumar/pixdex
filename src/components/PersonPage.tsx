@@ -1,15 +1,17 @@
 import { Anchor, Badge, Button, Group, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useListParams } from '../hooks/useListParams';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
+import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
 
-const PAGE = 24;
+const PHOTO_PAGE_SIZES = [12, 24, 48] as const;
 
 /** Shown under each photo: the person's cover control, plus a flag on an automatic match with a way to reject it. */
 const PersonFaceFooter = ({
@@ -81,7 +83,7 @@ const PersonPage = () => {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [limit, setLimit] = useState(PAGE);
+  const { page, size, offset, update } = useListParams(24, PHOTO_PAGE_SIZES);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -95,11 +97,22 @@ const PersonPage = () => {
   });
   const person = people.find((p) => p.id === id);
 
-  const { data: photos, error } = useQuery({
-    queryKey: ['person-photos', id, limit],
-    queryFn: () => workerApiClient.search({ people: [id], limit }),
+  const {
+    data: photoPage,
+    error,
+    isPlaceholderData,
+  } = useQuery({
+    queryKey: ['person-photos', id, size, offset],
+    queryFn: () => workerApiClient.searchPage({ people: [id], limit: size, offset }),
     enabled: id !== '',
+    placeholderData: keepPreviousData,
   });
+  const photos = photoPage?.results;
+  const onPage = useCallback(
+    (p: number, replace?: boolean) => update({ page: p }, { replace }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page, size]
+  );
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['photo-faces'] });
@@ -295,10 +308,16 @@ const PersonPage = () => {
           )}
         />
       )}
-      {photos && photos.length >= limit && (
-        <Button variant="light" w="fit-content" onClick={() => setLimit((l) => l + PAGE)}>
-          Show more photos
-        </Button>
+      {photoPage && (
+        <ListPagination
+          page={page}
+          size={size}
+          total={photoPage.total}
+          settled={!isPlaceholderData}
+          sizes={PHOTO_PAGE_SIZES}
+          onPage={onPage}
+          onSize={(s) => update({ size: s }, { resetPage: true })}
+        />
       )}
     </Stack>
   );

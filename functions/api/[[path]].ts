@@ -30,6 +30,7 @@ const ALLOWED_PATHS = [
   /^people$/,
   /^people\/groups$/,
   /^photos\/[^/]+\/faces$/,
+  /^faces\/[^/]+\/crop$/,
 ];
 
 // Full-resolution local-disk originals, served by the agent through a tunnel.
@@ -46,6 +47,7 @@ const FORWARDED_HEADERS = ['accept', 'if-none-match', 'if-modified-since', 'rang
 // never cached.
 function cacheControlFor(path: string, ok: boolean): string {
   if (!ok) return 'no-store';
+  if (path.endsWith('/crop')) return 'private, max-age=86400';
   if (path.startsWith('thumbnails/')) return 'private, max-age=31536000, immutable';
   if (ORIGINALS_PATH.test(path)) return 'private, max-age=3600';
   return 'private, no-cache';

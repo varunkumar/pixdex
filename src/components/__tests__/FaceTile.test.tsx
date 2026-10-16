@@ -28,4 +28,11 @@ describe('FaceTile', () => {
     expect(tile.style.width).toBe('80px');
     expect(tile.style.height).toBe('80px');
   });
+
+  it('shows the sharp crop, filling the tile, when the face has one', () => {
+    renderWithProviders(<FaceTile face={{ ...face, cropUrl: '/faces/f1/crop' }} size={80} />);
+    const tile = screen.getByTestId('face-tile');
+    expect(tile.style.backgroundImage).toContain('/faces/f1/crop');
+    expect(tile.style.backgroundSize).toBe('cover');
+  });
 });

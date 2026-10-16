@@ -92,6 +92,8 @@ export interface SerializedFace {
   id: string;
   photoId: string;
   thumbnailUrl: string;
+  /** Sharp crop of the face cut from the original; absent for faces scanned before crops existed. */
+  cropUrl?: string | null;
   bbox: { x: number; y: number; w: number; h: number };
   detScore: number;
   personId: string | null;

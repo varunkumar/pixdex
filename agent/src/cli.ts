@@ -57,6 +57,9 @@ export async function runCli(argv: string[]): Promise<number> {
   }
 
   if (command === 'backfill-faces') {
+    const faceArgs = argv.slice(1);
+    const missingCrops = faceArgs.includes('--recrop');
+    const faceFolder = faceArgs.find((a) => !a.startsWith('--'));
     try {
       const config = loadConfig();
       const sidecar = createFaceSidecar(config);
@@ -68,7 +71,8 @@ export async function runCli(argv: string[]): Promise<number> {
         cloudflareClient: new CloudflareClient(config),
         sidecar,
         // A trailing separator keeps "Processed" from also matching "Processed 2".
-        pathPrefix: folder ? path.join(path.resolve(folder), path.sep) : undefined,
+        pathPrefix: faceFolder ? path.join(path.resolve(faceFolder), path.sep) : undefined,
+        missingCrops,
         onProgress: (message) => console.log(message),
       });
       console.log(
@@ -101,7 +105,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }
