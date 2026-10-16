@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
-import { buildSearchText, effectiveText, ingestPhotoSchema, type PhotoRow } from '../db/photos';
+import { buildPrimaryText, buildSearchText, effectiveText, ingestPhotoSchema, type PhotoRow } from '../db/photos';
 
 export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
   let body: unknown;
@@ -23,6 +23,12 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
     .first<PhotoRow>();
   const eff = edits ? effectiveText({ ...edits, subjects: JSON.stringify(p.subjects), tags: JSON.stringify(p.tags), short_caption: p.shortCaption ?? null }) : null;
   const searchText = buildSearchText(eff ? { ...p, subjects: eff.subjects, tags: eff.tags, shortCaption: eff.shortCaption ?? undefined } : p);
+  const searchPrimary = buildPrimaryText({
+    subjects: eff?.subjects ?? p.subjects,
+    tags: eff?.tags ?? p.tags,
+    colors: p.colors,
+    shortCaption: (eff ? eff.shortCaption : p.shortCaption) ?? undefined,
+  });
   const now = new Date().toISOString();
 
   try {
@@ -31,11 +37,11 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          id, content_hash, source, path, drive_file_id, filename, date_time,
          width, height, format, file_size, subjects, colors, patterns, tags,
          season, environment, album, description, suggested_caption,
-         suggested_hashtags, model_provider, model_name, search_text, last_indexed,
+         suggested_hashtags, model_provider, model_name, search_text, search_primary, last_indexed,
          camera_make, camera_model, lens_model, focal_length, f_number,
          exposure_time, iso, latitude, longitude, has_watermark,
          aesthetic_score, short_caption
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          content_hash = excluded.content_hash,
          source = excluded.source,
@@ -60,6 +66,7 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          model_provider = excluded.model_provider,
          model_name = excluded.model_name,
          search_text = excluded.search_text,
+         search_primary = excluded.search_primary,
          last_indexed = excluded.last_indexed,
          camera_make = excluded.camera_make,
          camera_model = excluded.camera_model,
@@ -80,7 +87,7 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
         JSON.stringify(p.subjects), JSON.stringify(p.colors), JSON.stringify(p.patterns), JSON.stringify(p.tags),
         p.season ?? null, p.environment ?? null, p.album ?? null, p.description,
         p.suggestedCaption, JSON.stringify(p.suggestedHashtags), p.modelProvider, p.modelName,
-        searchText, now,
+        searchText, searchPrimary, now,
         p.cameraMake ?? null, p.cameraModel ?? null, p.lensModel ?? null,
         p.focalLength ?? null, p.fNumber ?? null, p.exposureTime ?? null,
         p.iso ?? null, p.latitude ?? null, p.longitude ?? null,

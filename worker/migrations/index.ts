@@ -104,6 +104,29 @@ export const EXIF_MIGRATION_STATEMENTS = [
   'ALTER TABLE photos ADD COLUMN user_caption TEXT;',
   'ALTER TABLE photos ADD COLUMN user_subjects TEXT;',
   'ALTER TABLE photos ADD COLUMN user_tags TEXT;',
+  // Mirrors 0008_search_weighting.sql (schema part; the test DB starts empty so no backfill).
+  'DROP TRIGGER IF EXISTS photos_ai;',
+  'DROP TRIGGER IF EXISTS photos_ad;',
+  'DROP TRIGGER IF EXISTS photos_au;',
+  'DROP TABLE IF EXISTS photos_fts;',
+  "ALTER TABLE photos ADD COLUMN search_primary TEXT NOT NULL DEFAULT '';",
+  `CREATE VIRTUAL TABLE photos_fts USING fts5(
+  search_text,
+  search_primary,
+  content = 'photos',
+  content_rowid = 'rowid',
+  tokenize = 'porter unicode61'
+);`,
+  `CREATE TRIGGER photos_ai AFTER INSERT ON photos BEGIN
+  INSERT INTO photos_fts(rowid, search_text, search_primary) VALUES (new.rowid, new.search_text, new.search_primary);
+END;`,
+  `CREATE TRIGGER photos_ad AFTER DELETE ON photos BEGIN
+  INSERT INTO photos_fts(photos_fts, rowid, search_text, search_primary) VALUES ('delete', old.rowid, old.search_text, old.search_primary);
+END;`,
+  `CREATE TRIGGER photos_au AFTER UPDATE ON photos BEGIN
+  INSERT INTO photos_fts(photos_fts, rowid, search_text, search_primary) VALUES ('delete', old.rowid, old.search_text, old.search_primary);
+  INSERT INTO photos_fts(rowid, search_text, search_primary) VALUES (new.rowid, new.search_text, new.search_primary);
+END;`,
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];
@@ -116,4 +139,12 @@ export const SEARCH_TEXT_BACKFILL_SQL = `UPDATE photos SET search_text = trim(
   || ' ' || COALESCE((SELECT group_concat(value, ' ') FROM json_each(photos.patterns)), '')
   || ' ' || COALESCE(season, '')
   || ' ' || COALESCE(camera_make, '')
+)`;
+
+// Mirrors the UPDATE in 0008_search_weighting.sql, exported so a test can run it on seeded rows.
+export const SEARCH_PRIMARY_BACKFILL_SQL = `UPDATE photos SET search_primary = trim(
+  COALESCE((SELECT group_concat(value, ' ') FROM json_each(COALESCE(user_subjects, subjects))), '')
+  || ' ' || COALESCE((SELECT group_concat(value, ' ') FROM json_each(COALESCE(user_tags, tags))), '')
+  || ' ' || COALESCE((SELECT group_concat(value, ' ') FROM json_each(colors)), '')
+  || ' ' || COALESCE(user_caption, short_caption, '')
 )`;

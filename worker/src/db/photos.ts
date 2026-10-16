@@ -75,6 +75,7 @@ export interface PhotoRow {
   model_provider?: string;
   model_name?: string;
   search_text?: string;
+  search_primary?: string;
   last_indexed?: string;
   instagram_suggested?: string | null;
   camera_make?: string | null;
@@ -166,6 +167,29 @@ export function effectiveText(row: PhotoRow) {
     tags: (parseOverrideArray(row.user_tags) ?? parseJsonArray(row.tags)) as string[],
     shortCaption: row.user_caption ?? row.short_caption ?? null,
   };
+}
+
+/** search_primary: the high-signal words that get extra weight in ranking. */
+export function buildPrimaryText(input: {
+  subjects: string[];
+  tags: string[];
+  colors?: string[];
+  shortCaption?: string;
+}): string {
+  return [...input.subjects, ...input.tags, ...(input.colors ?? []), input.shortCaption ?? '']
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** search_primary rebuilt from a full row, honouring overrides. */
+export function primaryTextForRow(row: PhotoRow): string {
+  const eff = effectiveText(row);
+  return buildPrimaryText({
+    subjects: eff.subjects,
+    tags: eff.tags,
+    colors: parseJsonArray(row.colors) as string[],
+    shortCaption: eff.shortCaption ?? undefined,
+  });
 }
 
 /** search_text rebuilt from a full row, honouring overrides. */

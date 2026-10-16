@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SEARCH_TEXT_BACKFILL_SQL } from '../migrations/index';
+import { SEARCH_PRIMARY_BACKFILL_SQL, SEARCH_TEXT_BACKFILL_SQL } from '../migrations/index';
 
 async function seed(
   id: string,
@@ -8,11 +8,11 @@ async function seed(
   subjects: string[],
   searchText: string,
   album: string,
-  extra: { colors?: string[]; patterns?: string[]; season?: string } = {}
+  extra: { colors?: string[]; patterns?: string[]; season?: string; primary?: string } = {}
 ) {
   await env.DB.prepare(
-    `INSERT INTO photos (id, content_hash, source, filename, subjects, album, colors, patterns, season, model_provider, model_name, search_text, last_indexed)
-     VALUES (?,?,'local',?,?,?,?,?,?, 'ollama', 'qwen3.5:27b-mlx', ?, '2026-09-18T00:00:00.000Z')`
+    `INSERT INTO photos (id, content_hash, source, filename, subjects, album, colors, patterns, season, model_provider, model_name, search_text, search_primary, last_indexed)
+     VALUES (?,?,'local',?,?,?,?,?,?, 'ollama', 'qwen3.5:27b-mlx', ?, ?, '2026-09-18T00:00:00.000Z')`
   )
     .bind(
       id,
@@ -23,7 +23,8 @@ async function seed(
       JSON.stringify(extra.colors ?? []),
       JSON.stringify(extra.patterns ?? []),
       extra.season ?? null,
-      searchText
+      searchText,
+      extra.primary ?? ''
     )
     .run();
 }
@@ -138,6 +139,100 @@ describe('GET /search', () => {
       expect(await ids('monsoon')).toEqual(['photo-old']);
     });
   });
+  describe('category and action queries', () => {
+    beforeEach(async () => {
+      await env.DB.prepare('DELETE FROM photos').run();
+      await seed('leopard-tree', 'h1', ['leopard'], 'leopard sleeping on a tree in forest', 'Kanha');
+      await seed('tiger-branch', 'h2', ['tiger'], 'tiger resting on a branch', 'Kanha');
+      await seed('tiger-grass', 'h3', ['tiger'], 'tiger walking in grass', 'Kanha');
+      await seed('crow-tree', 'h4', ['crow'], 'crow sitting on a tree', 'Kanha');
+    });
+
+    it('finds big cats sleeping on a tree across species and wording', async () => {
+      expect((await ids('big cats sleeping on a tree')).sort()).toEqual(['leopard-tree', 'tiger-branch']);
+    });
+
+    it('drops the action when nothing matches it, keeping the nouns', async () => {
+      expect((await ids('big cat flying on a tree')).sort()).toEqual(['leopard-tree', 'tiger-branch']);
+    });
+  });
+
+  describe('field weighting', () => {
+    beforeEach(async () => {
+      await env.DB.prepare('DELETE FROM photos').run();
+    });
+
+    it('ranks a photo whose subjects match above one that only mentions the word in its description', async () => {
+      await seed('mention', 'hm', ['elephant'], 'tiger tiger tiger far away behind an elephant', 'Kanha', { primary: 'elephant' });
+      await seed('subject', 'hs', ['tiger'], 'tiger resting in the forest at dusk', 'Kanha', { primary: 'tiger' });
+      expect(await ids('tiger')).toEqual(['subject', 'mention']);
+    });
+
+    it('fills search_primary from subjects, tags, colors and caption, honouring owner overrides', async () => {
+      await env.DB.prepare(
+        `INSERT INTO photos (id, content_hash, source, filename, subjects, tags, colors, short_caption, user_subjects, model_provider, model_name, search_text, last_indexed)
+         VALUES ('p1','hp1','local','p1.jpg','["crow"]','["perched"]','["black"]','Dusk call','["raven"]','ollama','m','x','2026-09-18T00:00:00.000Z')`
+      ).run();
+      await env.DB.prepare(SEARCH_PRIMARY_BACKFILL_SQL).run();
+      const row = await env.DB.prepare('SELECT search_primary FROM photos WHERE id = ?').bind('p1').first<{ search_primary: string }>();
+      const words = row!.search_primary.split(/\s+/);
+      expect(words).toEqual(expect.arrayContaining(['raven', 'perched', 'black', 'Dusk', 'call']));
+      expect(words).not.toContain('crow');
+    });
+  });
+
+  describe('vocabulary from the real library', () => {
+    beforeEach(async () => {
+      await env.DB.prepare('DELETE FROM photos').run();
+      await seed('pardus', 'v1', ['panthera pardus'], 'panthera pardus resting', 'Bandipur');
+      await seed('peafowl', 'v2', ['indian peafowl'], 'indian peafowl displaying', 'Bandipur');
+      await seed('child', 'v3', ['child'], 'child with balloons', 'School');
+      await seed('grad', 'v4', ['graduate'], 'graduate in a gown', 'School');
+      await seed('chital', 'v5', ['chital'], 'chital grazing', 'Bandipur');
+      await seed('langur', 'v6', ['gray langur'], 'gray langur on a branch', 'Bandipur');
+    });
+
+    it('maps common names to the scientific names the model also writes', async () => {
+      expect(await ids('leopard')).toEqual(['pardus']);
+    });
+
+    it('maps peacock to peafowl', async () => {
+      expect(await ids('peacock')).toEqual(['peafowl']);
+    });
+
+    it('maps kids to child, and graduation to graduate', async () => {
+      expect(await ids('kids')).toEqual(['child']);
+      expect(await ids('graduation')).toEqual(['grad']);
+    });
+
+    it('expands birds, deer and monkeys to species', async () => {
+      expect(await ids('birds')).toEqual(['peafowl']);
+      expect(await ids('deer')).toEqual(['chital']);
+      expect(await ids('monkeys')).toEqual(['langur']);
+    });
+  });
+
+  describe('colour queries', () => {
+    beforeEach(async () => {
+      await env.DB.prepare('DELETE FROM photos').run();
+      await seed('tiger-green', 'c1', ['tiger'], 'tiger green forest', 'Kanha', { colors: ['olive green', 'orange'] });
+      await seed('tiger-red', 'c2', ['tiger'], 'tiger red dusk', 'Kanha', { colors: ['crimson', 'black'] });
+      await seed('zebra', 'c3', ['zebra'], 'zebra black white', 'Kanha', { colors: ['black', 'white'] });
+    });
+
+    it('ignores "prominent" and "shade" and matches colour synonyms', async () => {
+      expect(await ids('prominent red shade')).toEqual(['tiger-red']);
+    });
+
+    it('treats "background" as filler: tiger on a green background', async () => {
+      expect(await ids('tiger on a green background')).toEqual(['tiger-green']);
+    });
+
+    it('finds black and white', async () => {
+      expect(await ids('black and white')).toContain('zebra');
+    });
+  });
+
   it('sort=date orders by photo date newest first, nulls last', async () => {
     await env.DB.prepare('DELETE FROM photos').run();
     const insert = (id: string, date: string | null) =>

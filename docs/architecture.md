@@ -68,8 +68,25 @@ photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
-- `routes/search.ts` + `search/synonyms.ts` - FTS5 search with wildlife synonym
-  expansion (`search/wildlife-synonyms.json`).
+- `routes/search.ts` + `search/synonyms.ts` - FTS5 search with query-time
+  synonym expansion; no re-index is needed to change it. Category words
+  (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
+  word families (`search/word-families.json`: "hard" nouns/places, "soft"
+  actions) are matched on word boundaries with plurals folded. Search tries
+  tiers until one finds photos (the dictionaries were built from the library's own
+  vocabulary: `SELECT lower(value), COUNT(*) FROM photos, json_each(photos.subjects)
+  GROUP BY 1 ORDER BY 2 DESC`, same for `tags`; the model already writes
+  category and scientific names, so entries map between those variants): all groups (AND), then without soft action
+  groups, then any group (OR, bm25-ranked). All terms are quoted. Colour
+  words have families too (red/crimson/scarlet), and filler such as
+  "shade" or "background" is ignored, so "tiger on a green background" is
+  tiger AND green (colours are a photo-level list, not per region).
+- Field weighting: `photos_fts` indexes two columns, `search_text` (everything)
+  and `search_primary` (subjects, tags, colours, caption, with owner overrides).
+  `bm25(photos_fts, 1.0, 4.0)` ranks primary matches higher. `search_primary`
+  is written by ingest, `PATCH photos/:id` and `ingest/rating` via
+  `primaryTextForRow` / `buildPrimaryText`; migration `0008` backfills it in
+  SQL (no model calls).
 - `db/photos.ts` - D1 queries. Schema changes are numbered SQL files in
   `migrations/` and registered in `migrations/index.ts`.
 - Tests run in the Workers runtime via `@cloudflare/vitest-pool-workers`.
