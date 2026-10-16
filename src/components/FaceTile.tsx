@@ -18,7 +18,7 @@ const FaceTile = ({ face, size = 72, index }: { face: SerializedFace; size?: num
         style={{
           width: size,
           height: size,
-          borderRadius: 'var(--mantine-radius-sm)',
+          borderRadius: '50%',
           backgroundColor: 'var(--mantine-color-default-hover)',
           backgroundImage: src ? `url("${src}")` : undefined,
           backgroundRepeat: 'no-repeat',

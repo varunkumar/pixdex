@@ -8,12 +8,14 @@ interface Props {
   sizes: readonly number[];
   /** False while `total` still belongs to a previous query (placeholder data). */
   settled?: boolean;
+  /** More items exist beyond `total` (not loaded yet): shows "N+" and keeps a next page available. */
+  hasMore?: boolean;
   onPage: (page: number, replace?: boolean) => void;
   onSize: (size: number) => void;
 }
 
-const ListPagination = ({ page, size, total, sizes, settled = true, onPage, onSize }: Props) => {
-  const pages = Math.max(1, Math.ceil(total / size));
+const ListPagination = ({ page, size, total, sizes, settled = true, hasMore = false, onPage, onSize }: Props) => {
+  const pages = Math.max(1, Math.ceil((total + (hasMore ? 1 : 0)) / size));
 
   // A stale or hand-edited URL can point past the last page: land on the last one.
   useEffect(() => {
@@ -25,11 +27,12 @@ const ListPagination = ({ page, size, total, sizes, settled = true, onPage, onSi
   const current = Math.min(page, pages);
   const from = (current - 1) * size + 1;
   const to = Math.min(current * size, total);
+  const range = from > total ? 'Loading...' : `Showing ${from}-${to} of ${total}${hasMore ? '+' : ''}`;
 
   return (
     <Group justify="space-between" gap="md">
       <Text size="sm" c="dimmed">
-        Showing {from}-{to} of {total}
+        {range}
       </Text>
       <Pagination total={pages} value={current} onChange={(p) => onPage(p)} />
       <Select

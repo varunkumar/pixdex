@@ -168,13 +168,16 @@ const PersonPage = () => {
       {person && (
         <>
           <Group justify="space-between" align="center">
-            <Stack gap={0}>
-              <Title order={2}>{person.name}</Title>
-              <Text size="sm" c="dimmed">
-                {person.photoCount} {person.photoCount === 1 ? 'photo' : 'photos'}, {person.faceCount}{' '}
-                {person.faceCount === 1 ? 'face' : 'faces'}
-              </Text>
-            </Stack>
+            <Group gap="md" wrap="nowrap">
+              {person.cover && <FaceTile face={{ ...person.cover, personName: null }} size={72} />}
+              <Stack gap={0}>
+                <Title order={2}>{person.name}</Title>
+                <Text size="sm" c="dimmed">
+                  {person.photoCount} {person.photoCount === 1 ? 'photo' : 'photos'}, {person.faceCount}{' '}
+                  {person.faceCount === 1 ? 'face' : 'faces'}
+                </Text>
+              </Stack>
+            </Group>
             <Group gap="xs">
               <Button
                 variant="light"

@@ -1,12 +1,14 @@
 import { Button, Card, Group, Select, SimpleGrid, Stack, Text, TextInput, Title, UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useListParams } from '../hooks/useListParams';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { FaceGroup, PersonSummary } from '../types/api';
 import FaceTile from './FaceTile';
+import ListPagination from './ListPagination';
 
 const GROUP_TILES = 8;
 
@@ -133,7 +135,13 @@ const GroupCard = ({
   );
 };
 
+const PEOPLE_PAGE_SIZES = [12, 24, 48] as const;
+const GROUP_PAGE_SIZES = [6, 12, 24] as const;
+
 const People = () => {
+  const { page, size, offset, update } = useListParams(12, PEOPLE_PAGE_SIZES);
+  const [groupPage, setGroupPage] = useState(1);
+  const [groupSize, setGroupSize] = useState<number>(GROUP_PAGE_SIZES[0]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const { data: people = [], isSuccess: peopleLoaded } = useQuery({
     queryKey: ['people'],
@@ -150,47 +158,74 @@ const People = () => {
     (g) => g.faces.length > 0 && !hidden.has(g.faces[0].id)
   );
   const loaded = peopleLoaded && groupsQuery.isSuccess;
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = groupsQuery;
+
+  // Groups come from the Worker a cursor page at a time: load more until the current page is full.
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage && groups.length < groupPage * groupSize) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, groups.length, groupPage, groupSize]);
+
+  const onPeoplePage = useCallback(
+    (p: number, replace?: boolean) => update({ page: p }, { replace }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page, size]
+  );
+  const onGroupPage = useCallback((p: number) => setGroupPage(p), []);
+
+  const shownPeople = people.slice(offset, offset + size);
+  const groupOffset = (groupPage - 1) * groupSize;
+  const shownGroups = groups.slice(groupOffset, groupOffset + groupSize);
 
   return (
     <Stack gap="lg">
       <Title order={2}>People</Title>
-      {(groupsQuery.error != null) && <Text c="red">Could not load unnamed faces</Text>}
+      {groupsQuery.error != null && <Text c="red">Could not load unnamed faces</Text>}
 
       {loaded && people.length === 0 && groups.length === 0 && (
         <Text c="dimmed">No faces yet. Index some photos and faces will appear here to name.</Text>
       )}
 
       {people.length > 0 && (
-        <SimpleGrid cols={{ base: 2, sm: 4, lg: 6 }} spacing="md">
-          {people.map((p) => (
-            <UnstyledButton key={p.id} component={Link} to={`/people/${p.id}`}>
-              <Card withBorder padding="sm">
-                <Stack gap={4} align="center">
-                  {p.cover ? (
-                    <FaceTile face={{ ...p.cover, personName: null }} size={96} />
-                  ) : (
-                    <Text c="dimmed" h={96} lh="96px">
-                      No cover
+        <>
+          <SimpleGrid cols={{ base: 2, sm: 4, lg: 6 }} spacing="md">
+            {shownPeople.map((p) => (
+              <UnstyledButton key={p.id} component={Link} to={`/people/${p.id}`}>
+                <Card withBorder padding="sm">
+                  <Stack gap={6} align="center">
+                    {p.cover ? (
+                      <FaceTile face={{ ...p.cover, personName: null }} size={112} />
+                    ) : (
+                      <Text c="dimmed" size="sm" h={112} lh="112px">
+                        No cover
+                      </Text>
+                    )}
+                    <Text fw={600} ta="center" lineClamp={1}>
+                      {p.name}
                     </Text>
-                  )}
-                  <Text fw={600} ta="center">
-                    {p.name}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {plural(p.photoCount, 'photo')}, {plural(p.faceCount, 'face')}
-                  </Text>
-                </Stack>
-              </Card>
-            </UnstyledButton>
-          ))}
-        </SimpleGrid>
+                    <Text size="xs" c="dimmed">
+                      {plural(p.photoCount, 'photo')}, {plural(p.faceCount, 'face')}
+                    </Text>
+                  </Stack>
+                </Card>
+              </UnstyledButton>
+            ))}
+          </SimpleGrid>
+          <ListPagination
+            page={page}
+            size={size}
+            total={people.length}
+            sizes={PEOPLE_PAGE_SIZES}
+            onPage={onPeoplePage}
+            onSize={(s) => update({ size: s }, { resetPage: true })}
+          />
+        </>
       )}
 
       {groups.length > 0 && (
         <Stack gap="md">
           <Title order={3}>Unnamed groups</Title>
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-            {groups.map((g) => (
+            {shownGroups.map((g) => (
               <GroupCard
                 key={g.faces[0].id}
                 group={g}
@@ -199,18 +234,19 @@ const People = () => {
               />
             ))}
           </SimpleGrid>
+          <ListPagination
+            page={groupPage}
+            size={groupSize}
+            total={groups.length}
+            hasMore={hasNextPage}
+            sizes={GROUP_PAGE_SIZES}
+            onPage={onGroupPage}
+            onSize={(s) => {
+              setGroupSize(s);
+              setGroupPage(1);
+            }}
+          />
         </Stack>
-      )}
-
-      {groupsQuery.hasNextPage && (
-        <Button
-          variant="light"
-          w="fit-content"
-          loading={groupsQuery.isFetchingNextPage}
-          onClick={() => void groupsQuery.fetchNextPage()}
-        >
-          Load more
-        </Button>
       )}
     </Stack>
   );

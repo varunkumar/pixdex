@@ -67,6 +67,15 @@ describe('PersonPage', () => {
     expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
   });
 
+  it('shows the cover face beside the name', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: face('c9', { personId: 'pe1' }) },
+    ]);
+    show();
+    const heading = await screen.findByRole('heading', { name: 'Asha' });
+    expect(heading.closest('div')?.parentElement?.querySelector('[data-testid="face-tile"]')).not.toBeNull();
+  });
+
   it('marks auto-matched faces with an Auto badge and a Not action', async () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
       face('a1', { personId: 'pe1', personName: 'Asha', status: 'auto' }),

@@ -141,15 +141,47 @@ describe('People', () => {
     await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function)));
   });
 
-  it('Load more follows the cursor', async () => {
+  it('loads further group pages only as needed and pages them like other lists', async () => {
+    const many = (prefix: string, n: number) =>
+      Array.from({ length: n }, (_, i) => group(`${prefix}${i}a`, `${prefix}${i}b`));
     vi.mocked(workerApiClient.getFaceGroups)
-      .mockResolvedValueOnce({ groups: [group('f1')], scanned: 150, nextCursor: 'cur1' })
-      .mockResolvedValueOnce({ groups: [group('f9')], scanned: 20, nextCursor: null });
+      .mockResolvedValueOnce({ groups: many('x', 6), scanned: 100, nextCursor: 'cur1' })
+      .mockResolvedValueOnce({ groups: many('y', 3), scanned: 20, nextCursor: null });
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    expect(await screen.findAllByRole('button', { name: 'Name this group' })).toHaveLength(6);
+    expect(screen.getByText('Showing 1-6 of 6+')).toBeInTheDocument();
+    expect(workerApiClient.getFaceGroups).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
     await waitFor(() => expect(workerApiClient.getFaceGroups).toHaveBeenLastCalledWith('cur1'));
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Name this group' })).toHaveLength(2));
-    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Name this group' })).toHaveLength(3));
+    expect(screen.getByText('Showing 7-9 of 9')).toBeInTheDocument();
+  });
+
+  it('pages the named people', async () => {
+    const lots = Array.from({ length: 14 }, (_, i) => ({
+      id: `p${i}`,
+      name: `Person ${String(i).padStart(2, '0')}`,
+      faceCount: 14 - i,
+      photoCount: 1,
+      cover: face(`c${i}`),
+    }));
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue(lots);
+    vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({ groups: [], scanned: 0, nextCursor: null });
+    show();
+    expect(await screen.findByRole('link', { name: /Person 00/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Person 13/ })).toBeNull();
+    expect(screen.getByText('Showing 1-12 of 14')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    expect(await screen.findByRole('link', { name: /Person 13/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Person 00/ })).toBeNull();
+  });
+
+  it('shows each person with their cover face and name', async () => {
+    show();
+    const link = await screen.findByRole('link', { name: /Asha/ });
+    expect(within(link).getByTestId('face-tile')).toBeInTheDocument();
+    expect(within(link).getByText('Asha')).toBeInTheDocument();
   });
 
   it('shows an empty state when no faces exist yet', async () => {
