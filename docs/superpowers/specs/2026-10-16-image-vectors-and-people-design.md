@@ -12,8 +12,9 @@ things text cannot do well:
 
 Both need vectors computed from pixels. This design adds them with no vector
 store, no Workers AI and no paid Cloudflare feature: the local agent computes
-vectors and pushes them to D1, and the Worker scores them on demand, on a
-bounded candidate set.
+vectors and pushes them to D1, and the Worker scores them. Face matching is
+automatic (when photos are ingested and when a person is named); find-similar is
+on demand, on a bounded candidate set.
 
 ## Goals
 
@@ -104,7 +105,11 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
   from date, location or album. This is a design rule from day one.
 - Build order: **faces and people first (phase A), find-similar second
   (phase B).**
-- Face matching is on demand, with a way to correct wrong matches.
+- Face matching is **automatic**: new photos are matched against the people you
+  have named as they are ingested, and naming a face matches the existing
+  unnamed faces. Only find-similar is on demand. There is a way to correct
+  wrong matches. (Updated 2026-10-16: an earlier draft had matching behind a
+  button.)
 - Naming works both ways: click a face in a photo, and a People page of groups.
 - Face recognition is a primary feature alongside find-similar.
 
@@ -118,8 +123,9 @@ captioner already running. 50 Bandipur photos plus 8 from "Aganvee 3 Photoshoot"
 - `faces(id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding BLOB,
   embedding_model, person_id NULL, assign_status, match_score, created_at)`.
   `assign_status` is one of `unassigned`, `auto`, `confirmed`. Only the owner
-  (browser writes) sets `confirmed`. The agent only inserts rows with
-  `unassigned` and never writes `person_id` or `assign_status`.
+  (browser writes) sets `confirmed`. The agent only sends boxes and vectors and
+  never sends `person_id` or `assign_status`; the Worker itself sets `auto` when
+  its own matching clears the threshold, and never touches `confirmed`.
 - `face_rejections(face_id, person_id)` primary key on the pair: "this face is
   not that person". Persisted so a correction survives re-matching.
 - Indexes on `faces(photo_id)`, `faces(person_id)`, `faces(assign_status)`.
@@ -198,12 +204,26 @@ face ids, bboxes, person ids and scores only.
 - `POST /faces/:id/reject {person_id}`: records the rejection, returns the face
   to `unassigned`, so it is never auto-matched to that person again.
 - `POST /faces/:id/unassign`: back to `unassigned`.
-- `GET /people/:id/matches`: on demand. Scores a page of up to 1,000
-  `unassigned` and `auto` faces against the person's confirmed faces (best
-  similarity over the references) and returns candidates at or above the
-  suggestion floor, excluding rejected pairs. Pass `apply=true` and faces at or
-  above the auto threshold are saved as `auto`; faces between the floor and the
-  auto threshold are returned as suggestions only, not saved.
+- `POST /people/:id/match` body `{ apply?, cursor? }`: scores one page of up to
+  1,000 `unassigned` faces (and `auto` faces of other people, taken only on a
+  higher score) against the person's reference faces and returns those at or
+  above the suggestion floor, excluding rejected pairs. With `apply: true`
+  faces at or above the auto threshold are saved as `auto`; faces between the
+  floor and the auto threshold are returned as suggestions only, never saved.
+  The frontend calls it with `apply: true` page by page after you name a face,
+  until `nextCursor` is null. Without `apply` it powers the suggestion review
+  queue.
+
+**Automatic matching.** Two triggers, both applying only the auto band:
+1. **At ingest.** When `/ingest/faces` stores a photo's new faces, the Worker
+   matches them against every person's reference faces and saves matches as
+   `auto`. Photos with no faces load nothing. Rejected pairs are respected.
+2. **When a face is named.** After create, assign or bulk assign, the frontend
+   runs the apply-matching loop for that person over the unnamed faces already
+   in the library.
+References per person are capped at the **30 newest confirmed faces**
+(`REFERENCES_PER_PERSON`) so an ingest reads a bounded number of rows (people
+x 30), which keeps the free D1 read quota safe during a backfill.
 - `GET /people/:id/photos` and a `people=a,b` filter on `/search` and album
   photos for "together" (a join on `faces`, all listed persons present in the
   photo; `auto` and `confirmed` both count, confirmed ranked first).
@@ -225,9 +245,9 @@ faces return to `unassigned` and its rejections are dropped.
   opens the results grid, with a note on how many photos were compared when
   capped (phase B). It has no filter controls.
 - **People page:** groups of unnamed faces (face tiles), name a whole group
-  at once, plus named persons with counts. Per person: their photos, a "Find
-  more photos of {name}" action (runs `matches`), and a review queue for
-  suggestions with Yes / Not them.
+  at once, plus named persons with counts. Per person: their photos, a "Review
+  suggestions" action (runs `match` without `apply`) that shows the "Is this
+  {name}?" band with Yes / Not them. Matching itself is automatic.
 - **Search and album pages:** a people filter (multi-select) for "together".
 - Mobile-friendly: tiles and panels reflow, no hover-only actions.
 
@@ -262,7 +282,8 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
   overwritten" for both ingest and matching, together-queries, schema tests for
   both migrations.
 - Agent: a fake sidecar, backfill resume, and that the agent never writes
-  `person_id` or `assign_status`.
+  `person_id` or `assign_status`, and that the Worker's ingest-time match saves
+  only `auto` matches and never changes a `confirmed` face.
 - Frontend: Find similar results (capped note), face naming and rejection
   flows, People page.
 - Matching quality is judged on the owner's real photos (reference faces across
@@ -286,8 +307,11 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
 - Auto-attach threshold 0.5 and suggestion floor 0.4 (from the spike, a
   starting point).
 - Only `confirmed` faces are references.
-- Suggestions between the floor and the auto threshold are computed on demand
-  and not stored. Only `auto` and `confirmed` rows persist.
+- Suggestions between the floor and the auto threshold are computed when you
+  open the review queue and not stored. Only `auto` and `confirmed` rows
+  persist.
+- Automatic matching uses at most the 30 newest confirmed faces per person as
+  references (revisit if children's older ages stop matching).
 - The matching and People groups routes are paged at 1,000 faces per request,
   mirroring the similar-photos cap.
 - Two migrations and two PRs, faces and people first (the owner's order).
