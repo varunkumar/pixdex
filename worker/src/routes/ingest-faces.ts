@@ -27,8 +27,6 @@ const faceSchema = z.object({
   bbox: z.object({ x: unit, y: unit, w: unit, h: unit }),
   detScore: z.number().min(0).max(1),
   embedding: z.string().min(1),
-  // Base64 JPEG of a padded square crop (about 192 px, well under 100 KB); optional for older agents.
-  crop: z.string().max(150_000).optional(),
 });
 
 // z.object strips unknown keys, so person_id / assign_status in a body are dropped.
@@ -49,17 +47,7 @@ function iou(a: Box, b: Box): number {
 }
 
 const cropKey = (faceId: string) => `faces/${faceId}.jpg`;
-
-function cropFromBase64(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
-
-async function putCrop(c: Context<{ Bindings: Env }>, faceId: string, bytes: Uint8Array) {
-  await c.env.THUMBNAILS.put(cropKey(faceId), bytes, { httpMetadata: { contentType: 'image/jpeg' } });
-}
+const MAX_CROP_BYTES = 200 * 1024;
 
 async function readJson(c: Context<{ Bindings: Env }>): Promise<unknown | undefined> {
   try {
@@ -143,12 +131,10 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   const { contentHash, model, faces } = parsed.data;
 
   let blobs: Uint8Array[];
-  let crops: (Uint8Array | undefined)[];
   try {
     blobs = faces.map((f) => embeddingToBytes(embeddingFromBase64(f.embedding)));
-    crops = faces.map((f) => (f.crop ? cropFromBase64(f.crop) : undefined));
   } catch {
-    return c.json({ error: 'Invalid embedding or crop' }, 400);
+    return c.json({ error: 'Invalid embedding' }, 400);
   }
 
   const photo = await c.env.DB.prepare('SELECT id FROM photos WHERE content_hash = ?')
@@ -191,39 +177,33 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   let stored = 0;
   let kept = 0;
   const newIds: string[] = [];
-  const cropWrites: Promise<unknown>[] = [];
+  // Id of the face each posted face ended up as (a kept confirmed face's own id), so the agent can attach crops.
+  const faceIds: (string | null)[] = [];
   const carried: { f: string; p: string }[] = [];
   faces.forEach((f, i) => {
     const duplicate = confirmedBoxes.find((b) => iou(b, f.bbox) >= 0.5);
     if (duplicate) {
       kept++;
-      // The owner's face keeps its data; a fresh sharp crop still replaces its old image.
-      const crop = crops[i];
-      if (crop) {
-        cropWrites.push(putCrop(c, duplicate.id, crop));
-        statements.push(
-          c.env.DB.prepare('UPDATE faces SET crop_key = ? WHERE id = ?').bind(cropKey(duplicate.id), duplicate.id)
-        );
-      }
+      faceIds.push(duplicate.id);
       return;
     }
     stored++;
     const faceId = crypto.randomUUID();
     newIds.push(faceId);
+    faceIds.push(faceId);
     for (const r of rejections.results) {
       if (iou({ x: r.bbox_x, y: r.bbox_y, w: r.bbox_w, h: r.bbox_h }, f.bbox) >= 0.5) {
         carried.push({ f: faceId, p: r.person_id });
       }
     }
-    if (crops[i]) cropWrites.push(putCrop(c, faceId, crops[i] as Uint8Array));
     statements.push(
       c.env.DB.prepare(
         `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score,
-           embedding, embedding_model, person_id, assign_status, match_score, created_at, crop_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'unassigned', NULL, ?, ?)`
+           embedding, embedding_model, person_id, assign_status, match_score, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'unassigned', NULL, ?)`
       ).bind(
         faceId, photo.id, f.bbox.x, f.bbox.y, f.bbox.w, f.bbox.h, f.detScore,
-        blobs[i].buffer, model, now, crops[i] ? cropKey(faceId) : null
+        blobs[i].buffer, model, now
       )
     );
   });
@@ -238,12 +218,34 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   statements.push(
     c.env.DB.prepare('UPDATE photos SET faces_scanned_model = ? WHERE id = ?').bind(model, photo.id)
   );
-  // Images first: a failed batch then leaves only unreferenced objects behind.
-  await Promise.all(cropWrites);
   await c.env.DB.batch(statements);
   if (stale.results.length > 0) await c.env.THUMBNAILS.delete(stale.results.map((r) => r.crop_key));
 
   const { matched, skipped } = await autoMatchFaces(c.env.DB, newIds);
 
-  return c.json({ stored, kept, matched, skipped });
+  return c.json({ stored, kept, matched, skipped, faceIds });
+}
+
+/**
+ * Stores the sharp crop of one face as raw JPEG bytes. A separate small request per face keeps
+ * each Worker invocation far inside the free tier's CPU limit (no JSON or base64 to decode).
+ */
+export async function putFaceCropRoute(c: Context<{ Bindings: Env }>) {
+  const faceId = c.req.param('faceId') ?? '';
+  const declared = Number(c.req.header('content-length') ?? 0);
+  if (declared > MAX_CROP_BYTES) return c.text('Payload Too Large', 413);
+  const bytes = await c.req.arrayBuffer();
+  if (bytes.byteLength === 0) return c.text('Bad Request', 400);
+  if (bytes.byteLength > MAX_CROP_BYTES) return c.text('Payload Too Large', 413);
+
+  const face = await c.env.DB.prepare('SELECT crop_key FROM faces WHERE id = ?')
+    .bind(faceId)
+    .first<{ crop_key: string | null }>();
+  if (!face) return c.text('Not Found', 404);
+
+  await c.env.THUMBNAILS.put(cropKey(faceId), bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+  if (face.crop_key !== cropKey(faceId)) {
+    await c.env.DB.prepare('UPDATE faces SET crop_key = ? WHERE id = ?').bind(cropKey(faceId), faceId).run();
+  }
+  return c.text('created', 201);
 }

@@ -117,27 +117,29 @@ export async function scanFaces(
     .sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)
     .slice(0, MAX_FACES_PER_PHOTO);
 
-  // Only the kept faces get a crop, all cut from one upright copy of the original.
+  const faces: FacePayload[] = largest.map(({ upright: _upright, ...face }) => face);
+
+  // An empty list is posted on purpose: it marks the photo as scanned with this model.
+  const stored = await cloudflareClient.ingestFaces(contentHash, detection.model, faces);
+  if (!stored) throw new PhotoNotIndexedError(contentHash);
+
+  // Crops go up one small raw request per face (the Worker's free CPU budget cannot take them in
+  // the JSON body), all cut from one upright copy of the original. A failed crop never fails the
+  // scan: the face keeps its thumbnail cut and `backfill-faces --recrop` retries it later.
   let source: Buffer | undefined;
-  const faces: FacePayload[] = [];
-  for (const { upright, ...face } of largest) {
-    let crop: string | undefined;
+  for (const [i, { upright }] of largest.entries()) {
+    const faceId = stored.faceIds[i];
+    if (!faceId) continue;
     try {
       source ??= await sharp(filePath)
         .rotate()
         .resize({ width: CROP_SOURCE_SIDE, height: CROP_SOURCE_SIDE, fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 95 })
         .toBuffer();
-      crop = (await cropFace(source, upright)).toString('base64');
+      await cloudflareClient.putFaceCrop(faceId, await cropFace(source, upright));
     } catch {
-      // A face without a crop still works: the UI falls back to the thumbnail.
+      // see above
     }
-    faces.push(crop ? { ...face, crop } : face);
-  }
-
-  // An empty list is posted on purpose: it marks the photo as scanned with this model.
-  if (!(await cloudflareClient.ingestFaces(contentHash, detection.model, faces))) {
-    throw new PhotoNotIndexedError(contentHash);
   }
   return faces.length;
 }

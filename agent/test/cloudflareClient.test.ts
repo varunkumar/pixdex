@@ -80,23 +80,39 @@ describe('CloudflareClient', () => {
     await expect(client.facesUnscanned('buffalo_l')).rejects.toThrow('500');
   });
 
-  it('ingestFaces posts the faces and returns true', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ stored: 1, kept: 0, matched: 0 }), { status: 200 }));
+  it('ingestFaces posts the faces and returns the stored face ids', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ stored: 1, kept: 0, matched: 0, faceIds: ['f1'] }), { status: 200 }));
     const faces = [{ bbox: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, detScore: 0.9, embedding: 'e' }];
-    await expect(client.ingestFaces('h1', 'buffalo_l', faces)).resolves.toBe(true);
+    await expect(client.ingestFaces('h1', 'buffalo_l', faces)).resolves.toEqual({ faceIds: ['f1'] });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('https://example.workers.dev/ingest/faces');
     expect(JSON.parse(init.body)).toEqual({ contentHash: 'h1', model: 'buffalo_l', faces });
   });
 
-  it('ingestFaces returns false on 404', async () => {
+  it('ingestFaces returns null on 404', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 404 }));
-    await expect(client.ingestFaces('h1', 'buffalo_l', [])).resolves.toBe(false);
+    await expect(client.ingestFaces('h1', 'buffalo_l', [])).resolves.toBeNull();
   });
 
   it('ingestFaces throws on other errors', async () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 500 }));
     await expect(client.ingestFaces('h1', 'buffalo_l', [])).rejects.toThrow(/500/);
+  });
+
+  it('putFaceCrop sends the JPEG bytes raw to the face crop route', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('created', { status: 201 }));
+    const jpeg = Buffer.from([1, 2, 3]);
+    await client.putFaceCrop('f1', jpeg);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/faces/f1/crop');
+    expect(init.method).toBe('PUT');
+    expect(init.headers['Content-Type']).toBe('image/jpeg');
+    expect(init.body).toBe(jpeg);
+  });
+
+  it('putFaceCrop throws on a failed response', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+    await expect(client.putFaceCrop('f1', Buffer.from([1]))).rejects.toThrow(/503/);
   });
 
   it('ingestPhoto posts the payload and resolves on 201', async () => {
