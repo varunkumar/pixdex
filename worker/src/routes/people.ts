@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../types';
-import { FACE_SELECT, serializeFace, type FaceRow } from '../db/faces';
+import { FACE_SELECT, confirmFaceStmt, missingFaceIds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
 
@@ -9,8 +9,6 @@ const nameField = z.string().trim().min(1).max(60);
 const createBody = z.object({ name: nameField, faceIds: z.array(z.string().min(1)).max(200).optional() });
 const renameBody = z.object({ name: nameField });
 const bulkBody = z.object({ faceIds: z.array(z.string().min(1)).min(1).max(200) });
-
-export type FaceWithJoins = FaceRow & { person_name: string | null; content_hash: string };
 
 const isUniqueViolation = (err: unknown) => err instanceof Error && /UNIQUE|constraint/i.test(`${err.message} ${(err as any).cause?.message ?? ''}`);
 
@@ -21,12 +19,6 @@ async function nameTaken(c: Ctx, name: string, exceptId?: string): Promise<boole
     .first();
   return row !== null;
 }
-
-/** Statement that confirms one face for a person (clears the match score). */
-export const confirmFaceStmt = (c: Ctx, faceId: string, personId: string) =>
-  c.env.DB.prepare(
-    "UPDATE faces SET person_id = ?, assign_status = 'confirmed', match_score = NULL WHERE id = ?"
-  ).bind(personId, faceId);
 
 export async function listPeopleRoute(c: Ctx) {
   const [people, covers] = await Promise.all([
@@ -62,11 +54,14 @@ export async function createPersonRoute(c: Ctx) {
   const { name, faceIds } = parsed.data;
   if (await nameTaken(c, name)) return c.json({ error: 'A person with this name already exists' }, 409);
 
+  const missing = await missingFaceIds(c.env.DB, [...new Set(faceIds ?? [])]);
+  if (missing.length) return c.json({ error: `Unknown face ids: ${missing.join(', ')}` }, 404);
+
   const id = crypto.randomUUID();
   try {
     await c.env.DB.batch([
       c.env.DB.prepare('INSERT INTO persons (id, name, created_at) VALUES (?, ?, ?)').bind(id, name, new Date().toISOString()),
-      ...(faceIds ?? []).map((fid) => confirmFaceStmt(c, fid, id)),
+      ...(faceIds ?? []).map((fid) => confirmFaceStmt(c.env.DB, fid, id)),
     ]);
   } catch (err) {
     if (isUniqueViolation(err)) return c.json({ error: 'A person with this name already exists' }, 409);
@@ -114,8 +109,10 @@ export async function assignFacesRoute(c: Ctx) {
   const existing = await c.env.DB.prepare('SELECT id FROM persons WHERE id = ?').bind(id).first();
   if (!existing) return c.text('Not Found', 404);
   const faceIds = [...new Set(parsed.data.faceIds)];
+  const missing = await missingFaceIds(c.env.DB, faceIds);
+  if (missing.length) return c.json({ error: `Unknown face ids: ${missing.join(', ')}` }, 404);
   await c.env.DB.batch([
-    ...faceIds.map((fid) => confirmFaceStmt(c, fid, id)),
+    ...faceIds.map((fid) => confirmFaceStmt(c.env.DB, fid, id)),
     ...faceIds.map((fid) => c.env.DB.prepare('DELETE FROM face_rejections WHERE face_id = ? AND person_id = ?').bind(fid, id)),
   ]);
   return c.json({ personId: id, assigned: faceIds.length });

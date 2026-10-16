@@ -110,6 +110,30 @@ describe('people routes', () => {
     expect((await call('POST', `/people/${a.id}/faces`, { faceIds: Array(201).fill('x') })).status).toBe(400);
   });
 
+  it('bulk assign and create-with-faces 404 on unknown face ids and write nothing', async () => {
+    await addFace('f1', 0.1);
+    const a = await createPerson('Anu');
+    const res = await call('POST', `/people/${a.id}/faces`, { faceIds: ['f1', 'ghost'] });
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as any).error).toContain('ghost');
+    expect(await faceRow('f1')).toMatchObject({ person_id: null, assign_status: 'unassigned' });
+
+    const created = await call('POST', '/people', { name: 'Bo', faceIds: ['f1', 'ghost2'] });
+    expect(created.status).toBe(404);
+    expect(((await created.json()) as any).error).toContain('ghost2');
+    const bo = await env.DB.prepare("SELECT id FROM persons WHERE name = 'Bo'").first();
+    expect(bo).toBeNull();
+    expect(await faceRow('f1')).toMatchObject({ person_id: null });
+  });
+
+  it('assign overrides another person\'s confirmed face', async () => {
+    const a = await createPerson('Anu');
+    const b = await createPerson('Bo');
+    await addFace('f1', 0.1, 0.9, a.id, 'confirmed');
+    const res = await call('POST', '/faces/f1/assign', { personId: b.id });
+    expect(await res.json()).toMatchObject({ personId: b.id, status: 'confirmed' });
+  });
+
   it('assign overrides an auto assignment and clears the rejection', async () => {
     const a = await createPerson('Anu');
     const b = await createPerson('Bo');
