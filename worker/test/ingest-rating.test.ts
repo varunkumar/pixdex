@@ -45,6 +45,13 @@ describe('POST /ingest/rating', () => {
     expect(JSON.stringify(await res.json())).toContain('p1');
   });
 
+  it('keeps search_primary in step with the caption', async () => {
+    await post({ contentHash: 'h1', shortCaption: 'Sleepy marmot' });
+    await post({ contentHash: 'h1', shortCaption: 'Alert marmot' });
+    const row = await env.DB.prepare('SELECT search_primary FROM photos WHERE id = ?').bind('p1').first<{ search_primary: string }>();
+    expect(row?.search_primary).toBe('Alert marmot');
+  });
+
   it('replaces the previous caption in search_text when re-rated', async () => {
     await post({ contentHash: 'h1', shortCaption: 'Woman and child by' });
     await post({ contentHash: 'h1', shortCaption: 'Woman and child' });

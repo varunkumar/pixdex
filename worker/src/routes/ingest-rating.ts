@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../types';
+import { primaryTextForRow, type PhotoRow } from '../db/photos';
 
 const requestSchema = z
   .object({
@@ -36,37 +37,39 @@ export async function ingestRatingRoute(c: Context<{ Bindings: Env }>) {
   // Re-rating replaces the caption: drop the previous one from search_text when
   // it was appended at the end (as this route does) so stale words do not pile up.
   let searchText: string | null = null;
+  let searchPrimary: string | null = null;
   if (caption) {
-    const current = await c.env.DB.prepare(
-      'SELECT search_text, short_caption, user_caption FROM photos WHERE content_hash = ?'
-    )
+    const current = await c.env.DB.prepare('SELECT * FROM photos WHERE content_hash = ?')
       .bind(p.contentHash)
-      .first<{ search_text: string; short_caption: string | null; user_caption: string | null }>();
+      .first<PhotoRow>();
     if (!current) return c.json({ error: 'Unknown content hash' }, 404);
     // The owner's title is what is indexed; the model's new one is stored but not searchable.
-    if (current.user_caption) return finish(c, p, null);
-    let text = current.search_text;
+    if (current.user_caption) return finish(c, p, null, null);
+    let text = current.search_text ?? '';
     const old = current.short_caption;
     if (old && old !== caption && text.endsWith(` ${old}`)) text = text.slice(0, -(old.length + 1));
     searchText = text.includes(caption) ? text : `${text} ${caption}`;
+    searchPrimary = primaryTextForRow({ ...current, short_caption: caption });
   }
 
-  return finish(c, p, searchText);
+  return finish(c, p, searchText, searchPrimary);
 }
 
 async function finish(
   c: Context<{ Bindings: Env }>,
   p: z.infer<typeof requestSchema>,
-  searchText: string | null
+  searchText: string | null,
+  searchPrimary: string | null
 ) {
   const result = await c.env.DB.prepare(
     `UPDATE photos SET
        aesthetic_score = COALESCE(?, aesthetic_score),
        short_caption = COALESCE(?, short_caption),
-       search_text = COALESCE(?, search_text)
+       search_text = COALESCE(?, search_text),
+       search_primary = COALESCE(?, search_primary)
      WHERE content_hash = ?`
   )
-    .bind(p.score ?? null, p.shortCaption ?? null, searchText, p.contentHash)
+    .bind(p.score ?? null, p.shortCaption ?? null, searchText, searchPrimary, p.contentHash)
     .run();
 
   if (!result.meta.changes) {

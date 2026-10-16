@@ -76,6 +76,15 @@ describe('PATCH /photos/:id', () => {
     expect(await searchIds('crested')).toEqual([ID]);
   });
 
+  it('keeps search_primary on the effective subjects, tags and caption', async () => {
+    await ingest();
+    let row = await env.DB.prepare('SELECT search_primary FROM photos WHERE id = ?').bind(ID).first<{ search_primary: string }>();
+    expect(row?.search_primary).toBe('serpent eagle raptor Serpent eagle');
+    await patch({ subjects: ['crested hawk-eagle'] });
+    row = await env.DB.prepare('SELECT search_primary FROM photos WHERE id = ?').bind(ID).first<{ search_primary: string }>();
+    expect(row?.search_primary).toBe('crested hawk-eagle raptor Serpent eagle');
+  });
+
   it('leaves omitted fields alone and clears an override with null', async () => {
     await patch({ userRating: 4, tags: ['hawk-eagle'] });
     await patch({ userRating: null });
@@ -101,6 +110,13 @@ describe('PATCH /photos/:id', () => {
       body: JSON.stringify({ userRating: 3 }),
     });
     expect(res.status).toBe(401);
+  });
+
+  it('keeps search_primary on the owner edits after the agent re-indexes', async () => {
+    await patch({ caption: 'Crested hawk-eagle', subjects: ['crested hawk-eagle'], tags: ['hunting'] });
+    await ingest();
+    const row = await env.DB.prepare('SELECT search_primary FROM photos WHERE id = ?').bind(ID).first<{ search_primary: string }>();
+    expect(row?.search_primary).toBe('crested hawk-eagle hunting Crested hawk-eagle');
   });
 
   it('survives the agent re-indexing the photo', async () => {

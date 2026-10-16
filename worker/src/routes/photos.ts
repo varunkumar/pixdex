@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../types';
-import { serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
+import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
 import { COMBINED_SCORE_SQL } from '../db/rating';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
@@ -64,11 +64,12 @@ export async function patchPhotoRoute(c: Context<{ Bindings: Env }>) {
 
   // search_text is rebuilt so a corrected species stops matching the model's wrong one.
   row.search_text = searchTextForRow(row);
+  row.search_primary = primaryTextForRow(row);
   await c.env.DB.prepare(
-    `UPDATE photos SET user_rating = ?, user_caption = ?, user_subjects = ?, user_tags = ?, search_text = ?
+    `UPDATE photos SET user_rating = ?, user_caption = ?, user_subjects = ?, user_tags = ?, search_text = ?, search_primary = ?
      WHERE id = ?`
   )
-    .bind(row.user_rating ?? null, row.user_caption ?? null, row.user_subjects ?? null, row.user_tags ?? null, row.search_text, id)
+    .bind(row.user_rating ?? null, row.user_caption ?? null, row.user_subjects ?? null, row.user_tags ?? null, row.search_text, row.search_primary, id)
     .run();
   return c.json(serializePhoto(row));
 }

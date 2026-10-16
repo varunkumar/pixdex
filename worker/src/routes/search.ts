@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
-import { expandQuery, wildlifeSynonyms } from '../search/synonyms';
+import { expandQueryTiers } from '../search/synonyms';
 import { COMBINED_SCORE_SQL } from '../db/rating';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
@@ -36,7 +36,7 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
           : sort === 'rating'
             ? `ORDER BY ${COMBINED_SCORE_SQL} IS NULL, ${COMBINED_SCORE_SQL} DESC, photos.date_time DESC, photos.id`
             : match
-              ? `ORDER BY bm25(photos_fts), last_indexed DESC`
+              ? `ORDER BY bm25(photos_fts, 1.0, 4.0), last_indexed DESC`
               : `ORDER BY last_indexed DESC`;
     const [rows, count] = await Promise.all([
       c.env.DB.prepare(`SELECT photos.* ${from} ${order} LIMIT ? OFFSET ?`)
@@ -51,12 +51,13 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
 
   if (!q) return c.json(await run(null));
 
-  // Every meaningful word must match; if that finds nothing, fall back to any word.
-  const strict = expandQuery(q, wildlifeSynonyms, 'all');
-  let response = await run(strict);
-  if (response.total === 0) {
-    const loose = expandQuery(q, wildlifeSynonyms, 'any');
-    if (loose !== strict) response = await run(loose);
+  // Try the strictest reading first and loosen only while nothing matches
+  // (see expandQueryTiers); the last tier is any word, ranked by bm25.
+  const tiers = expandQueryTiers(q);
+  let response = await run(tiers[0] ?? null);
+  for (const tier of tiers.slice(1)) {
+    if (response.total > 0) break;
+    response = await run(tier);
   }
   return c.json(response);
 }

@@ -1,7 +1,18 @@
 {
-  "big cat": ["leopard", "tiger", "lion", "jaguar", "cheetah", "panther"],
-  "raptor": ["eagle", "hawk", "osprey", "falcon", "kite"],
-  "waterfowl": ["duck", "goose", "heron", "egret", "stork"],
-  "primate": ["monkey", "langur", "macaque", "gibbon"],
-  "reptile": ["monitor lizard", "crocodile", "snake", "turtle"]
+  "big cat": ["leopard", "tiger", "lion", "jaguar", "cheetah", "panther", "snow leopard", "cougar", "puma"],
+  "feline": ["leopard", "tiger", "lion", "jaguar", "cheetah", "panther", "snow leopard", "cougar", "puma", "cat", "lynx", "caracal", "jungle cat", "leopard cat", "fishing cat", "wildcat", "serval", "ocelot"],
+  "raptor": ["eagle", "hawk", "osprey", "falcon", "kite", "harrier", "buzzard", "vulture", "kestrel", "shikra", "goshawk", "hobby", "serpent eagle", "fish eagle", "owl"],
+  "bird of prey": ["eagle", "hawk", "osprey", "falcon", "kite", "harrier", "buzzard", "vulture", "kestrel", "shikra", "goshawk", "hobby", "serpent eagle", "fish eagle", "owl"],
+  "waterfowl": ["duck", "goose", "heron", "egret", "stork", "teal", "pintail", "swan", "pelican", "ibis", "spoonbill", "cormorant", "crane"],
+  "water bird": ["duck", "goose", "heron", "egret", "stork", "teal", "pintail", "swan", "pelican", "ibis", "spoonbill", "cormorant", "crane"],
+  "wader": ["sandpiper", "plover", "lapwing", "stilt", "godwit", "snipe", "heron", "egret", "stork", "ibis", "spoonbill"],
+  "songbird": ["bulbul", "sunbird", "oriole", "robin", "flycatcher", "warbler", "babbler", "drongo", "myna", "sparrow", "finch", "lark", "thrush", "shama"],
+  "primate": ["monkey", "langur", "macaque", "gibbon", "ape", "lemur"],
+  "reptile": ["monitor lizard", "crocodile", "snake", "turtle", "lizard", "tortoise", "gharial", "python", "cobra"],
+  "deer": ["chital", "spotted deer", "sambar", "barasingha", "swamp deer", "muntjac", "barking deer", "hog deer", "elk", "stag", "fawn", "doe"],
+  "antelope": ["blackbuck", "nilgai", "chinkara", "gazelle", "four-horned antelope"],
+  "canid": ["wolf", "dhole", "jackal", "fox", "wild dog", "coyote"],
+  "wild dog": ["dhole", "wolf", "jackal", "fox", "coyote"],
+  "bovid": ["gaur", "bison", "buffalo", "wild buffalo", "nilgai", "blackbuck"],
+  "insect": ["butterfly", "moth", "dragonfly", "bee", "beetle", "grasshopper", "mantis", "wasp"]
 }
