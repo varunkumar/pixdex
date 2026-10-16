@@ -49,7 +49,7 @@ describe('People', () => {
       scanned: 2,
       nextCursor: null,
     });
-    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0 });
+    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
   });
 
   it('lists named people and unnamed groups', async () => {

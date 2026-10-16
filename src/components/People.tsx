@@ -4,7 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { errorMessage, SEARCH_KEYS } from '../services/peopleKeys';
+import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { FaceGroup, PersonSummary } from '../types/api';
 import FaceTile from './FaceTile';
 
@@ -30,12 +30,11 @@ const GroupCard = ({
   const finish = async (personId: string) => {
     try {
       setProgress('Looking for more matches...');
-      const { matched } = await workerApiClient.matchPersonAll(personId, (scanned, found) =>
+      const { matched, truncated } = await workerApiClient.matchPersonAll(personId, (scanned, found) =>
         setProgress(`Looking for more matches... scanned ${scanned}, matched ${found}`)
       );
-      if (matched > 0) {
-        notifications.show({ message: `Matched ${plural(matched, 'more photo')}` });
-      }
+      if (matched > 0) notifications.show({ message: matchedMessage(matched) });
+      if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
     } catch {
       // The group is already named; a failed follow-up search must not read as a naming failure.
       notifications.show({ message: 'Named, but could not look for more matches' });

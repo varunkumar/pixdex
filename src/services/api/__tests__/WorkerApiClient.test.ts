@@ -221,17 +221,17 @@ describe('WorkerApiClient', () => {
         .mockResolvedValueOnce(ok({ auto: [face, face], suggestions: [], scanned: 300, nextCursor: '300' }))
         .mockResolvedValueOnce(ok({ auto: [face], suggestions: [], scanned: 40, nextCursor: null }));
       const onPage = vi.fn();
-      await expect(client.matchPersonAll('n1', onPage)).resolves.toEqual({ matched: 3 });
+      await expect(client.matchPersonAll('n1', onPage)).resolves.toEqual({ matched: 3, truncated: false });
       expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ apply: true });
       expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ apply: true, cursor: '300' });
       expect(onPage).toHaveBeenNthCalledWith(1, 300, 2);
       expect(onPage).toHaveBeenNthCalledWith(2, 340, 3);
     });
 
-    it('matchPersonAll stops after 100 pages', async () => {
+    it('matchPersonAll stops after 150 pages and reports it was truncated', async () => {
       fetchMock.mockResolvedValue(ok({ auto: [], suggestions: [], scanned: 1, nextCursor: 'more' }));
-      await client.matchPersonAll('n1');
-      expect(fetchMock).toHaveBeenCalledTimes(100);
+      await expect(client.matchPersonAll('n1')).resolves.toEqual({ matched: 0, truncated: true });
+      expect(fetchMock).toHaveBeenCalledTimes(150);
     });
 
     it('search sends people as a comma list', async () => {

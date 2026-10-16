@@ -48,7 +48,7 @@ describe('PersonPage', () => {
     ]);
     vi.mocked(workerApiClient.search).mockResolvedValue([makePhoto({ id: 'p1' })]);
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([]);
-    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0 });
+    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
     vi.mocked(workerApiClient.matchPerson).mockResolvedValue({
       auto: [face('a1')],
       suggestions: [face('s1'), face('s2')],
@@ -119,6 +119,14 @@ describe('PersonPage', () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Re-run matching' }));
     await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe1', expect.any(Function)));
+  });
+
+  it('Re-run matching says when it stopped early', async () => {
+    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 2, truncated: true });
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Re-run matching' }));
+    expect(await screen.findByText('Matched 2 more faces')).toBeInTheDocument();
+    expect(await screen.findByText('Stopped early, run Re-run matching to continue')).toBeInTheDocument();
   });
 
   it('renames the person', async () => {

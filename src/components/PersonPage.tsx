@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { errorMessage, SEARCH_KEYS } from '../services/peopleKeys';
+import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
 import PhotoGrid from './PhotoGrid';
@@ -95,7 +95,6 @@ const PersonPage = () => {
     mutationFn: () => workerApiClient.deletePerson(id),
     onSuccess: () => {
       refresh();
-      void queryClient.invalidateQueries({ queryKey: ['people-groups'] });
       navigate('/people');
     },
   });
@@ -103,12 +102,11 @@ const PersonPage = () => {
     mutationFn: async () => {
       setProgress('Looking for matches...');
       try {
-        const { matched } = await workerApiClient.matchPersonAll(id, (scanned, found) =>
+        const { matched, truncated } = await workerApiClient.matchPersonAll(id, (scanned, found) =>
           setProgress(`Looking for matches... scanned ${scanned}, matched ${found}`)
         );
-        notifications.show({
-          message: matched > 0 ? `Matched ${matched} more photo${matched === 1 ? '' : 's'}` : 'No new matches',
-        });
+        notifications.show({ message: matched > 0 ? matchedMessage(matched) : 'No new matches' });
+        if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
       } finally {
         setProgress(null);
         refresh();

@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { errorMessage, SEARCH_KEYS } from '../services/peopleKeys';
+import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
 
@@ -83,9 +83,12 @@ const FaceRow = ({
             >
               Not {face.personName}
             </Button>
-            <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate()}>
-              Remove name
-            </Button>
+            {/* Soft: an auto face is already corrected with "Not X"; Remove name is for confirmed faces. */}
+            {face.status === 'confirmed' && (
+              <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate()}>
+                Remove name
+              </Button>
+            )}
           </Group>
         ) : creating ? (
           <Group gap="xs" align="flex-end">
@@ -157,12 +160,9 @@ const PhotoFaces = ({ photoId, thumbnailUrl }: { photoId: string; thumbnailUrl: 
   // After naming a face, attach the person's other unnamed faces automatically.
   const onNamed = async (personId: string) => {
     try {
-      const { matched } = await workerApiClient.matchPersonAll(personId);
-      if (matched > 0) {
-        notifications.show({
-          message: `Matched ${matched} more photo${matched === 1 ? '' : 's'}`,
-        });
-      }
+      const { matched, truncated } = await workerApiClient.matchPersonAll(personId);
+      if (matched > 0) notifications.show({ message: matchedMessage(matched) });
+      if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
     } catch {
       // The face is already named; a failed follow-up search must not read as a naming failure.
       notifications.show({ message: 'Named, but could not look for more matches' });

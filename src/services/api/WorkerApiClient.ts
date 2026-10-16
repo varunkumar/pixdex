@@ -23,8 +23,8 @@ export interface SearchParams {
   offset?: number;
 }
 
-// Safety valve for matchPersonAll: 100 pages of 300 faces.
-const MATCH_ALL_MAX_PAGES = 100;
+// Safety valve for matchPersonAll: 150 pages of 200 faces.
+const MATCH_ALL_MAX_PAGES = 150;
 
 const RELOAD_KEY = 'pixdex:session-reload-at';
 const RELOAD_COOLDOWN_MS = 30_000;
@@ -203,10 +203,11 @@ export class WorkerApiClient {
   async matchPersonAll(
     personId: string,
     onPage?: (scanned: number, matched: number) => void
-  ): Promise<{ matched: number }> {
+  ): Promise<{ matched: number; truncated: boolean }> {
     let cursor: string | undefined;
     let scanned = 0;
     let matched = 0;
+    let truncated = false;
     for (let page = 0; page < MATCH_ALL_MAX_PAGES; page++) {
       const res = await this.matchPerson(personId, cursor ? { apply: true, cursor } : { apply: true });
       scanned += res.scanned;
@@ -214,8 +215,9 @@ export class WorkerApiClient {
       onPage?.(scanned, matched);
       if (!res.nextCursor) break;
       cursor = res.nextCursor;
+      if (page === MATCH_ALL_MAX_PAGES - 1) truncated = true;
     }
-    return { matched };
+    return { matched, truncated };
   }
 
   async getPhoto(id: string): Promise<SerializedPhoto> {

@@ -45,7 +45,7 @@ describe('PhotoFaces', () => {
     vi.resetAllMocks();
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
-    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0 });
+    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
   });
 
   it('renders nothing when the photo has no faces', async () => {
@@ -127,6 +127,26 @@ describe('PhotoFaces', () => {
     await waitFor(() => expect(workerApiClient.unassignFace).toHaveBeenCalledWith('f1'));
   });
 
+  it('an auto-matched face has Not X but no Remove name', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face({ personId: 'pe1', personName: 'Asha', status: 'auto', matchScore: 0.8 }),
+    ]);
+    show();
+    expect(await screen.findByRole('button', { name: 'Not Asha' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove name' })).toBeNull();
+  });
+
+  it('tells the owner when matching stopped early', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face()]);
+    vi.mocked(workerApiClient.assignFace).mockResolvedValue(face({ personId: 'pe2', status: 'confirmed' }));
+    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 1, truncated: true });
+    show();
+    fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
+    expect(await screen.findByText('Matched 1 more face')).toBeInTheDocument();
+    expect(await screen.findByText('Stopped early, run Re-run matching to continue')).toBeInTheDocument();
+  });
+
   it('an auto-matched face is labelled as such', async () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
       face({
@@ -143,12 +163,12 @@ describe('PhotoFaces', () => {
   it('naming a face triggers matchPersonAll for that person', async () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face()]);
     vi.mocked(workerApiClient.assignFace).mockResolvedValue(face({ personId: 'pe2', status: 'confirmed' }));
-    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 4 });
+    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 4, truncated: false });
     show();
     fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
     fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
     await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2'));
-    expect(await screen.findByText('Matched 4 more photos')).toBeInTheDocument();
+    expect(await screen.findByText('Matched 4 more faces')).toBeInTheDocument();
   });
 
   it('still closes the new person form when matching fails after naming', async () => {
