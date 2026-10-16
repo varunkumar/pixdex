@@ -64,7 +64,7 @@ them. Your stars are blended with the model's aesthetic score (70% yours, 30%
 the model's, on a 1-10 scale; the model's alone when you have not rated). That
 combined score drives "Best rated" on the search and album pages, album average
 ratings and the daily pick. The search page has a "Sort by" control (best match
-by default). The description and suggested caption are not editable.
+by default) and a "People" filter (up to 5 named people; photos containing all selected people). The description and suggested caption are not editable.
 
 ## Camera details
 

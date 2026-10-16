@@ -1,4 +1,4 @@
-import { Button, Card, Group, Loader, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Card, Group, Loader, MultiSelect, Select, Stack, Text, TextInput } from '@mantine/core';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { MdSearch } from 'react-icons/md';
@@ -19,6 +19,8 @@ const Search = () => {
   const rawQ = params.get('q') ?? '';
   const q = rawQ.trim();
   const album = params.get('album') ?? '';
+  const people = (params.get('people') ?? '').split(',').filter(Boolean).slice(0, 5);
+  const peopleKey = people.join(',');
   const sort = (SORT_OPTIONS.find((o) => o.value === params.get('sort'))?.value ?? 'relevance') as PhotoSort | 'relevance';
   const [text, setText] = useState(rawQ);
   const [syncedQ, setSyncedQ] = useState(rawQ);
@@ -34,13 +36,26 @@ const Search = () => {
     queryFn: () => workerApiClient.getAlbums(),
   });
 
-  // No term and no album means nothing to look for: show a prompt, not the whole library.
-  const hasCriteria = q !== '' || album !== '';
+  const { data: namedPeople = [] } = useQuery({
+    queryKey: ['people'],
+    queryFn: () => workerApiClient.getPeople(),
+  });
+  const peopleOptions = namedPeople.map((p) => ({ value: p.id, label: p.name }));
+
+  // No term, album or person means nothing to look for: show a prompt, not the whole library.
+  const hasCriteria = q !== '' || album !== '' || people.length > 0;
 
   const { data, isFetching, error, isPlaceholderData } = useQuery({
-    queryKey: ['search', q, album, page, size, sort],
+    queryKey: ['search', q, album, peopleKey, page, size, sort],
     queryFn: () =>
-      workerApiClient.searchPage({ q, album, sort: sort === 'relevance' ? undefined : sort, limit: size, offset }),
+      workerApiClient.searchPage({
+        q,
+        album,
+        ...(people.length > 0 && { people }),
+        sort: sort === 'relevance' ? undefined : sort,
+        limit: size,
+        offset,
+      }),
     enabled: hasCriteria,
     placeholderData: keepPreviousData,
   });
@@ -66,6 +81,19 @@ const Search = () => {
             clearable
             searchable
           />
+          {peopleOptions.length > 0 && (
+            <MultiSelect
+              label="People"
+              placeholder={people.length === 0 ? 'Anyone' : undefined}
+              data={peopleOptions}
+              value={people.filter((id) => peopleOptions.some((o) => o.value === id))}
+              onChange={(ids) => update({ people: ids.join(',') }, { resetPage: true })}
+              maxValues={5}
+              clearable
+              searchable
+              hidePickedOptions
+            />
+          )}
           <Select
             label="Sort by"
             aria-label="Sort results"
@@ -96,7 +124,7 @@ const Search = () => {
         </Group>
       </Card>
 
-      {!hasCriteria && <Text c="dimmed">Enter a search term or pick an album to find photos.</Text>}
+      {!hasCriteria && <Text c="dimmed">Enter a search term or pick an album or person to find photos.</Text>}
 
       {hasCriteria && error && (
         <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>
