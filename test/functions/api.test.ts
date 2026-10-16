@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { onRequestGet, onRequestPatch, onRequestPut } from '../../functions/api/[[path]]';
+import { onRequestDelete, onRequestGet, onRequestPatch, onRequestPost, onRequestPut } from '../../functions/api/[[path]]';
 
 const env = {
   WORKER_URL: 'https://worker.example.dev/',
@@ -37,6 +37,9 @@ describe('/api proxy', () => {
     '/api/albums?names=1',
     '/api/daily-pick', '/api/photos/p1',
     '/api/thumbnails/abc123',
+    '/api/people',
+    '/api/people/groups',
+    '/api/photos/p1/faces',
   ])(
     'allows %s',
     async (path) => {
@@ -44,7 +47,7 @@ describe('/api proxy', () => {
     }
   );
 
-  it.each(['/api/ingest/photo', '/api/health', '/api/photos', '/api/photos/a/b', '/api/'])(
+  it.each(['/api/ingest/photo', '/api/health', '/api/photos', '/api/photos/a/b', '/api/', '/api/ingest/faces', '/api/people/p1', '/api/faces/f1/assign'])(
     'rejects %s without calling the worker',
     async (path) => {
       expect((await call(path)).status).toBe(404);
@@ -224,5 +227,94 @@ describe('/api proxy PATCH', () => {
     expect((await patch('/api/photos/p1/x')).status).toBe(404);
     expect((await patch('/api/photos/p1', 'text/plain')).status).toBe(415);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api proxy POST, PATCH people, DELETE', () => {
+  const send = (
+    handler: typeof onRequestPost,
+    method: string,
+    path: string,
+    type: string | null = 'application/json'
+  ) =>
+    handler({
+      request: new Request(`https://pixdex.example.dev${path}`, {
+        method,
+        headers: type ? { 'content-type': type, cookie: 'CF_Authorization=abc' } : {},
+        body: method === 'DELETE' ? undefined : '{"name":"Asha"}',
+      }),
+      env,
+    });
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it.each([
+    '/api/people',
+    '/api/people/p1/faces',
+    '/api/people/p1/match',
+    '/api/faces/f1/assign',
+    '/api/faces/f1/reject',
+    '/api/faces/f1/unassign',
+  ])('POST forwards %s with the server-side token', async (path) => {
+    const res = await send(onRequestPost, 'POST', path);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(`https://worker.example.dev${path.replace('/api', '')}`);
+    expect(init.method).toBe('POST');
+    const h = new Headers(init.headers);
+    expect(h.get('authorization')).toBe('Bearer secret-token');
+    expect(h.get('cookie')).toBeNull();
+    expect(init.body).toBe('{"name":"Asha"}');
+  });
+
+  it.each([
+    '/api/ingest/faces',
+    '/api/ingest/photo',
+    '/api/people/groups',
+    '/api/people/p1',
+    '/api/people/p1/other',
+    '/api/faces/f1',
+    '/api/faces/f1/assign/x',
+    '/api/photos/p1/faces',
+    '/api/albums/cover',
+  ])('POST rejects %s without calling the worker', async (path) => {
+    expect((await send(onRequestPost, 'POST', path)).status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('POST rejects non-JSON bodies with 415', async () => {
+    expect((await send(onRequestPost, 'POST', '/api/people', 'text/plain')).status).toBe(415);
+    expect((await send(onRequestPost, 'POST', '/api/people', null)).status).toBe(415);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('PATCH forwards people/<id> and still rejects people sub-paths', async () => {
+    expect((await send(onRequestPatch, 'PATCH', '/api/people/p1')).status).toBe(200);
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://worker.example.dev/people/p1');
+    expect((await send(onRequestPatch, 'PATCH', '/api/people/p1/faces')).status).toBe(404);
+    expect((await send(onRequestPatch, 'PATCH', '/api/ingest/faces')).status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('DELETE forwards people/<id> only', async () => {
+    expect((await send(onRequestDelete, 'DELETE', '/api/people/p1', null)).status).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('https://worker.example.dev/people/p1');
+    expect(init.method).toBe('DELETE');
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer secret-token');
+    for (const path of ['/api/people', '/api/people/p1/faces', '/api/photos/p1', '/api/ingest/faces', '/api/albums/cover']) {
+      expect((await send(onRequestDelete, 'DELETE', path, null)).status).toBe(404);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('write handlers return 502 when the worker is unreachable', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('down'));
+    expect((await send(onRequestPost, 'POST', '/api/people')).status).toBe(502);
   });
 });

@@ -144,6 +144,7 @@ npm run build
 - `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
   and helpers, API types
 - `functions/api` - Pages Function: same-origin proxy that adds the read token
+  (read routes plus the album cover, photo review and people/face writes)
 - `worker/` - Cloudflare Worker (Hono, D1, R2) and its migrations
 - `agent/` - local indexing CLI and originals server
 - `docs/` - [architecture](docs/architecture.md),

@@ -9,7 +9,9 @@ never leave local disk or Google Drive.
 
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`)
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (also
-  forwards the two browser writes: `PUT albums/cover`, `PATCH photos/:id`)
+  forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,
+  `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
+  `people/:id/match`, `faces/:id/assign|reject|unassign`)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI and originals server
 - `docs/` - internal docs, plus `superpowers/` plans and specs

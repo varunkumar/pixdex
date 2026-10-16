@@ -41,11 +41,15 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 Same-origin read proxy. Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `albums`,
-`daily-pick`, `photos/:id`, `thumbnails/:hash`) plus `originals/:id`, which goes
+`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `people`,
+`people/groups`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
-`no-cache`. The only writes the browser can make are `PUT albums/cover` and
-`PATCH photos/:id` (JSON only), both forwarded with the read token.
+`no-cache`. The only writes the browser can make are `PUT albums/cover`,
+`PATCH photos/:id`, `PATCH`/`DELETE people/:id`, and `POST` to `people`,
+`people/:id/faces`, `people/:id/match` and `faces/:id/assign|reject|unassign`
+(bodies JSON only, DELETE has none), all forwarded with the read token through
+one shared helper with per-method allowlists.
 
 ### Human review (HITL)
 

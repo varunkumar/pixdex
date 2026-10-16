@@ -82,7 +82,8 @@ New env vars go in the matching `.env.example` and the config table in
   it in `worker/migrations/index.ts`; add a test in `worker/test/schema.test.ts`
   when relevant.
 - New Worker read route: add it to `worker/src/index.ts` with `requireReadToken`,
-  and to the `ALLOWED_PATHS` allowlist in `functions/api/[[path]].ts`.
+  and to the `ALLOWED_PATHS` allowlist in `functions/api/[[path]].ts`. A new
+  browser write goes in that file's `WRITE_PATHS` for its method instead.
 - Ingest routes stay out of the proxy allowlist.
 - Plans and specs live in `docs/superpowers/plans` and `docs/superpowers/specs`.
 - Backlog is `TODO.todo`.
