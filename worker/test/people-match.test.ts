@@ -97,7 +97,7 @@ describe('people groups and matching', () => {
 
   it('groups pages with a cursor', async () => {
     const stmts = [];
-    for (let i = 0; i < 1001; i++) {
+    for (let i = 0; i < 151; i++) {
       stmts.push(
         env.DB.prepare(
           `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, created_at)
@@ -107,12 +107,12 @@ describe('people groups and matching', () => {
     }
     for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
     const first = (await (await call('GET', '/people/groups')).json()) as any;
-    expect(first.scanned).toBe(1000);
+    expect(first.scanned).toBe(150);
     expect(first.nextCursor).not.toBeNull();
     const second = (await (await call('GET', `/people/groups?cursor=${first.nextCursor}`)).json()) as any;
     expect(second.scanned).toBe(1);
     expect(second.nextCursor).toBeNull();
-    expect(second.groups[0].faces[0].id).toBe('f1000');
+    expect(second.groups[0].faces[0].id).toBe('f150');
   });
 
   it('match returns auto and suggestion buckets by threshold', async () => {
@@ -236,10 +236,10 @@ describe('people groups and matching', () => {
     expect(body.auto[0].matchScore).toBeCloseTo(0.8, 3);
   });
 
-  it('matches 1000 candidates quickly', async () => {
+  it('matches 300 candidates quickly', async () => {
     const pid = await refPerson();
     const stmts = [];
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 300; i++) {
       stmts.push(
         env.DB.prepare(
           `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, created_at)
@@ -251,9 +251,9 @@ describe('people groups and matching', () => {
     const t = performance.now();
     const res = await call('POST', `/people/${pid}/match`, {});
     const ms = performance.now() - t;
-    console.log(`MATCH_1000_MS ${ms.toFixed(0)}`);
+    console.log(`MATCH_300_MS ${ms.toFixed(0)}`);
     expect(res.status).toBe(200);
-    expect(((await res.json()) as any).scanned).toBe(1000);
+    expect(((await res.json()) as any).scanned).toBe(300);
     expect(ms).toBeLessThan(5000);
   });
 });

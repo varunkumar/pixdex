@@ -115,4 +115,32 @@ describe('matching', () => {
     expect(MATCHABLE_SQL).toContain('bbox_w');
     expect(MATCHABLE_SQL).toContain('bbox_h');
   });
+
+  it('clusterFaces follows a slowly drifting set and stays linear in cluster size', () => {
+    // 150 near-identical vectors form one cluster.
+    const same = Array.from({ length: 150 }, (_, i) => {
+      const v = unit(0);
+      v[1 + (i % 20)] = 0.05;
+      return { id: `s${i}`, embedding: v };
+    });
+    const t = performance.now();
+    const out = clusterFaces(same);
+    expect(performance.now() - t).toBeLessThan(200);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toHaveLength(150);
+
+    // Slow drift in the e0/e1 plane (3 degrees per step) stays together while the centroid tracks it,
+    // and a vector at 90 degrees is separate.
+    const drift = Array.from({ length: 20 }, (_, i) => {
+      const v = new Float32Array(EMBEDDING_DIM);
+      v[0] = Math.cos((i * 3 * Math.PI) / 180);
+      v[1] = Math.sin((i * 3 * Math.PI) / 180);
+      return { id: `d${i}`, embedding: v };
+    });
+    const far = unit(1);
+    far[0] = 0;
+    const res = clusterFaces([...drift, { id: 'far', embedding: unit(9) }]);
+    expect(res[0]).toHaveLength(20);
+    expect(res[1]).toEqual(['far']);
+  });
 });

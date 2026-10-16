@@ -194,7 +194,7 @@ docs must be updated.** Embeddings never leave the Worker: responses carry
 face ids, bboxes, person ids and scores only.
 
 - `GET /people`: persons with confirmed counts and a cover face.
-- `GET /people/groups`: unnamed groups. Takes a page of up to 1,000 `unassigned`
+- `GET /people/groups`: unnamed groups. Takes a page of up to 150 `unassigned`
   faces, clusters them greedily (link when similarity to an existing member is
   at least the suggestion threshold), returns groups with face ids. Paged by
   cursor so the cap is respected.
@@ -205,7 +205,7 @@ face ids, bboxes, person ids and scores only.
   to `unassigned`, so it is never auto-matched to that person again.
 - `POST /faces/:id/unassign`: back to `unassigned`.
 - `POST /people/:id/match` body `{ apply?, cursor? }`: scores one page of up to
-  1,000 `unassigned` faces (and `auto` faces of other people, taken only on a
+  300 `unassigned` faces (and `auto` faces of other people, taken only on a
   higher score) against the person's reference faces and returns those at or
   above the suggestion floor, excluding rejected pairs. With `apply: true`
   faces at or above the auto threshold are saved as `auto`; faces between the
@@ -266,7 +266,7 @@ faces return to `unassigned` and its rejections are dropped.
   (about 0.77 M at 1,000, about 0.15 M at 200). At 30,000 photos the library
   total (90 MB of image vectors) fits free D1 storage, and the cap keeps
   per-click cost flat as the library grows.
-- Faces: similar per-request bound of 1,000 faces x 512-d (about 0.5 M).
+- Faces: matching is bounded to 300 faces per request (x 512-d, about 0.15 M per reference, up to 30 references) and groups to 150 faces per page. The Workers Free CPU limit (~10 ms) drove these sizes.
 - Verify the actual CPU time with a Worker test or a local `wrangler dev`
   benchmark at 1,000 candidates before shipping. If a request is too slow,
   lower the cap (down to 200 is acceptable to the owner) or move scoring to the
@@ -321,8 +321,8 @@ Each is its own PR with docs updated in the same commit (README, `AGENTS.md`,
   persist.
 - Automatic matching uses at most the 30 newest confirmed faces per person as
   references (revisit if children's older ages stop matching).
-- The matching and People groups routes are paged at 1,000 faces per request,
-  mirroring the similar-photos cap.
+- The matching route is paged at 300 faces per request and People groups at 150 (the Workers Free CPU limit, ~10 ms,
+  drove this; groups clusters against one running centroid per cluster).
 - Two migrations and two PRs, faces and people first (the owner's order).
 - Sidecar is Python (open_clip and insightface), because Ollama does not appear
   to serve SigLIP or ArcFace.

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../types';
 import { embeddingFromBytes } from '../people/embedding';
 import { loadReferences } from '../people/references';
-import { FACE_PAGE_SIZE, MATCHABLE_SQL, bestScore, classify, clusterFaces } from '../people/matching';
+import { FACE_PAGE_SIZE, GROUPS_PAGE_SIZE, MATCHABLE_SQL, bestScore, classify, clusterFaces } from '../people/matching';
 import { FACE_SELECT, confirmFaceStmt, missingFaceIds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -150,7 +150,7 @@ export async function groupsRoute(c: Ctx) {
   const { results } = await c.env.DB.prepare(
     `SELECT rowid AS rid, id, embedding FROM faces
      WHERE assign_status = 'unassigned' AND ${MATCHABLE_SQL} AND rowid > ?
-     ORDER BY rowid LIMIT ${FACE_PAGE_SIZE}`
+     ORDER BY rowid LIMIT ${GROUPS_PAGE_SIZE}`
   )
     .bind(Number(parsedCursor.data))
     .all<CandidateRow>();
@@ -160,7 +160,7 @@ export async function groupsRoute(c: Ctx) {
   return c.json({
     groups: clusters.map((ids) => ({ faces: ids.map((id) => serializeFace(faces.get(id)!)) })),
     scanned: results.length,
-    nextCursor: results.length === FACE_PAGE_SIZE ? String(results[results.length - 1].rid) : null,
+    nextCursor: results.length === GROUPS_PAGE_SIZE ? String(results[results.length - 1].rid) : null,
   });
 }
 
@@ -210,7 +210,7 @@ export async function matchPersonRoute(c: Ctx) {
 
   const faces = await loadFaces(c.env.DB, [...auto, ...suggestions].map((m) => m.id));
   const present = (list: { id: string; score: number }[]) =>
-    list
+    [...list]
       .sort((a, b) => b.score - a.score)
       .map((m) => ({ ...serializeFace(faces.get(m.id)!), matchScore: m.score }));
   return c.json({
