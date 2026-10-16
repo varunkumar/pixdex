@@ -60,4 +60,13 @@ describe('loadConfig', () => {
     });
     expect(withToken.READ_TOKEN).toBe('read-secret');
   });
+
+  it('accepts and omits FACE_SIDECAR_URL', () => {
+    const base = { CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev', INGEST_TOKEN: 't' };
+    expect(loadConfig(base).FACE_SIDECAR_URL).toBeUndefined();
+    expect(loadConfig({ ...base, FACE_SIDECAR_URL: 'http://127.0.0.1:8799' }).FACE_SIDECAR_URL).toBe(
+      'http://127.0.0.1:8799'
+    );
+    expect(() => loadConfig({ ...base, FACE_SIDECAR_URL: 'nope' })).toThrow();
+  });
 });

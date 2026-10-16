@@ -95,6 +95,7 @@ cd agent
 npm run dev -- index-local "/path/to/folder"
 npm run dev -- index-batch <roots...>   # resumable, see README
 npm run dev -- index-status
+npm run dev -- backfill-faces <folder>    # needs the face sidecar, see agent/sidecar/README.md
 npm run dev -- serve-originals          # needs cloudflared, see agent/cloudflared/README.md
 ```
 

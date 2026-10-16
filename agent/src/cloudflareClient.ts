@@ -3,6 +3,12 @@ import type { CameraExif } from './exif';
 
 const CHECK_HASHES_BATCH_SIZE = 500;
 
+export interface FacePayload {
+  bbox: { x: number; y: number; w: number; h: number };
+  detScore: number;
+  embedding: string;
+}
+
 export interface IngestPhotoPayload {
   id: string;
   contentHash: string;
@@ -74,6 +80,41 @@ export class CloudflareClient {
     }
 
     return known;
+  }
+
+  /** Hashes that are indexed but not yet face-scanned with this model. */
+  async facesPending(hashes: string[], model: string): Promise<Set<string>> {
+    const pending = new Set<string>();
+
+    for (let i = 0; i < hashes.length; i += CHECK_HASHES_BATCH_SIZE) {
+      const batch = hashes.slice(i, i + CHECK_HASHES_BATCH_SIZE);
+      const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces/pending`, {
+        method: 'POST',
+        headers: this.authHeaders('application/json'),
+        body: JSON.stringify({ hashes: batch, model }),
+      });
+      if (!response.ok) {
+        throw new Error(`ingest/faces/pending failed: ${response.status}`);
+      }
+      const body = (await response.clone().json()) as { pending: string[] };
+      body.pending.forEach((h) => pending.add(h));
+    }
+
+    return pending;
+  }
+
+  /** Replaces a photo's detected faces (an empty list marks it scanned); false if the hash is unknown. */
+  async ingestFaces(contentHash: string, model: string, faces: FacePayload[]): Promise<boolean> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ contentHash, model, faces }),
+    });
+    if (response.status === 404) return false;
+    if (!response.ok) {
+      throw new Error(`ingest/faces failed: ${response.status}`);
+    }
+    return true;
   }
 
   async ingestPhoto(payload: IngestPhotoPayload): Promise<void> {

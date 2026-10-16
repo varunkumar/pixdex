@@ -99,7 +99,7 @@ photo qualifies.
 
 - `cli.ts` is the entry point. Commands: `index-local`, `index-drive`,
   `index-batch`, `index-status`, `backfill-exif`, `backfill-ratings`,
-  `serve-originals`.
+  `backfill-faces`, `serve-originals`.
 - Pipeline per photo (`processFile.ts`): hash content, skip if already indexed
   (`check-hashes`), read EXIF, make a thumbnail (sharp), ask Ollama for a
   description/tags/caption/quality rating, then push to the Worker.
@@ -123,7 +123,7 @@ photo qualifies.
 | Where | Variables |
 | --- | --- |
 | Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET` |
-| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN` |
+| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
 | Worker secrets | `READ_TOKEN`, `INGEST_TOKEN` |
 
 Never prefix server-side secrets with `VITE_`.

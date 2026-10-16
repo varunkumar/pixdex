@@ -5,6 +5,7 @@ import { listDriveFolders as defaultListDriveFolders, type DriveFilesClient } fr
 import { indexGoogleDriveFolder as defaultIndexGoogleDriveFolder } from './google/indexGoogleDriveFolder';
 import { CloudflareClient } from './cloudflareClient';
 import { OllamaClient } from './ollama/client';
+import { createFaceSidecar } from './faces/sidecarClient';
 import type { AgentConfig } from './config';
 
 export interface RunIndexDriveDeps {
@@ -49,6 +50,7 @@ export async function runIndexDrive(config: AgentConfig, deps: RunIndexDriveDeps
     cloudflareClient: new CloudflareClient(config),
     ollamaClient: new OllamaClient(config),
     config,
+    faceSidecar: createFaceSidecar(config),
     onProgress: (message) => console.log(message),
   });
 

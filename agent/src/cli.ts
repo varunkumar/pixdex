@@ -7,6 +7,8 @@ import { runIndexDrive } from './driveCli';
 import { runServeOriginals } from './originalsCli';
 import { backfillRatings } from './backfillRatings';
 import { backfillExif } from './backfillExif';
+import { backfillFaces } from './backfillFaces';
+import { createFaceSidecar } from './faces/sidecarClient';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
 
 export async function runCli(argv: string[]): Promise<number> {
@@ -53,6 +55,29 @@ export async function runCli(argv: string[]): Promise<number> {
     }
   }
 
+  if (command === 'backfill-faces' && folder) {
+    try {
+      const config = loadConfig();
+      const sidecar = createFaceSidecar(config);
+      if (!sidecar) {
+        console.error('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
+        return 1;
+      }
+      const result = await backfillFaces(folder, {
+        cloudflareClient: new CloudflareClient(config),
+        sidecar,
+        onProgress: (message) => console.log(message),
+      });
+      console.log(
+        `Done. Total: ${result.total}, Scanned: ${result.scanned}, Faces: ${result.faces}, Already scanned: ${result.skipped}, Not indexed: ${result.notIndexed}, Failed: ${result.failed}`
+      );
+      return result.failed > 0 ? 1 : 0;
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
+  }
+
   if (command === 'backfill-ratings' && folder) {
     try {
       const config = loadConfig();
@@ -73,7 +98,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces <folder>\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }
@@ -87,6 +112,7 @@ export async function runCli(argv: string[]): Promise<number> {
       cloudflareClient,
       ollamaClient,
       config,
+      faceSidecar: createFaceSidecar(config),
       onProgress: (message) => console.log(message),
     });
 

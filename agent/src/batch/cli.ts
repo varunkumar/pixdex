@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { AgentConfig } from '../config';
 import { CloudflareClient } from '../cloudflareClient';
 import { OllamaClient } from '../ollama/client';
+import { createFaceSidecar } from '../faces/sidecarClient';
 import { indexLocalFolder } from '../indexLocalFolder';
 import { runBatch } from './runBatch';
 import { formatStatus, summarize, type LiveCounts } from './status';
@@ -58,6 +59,7 @@ export async function runIndexBatch(config: AgentConfig, args: string[]): Promis
   const dir = stateDirectory();
   const cloudflareClient = new CloudflareClient(config);
   const ollamaClient = new OllamaClient(config);
+  const faceSidecar = createFaceSidecar(config);
   const stamp = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 
   const stop = () => process.exit(130);
@@ -69,7 +71,7 @@ export async function runIndexBatch(config: AgentConfig, args: string[]): Promis
       { inputs, priority, retryFailed, stateFile: path.join(dir, 'queue.json'), lockFile: path.join(dir, 'batch.lock') },
       {
         indexFolder: (folder, hooks) =>
-          indexLocalFolder(folder, { cloudflareClient, ollamaClient, config, ...hooks }),
+          indexLocalFolder(folder, { cloudflareClient, ollamaClient, config, faceSidecar, ...hooks }),
         checkHealth: async () => {
           if (!(await probe(`${config.OLLAMA_BASE_URL}/api/tags`))) return `Ollama is not reachable at ${config.OLLAMA_BASE_URL}`;
           if (!(await probe(`${config.CLOUDFLARE_API_BASE_URL}/health`))) return 'the Worker is not reachable';

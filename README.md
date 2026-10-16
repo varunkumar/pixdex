@@ -77,6 +77,22 @@ vision pass:
 cd agent && npm run dev -- backfill-exif "/path/to/folder"
 ```
 
+## Faces
+
+Face scanning is optional and runs locally. Start the InsightFace sidecar
+(setup and run commands are in `agent/sidecar/README.md`), set
+`FACE_SIDECAR_URL=http://127.0.0.1:8799` in `agent/.env`, and indexing will
+detect faces after each photo (a sidecar failure is logged and never fails the
+photo). To scan photos that were indexed earlier:
+
+```bash
+cd agent && npm run dev -- backfill-faces "/path/to/folder"
+```
+
+It is resumable: a re-run skips photos already scanned. Naming people happens in
+the People page; once someone is named, new faces are matched to them
+automatically at ingest.
+
 ## Indexing many folders (resumable)
 
 `index-batch` indexes every `<album>/Processed` folder under one or more roots
