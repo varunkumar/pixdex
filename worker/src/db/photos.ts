@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { combinedScore } from './rating';
 
 // Standard camera/EXIF details, stored as first-class columns.
 export const exifFieldsSchema = z.object({
@@ -88,6 +89,10 @@ export interface PhotoRow {
   has_watermark?: number | null;
   aesthetic_score?: number | null;
   short_caption?: string | null;
+  user_rating?: number | null;
+  user_caption?: string | null;
+  user_subjects?: string | null;
+  user_tags?: string | null;
   [key: string]: unknown;
 }
 
@@ -133,6 +138,12 @@ export interface SerializedPhoto {
   aestheticScore: number | null;
   /** 3-4 word title; null when not generated yet. */
   shortCaption: string | null;
+  /** Owner's 1-5 star rating; null when not rated by hand. */
+  userRating: number | null;
+  /** 1-10 blend of the owner's rating and the model's score; null when neither exists. */
+  combinedScore: number | null;
+  /** What the owner changed. A null field is not overridden; subjects/tags/shortCaption above hold the effective values. */
+  overrides: { shortCaption: string | null; subjects: unknown[] | null; tags: unknown[] | null };
 }
 
 function parseJsonArray(value: string | undefined | null): unknown[] {
@@ -144,6 +155,38 @@ function parseJsonArray(value: string | undefined | null): unknown[] {
   }
 }
 
+function parseOverrideArray(value: string | undefined | null): unknown[] | null {
+  return value == null ? null : parseJsonArray(value);
+}
+
+/** The values to show and index: the owner's override when set, else the model's. */
+export function effectiveText(row: PhotoRow) {
+  return {
+    subjects: (parseOverrideArray(row.user_subjects) ?? parseJsonArray(row.subjects)) as string[],
+    tags: (parseOverrideArray(row.user_tags) ?? parseJsonArray(row.tags)) as string[],
+    shortCaption: row.user_caption ?? row.short_caption ?? null,
+  };
+}
+
+/** search_text rebuilt from a full row, honouring overrides. */
+export function searchTextForRow(row: PhotoRow): string {
+  const eff = effectiveText(row);
+  return buildSearchText({
+    subjects: eff.subjects,
+    tags: eff.tags,
+    colors: parseJsonArray(row.colors) as string[],
+    patterns: parseJsonArray(row.patterns) as string[],
+    season: row.season ?? undefined,
+    shortCaption: eff.shortCaption ?? undefined,
+    description: row.description ?? '',
+    environment: row.environment ?? undefined,
+    album: row.album ?? undefined,
+    cameraMake: row.camera_make ?? undefined,
+    cameraModel: row.camera_model ?? undefined,
+    lensModel: row.lens_model ?? undefined,
+  });
+}
+
 /**
  * Turns a raw D1 photos row (snake_case columns, JSON-encoded array columns
  * stored as text) into the one clean camelCase shape every route returns.
@@ -151,6 +194,7 @@ function parseJsonArray(value: string | undefined | null): unknown[] {
  * columns for cost reasons) by defaulting missing array columns to [].
  */
 export function serializePhoto(row: PhotoRow): SerializedPhoto {
+  const eff = effectiveText(row);
   return {
     id: row.id,
     contentHash: row.content_hash,
@@ -163,10 +207,10 @@ export function serializePhoto(row: PhotoRow): SerializedPhoto {
     height: row.height ?? null,
     format: row.format ?? null,
     fileSize: row.file_size ?? null,
-    subjects: parseJsonArray(row.subjects),
+    subjects: eff.subjects,
     colors: parseJsonArray(row.colors),
     patterns: parseJsonArray(row.patterns),
-    tags: parseJsonArray(row.tags),
+    tags: eff.tags,
     season: row.season ?? null,
     environment: row.environment ?? null,
     album: row.album ?? null,
@@ -189,7 +233,14 @@ export function serializePhoto(row: PhotoRow): SerializedPhoto {
     longitude: row.longitude ?? null,
     hasWatermark: row.has_watermark == null ? null : row.has_watermark === 1,
     aestheticScore: row.aesthetic_score ?? null,
-    shortCaption: row.short_caption ?? null,
+    shortCaption: eff.shortCaption,
+    userRating: row.user_rating ?? null,
+    combinedScore: combinedScore(row),
+    overrides: {
+      shortCaption: row.user_caption ?? null,
+      subjects: parseOverrideArray(row.user_subjects),
+      tags: parseOverrideArray(row.user_tags),
+    },
   };
 }
 

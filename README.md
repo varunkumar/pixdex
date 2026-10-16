@@ -54,6 +54,18 @@ run any backend of its own.
    npm run dev
    ```
 
+## Rating and correcting the AI
+
+On a photo's page, "Your review" lets you give 1-5 stars and edit the AI's
+title, subjects (species) and tags. Edits live in separate columns, so
+re-indexing never overwrites them, and search is re-indexed from your text (a
+corrected species stops matching the model's wrong one). "Reset to AI" undoes
+them. Your stars are blended with the model's aesthetic score (70% yours, 30%
+the model's, on a 1-10 scale; the model's alone when you have not rated). That
+combined score drives "Best rated" on the search and album pages, album average
+ratings and the daily pick. The search page has a "Sort by" control (best match
+by default). The description and suggested caption are not editable.
+
 ## Camera details
 
 Indexing also stores camera make/model, lens, focal length, aperture, shutter

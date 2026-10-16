@@ -27,7 +27,8 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 ### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
 
-- `components/` - Search, Albums, AlbumPhotos, PhotoDetail, Dashboard,
+- `components/` - Search, Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
+  and AI overrides), Dashboard,
   DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
 - `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
   It calls same-origin `/api/*`.
@@ -43,7 +44,20 @@ bundle. Only an allowlist of read routes is forwarded (`search`, `albums`,
 `daily-pick`, `photos/:id`, `thumbnails/:hash`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
-`no-cache`.
+`no-cache`. The only writes the browser can make are `PUT albums/cover` and
+`PATCH photos/:id` (JSON only), both forwarded with the read token.
+
+### Human review (HITL)
+
+Migration `0007_user_overrides.sql` adds `user_rating` (1-5), `user_caption`,
+`user_subjects` and `user_tags` (NULL = no override). `PATCH /photos/:id`
+(`routes/photos.ts`) sets them and rebuilds `search_text` from the effective
+values (`db/photos.ts` `searchTextForRow`). `serializePhoto` returns the
+effective `subjects`/`tags`/`shortCaption` plus `userRating`, `combinedScore`
+and `overrides`. `/ingest/photo` upserts never touch the `user_*` columns and
+index the override when one exists. `db/rating.ts` holds the blend
+(`0.7 * stars*2 + 0.3 * aesthetic`, or aesthetic alone) as SQL and TS; search
+`sort=rating`, album average rating and the daily pick all use it.
 
 The daily pick (`worker/src/routes/daily-pick.ts`) is for nature, wildlife and
 landscapes: photos whose subjects or description mention a person are never

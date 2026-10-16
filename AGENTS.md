@@ -8,7 +8,8 @@ never leave local disk or Google Drive.
 ## Layout
 
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`)
-- `functions/api/` - Cloudflare Pages Function: token-adding read proxy
+- `functions/api/` - Cloudflare Pages Function: token-adding read proxy (also
+  forwards the two browser writes: `PUT albums/cover`, `PATCH photos/:id`)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI and originals server
 - `docs/` - internal docs, plus `superpowers/` plans and specs
@@ -35,6 +36,9 @@ D1 migrations are NOT applied by the deploy: run
 - Never expose `READ_TOKEN`, `INGEST_TOKEN` or `ORIGINALS_TOKEN` to the browser;
   no `VITE_` prefix on secrets.
 - `/ingest/*` must stay out of the Pages proxy allowlist.
+- Owner edits (`user_*` columns) are never written by the agent or ingest
+  routes; ranking uses `worker/src/db/rating.ts` (combined score), not
+  `aesthetic_score` directly.
 - DB changes go in a new numbered file in `worker/migrations/`.
 - After every feature or change, update `README.md` and this file (and `docs/`
   if architecture, config or workflow changed) in the same commit.

@@ -1,4 +1,11 @@
-import type { AlbumsPageResponse, AlbumsResponse, DailyPickResponse, SearchResponse, SerializedPhoto } from '../../types/api';
+import type {
+  AlbumsPageResponse,
+  AlbumsResponse,
+  DailyPickResponse,
+  PhotoReviewPatch,
+  SearchResponse,
+  SerializedPhoto,
+} from '../../types/api';
 
 export type PhotoSort = 'date' | 'name' | 'rating';
 export type AlbumSort = 'date' | 'name' | 'count' | 'rating';
@@ -111,6 +118,21 @@ export class WorkerApiClient {
       throw new Error(`Could not set cover: ${err instanceof Error ? err.message : 'network error'}`);
     }
     if (!response.ok) throw new Error(`Could not set cover: ${response.status}`);
+  }
+
+  async updatePhoto(id: string, patch: PhotoReviewPatch): Promise<SerializedPhoto> {
+    let response: Response;
+    try {
+      response = await this.fetchFn(`${this.baseUrl}/photos/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+    } catch (err) {
+      throw new Error(`Could not save: ${err instanceof Error ? err.message : 'network error'}`);
+    }
+    if (!response.ok) throw new Error(`Could not save: ${response.status}`);
+    return (await response.json()) as SerializedPhoto;
   }
 
   async getPhoto(id: string): Promise<SerializedPhoto> {

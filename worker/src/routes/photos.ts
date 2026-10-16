@@ -1,7 +1,8 @@
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../types';
-import { serializePhoto, type PhotoRow } from '../db/photos';
+import { serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
+import { COMBINED_SCORE_SQL } from '../db/rating';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
@@ -29,7 +30,48 @@ const ALBUM_ORDER: Record<string, string> = {
   rating: 'avg_score IS NULL, avg_score DESC, album COLLATE NOCASE',
 };
 
+const tagList = z.array(z.string().trim().min(1).max(60)).max(30);
+
+// Every field is optional; an omitted one is left alone and null (or empty) clears the override.
+const reviewBody = z
+  .object({
+    userRating: z.number().int().min(1).max(5).nullable(),
+    caption: z.string().trim().max(80).nullable(),
+    subjects: tagList.nullable(),
+    tags: tagList.nullable(),
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, { message: 'nothing to update' });
+
 const coverBody = z.object({ album: z.string().min(1), photoId: z.string().min(1) });
+
+const dedupe = (items: string[]) => [...new Map(items.map((i) => [i.toLowerCase(), i])).values()];
+
+/** Human review of one photo: star rating and overrides for title, subjects and tags. */
+export async function patchPhotoRoute(c: Context<{ Bindings: Env }>) {
+  const parsed = reviewBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  const edit = parsed.data;
+
+  const id = c.req.param('id');
+  const row = await c.env.DB.prepare('SELECT * FROM photos WHERE id = ?').bind(id).first<PhotoRow>();
+  if (!row) return c.text('Not Found', 404);
+
+  if ('userRating' in edit) row.user_rating = edit.userRating ?? null;
+  if ('caption' in edit) row.user_caption = edit.caption || null;
+  if ('subjects' in edit) row.user_subjects = edit.subjects?.length ? JSON.stringify(dedupe(edit.subjects)) : null;
+  if ('tags' in edit) row.user_tags = edit.tags?.length ? JSON.stringify(dedupe(edit.tags)) : null;
+
+  // search_text is rebuilt so a corrected species stops matching the model's wrong one.
+  row.search_text = searchTextForRow(row);
+  await c.env.DB.prepare(
+    `UPDATE photos SET user_rating = ?, user_caption = ?, user_subjects = ?, user_tags = ?, search_text = ?
+     WHERE id = ?`
+  )
+    .bind(row.user_rating ?? null, row.user_caption ?? null, row.user_subjects ?? null, row.user_tags ?? null, row.search_text, id)
+    .run();
+  return c.json(serializePhoto(row));
+}
 
 export async function putAlbumCoverRoute(c: Context<{ Bindings: Env }>) {
   const parsed = coverBody.safeParse(await c.req.json().catch(() => null));
@@ -82,7 +124,7 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
                   ORDER BY (id = (SELECT photo_id FROM album_covers WHERE album_covers.album = photos.album)) DESC,
                            date_time IS NULL, date_time DESC, last_indexed DESC, id
                 ) AS rn,
-                AVG(aesthetic_score) OVER (PARTITION BY album) AS avg_score,
+                AVG(${COMBINED_SCORE_SQL}) OVER (PARTITION BY album) AS avg_score,
                 COUNT(*) OVER (PARTITION BY album) AS cnt,
                 MAX(date_time) OVER (PARTITION BY album) AS newest_date,
                 MAX(last_indexed) OVER (PARTITION BY album) AS newest_indexed

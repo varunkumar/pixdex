@@ -37,16 +37,28 @@ export async function ingestRatingRoute(c: Context<{ Bindings: Env }>) {
   // it was appended at the end (as this route does) so stale words do not pile up.
   let searchText: string | null = null;
   if (caption) {
-    const current = await c.env.DB.prepare('SELECT search_text, short_caption FROM photos WHERE content_hash = ?')
+    const current = await c.env.DB.prepare(
+      'SELECT search_text, short_caption, user_caption FROM photos WHERE content_hash = ?'
+    )
       .bind(p.contentHash)
-      .first<{ search_text: string; short_caption: string | null }>();
+      .first<{ search_text: string; short_caption: string | null; user_caption: string | null }>();
     if (!current) return c.json({ error: 'Unknown content hash' }, 404);
+    // The owner's title is what is indexed; the model's new one is stored but not searchable.
+    if (current.user_caption) return finish(c, p, null);
     let text = current.search_text;
     const old = current.short_caption;
     if (old && old !== caption && text.endsWith(` ${old}`)) text = text.slice(0, -(old.length + 1));
     searchText = text.includes(caption) ? text : `${text} ${caption}`;
   }
 
+  return finish(c, p, searchText);
+}
+
+async function finish(
+  c: Context<{ Bindings: Env }>,
+  p: z.infer<typeof requestSchema>,
+  searchText: string | null
+) {
   const result = await c.env.DB.prepare(
     `UPDATE photos SET
        aesthetic_score = COALESCE(?, aesthetic_score),

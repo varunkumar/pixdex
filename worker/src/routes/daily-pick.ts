@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
-import { serializePhoto, type PhotoRow } from '../db/photos';
+import { combinedScore } from '../db/rating';
+import { effectiveText, serializePhoto, type PhotoRow } from '../db/photos';
 
 const SEASON_MONTHS: Record<string, number[]> = {
   winter: [11, 0, 1],
@@ -12,7 +13,7 @@ const SEASON_MONTHS: Record<string, number[]> = {
 // Only the columns the route actually reads, to keep D1 row-read cost down
 // (this endpoint is unauthenticated and can be called by anyone).
 const SELECT_COLUMNS =
-  'id, filename, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested, source, drive_file_id, aesthetic_score, short_caption, has_watermark';
+  'id, filename, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested, source, drive_file_id, aesthetic_score, short_caption, has_watermark, user_rating, user_caption, user_subjects, user_tags';
 
 function isEligible(row: PhotoRow): boolean {
   if (!row.instagram_suggested) return true;
@@ -28,17 +29,17 @@ const HUMAN_TERMS =
   /\b(person|people|persons|human|humans|man|men|woman|women|boy|boys|girl|girls|child|children|kid|kids|baby|toddler|infant|adult|tourist|tourists|visitor|visitors|photographer|photographers|couple|family|crowd|selfie|villager|villagers|farmer|farmers|fisherman|fishermen|guide|driver|ranger|rider|hiker|trekker|bride|groom)\b/i;
 
 function hasHuman(row: PhotoRow): boolean {
-  return HUMAN_TERMS.test(`${row.subjects ?? ''} ${row.description ?? ''}`);
+  return HUMAN_TERMS.test(`${effectiveText(row).subjects.join(' ')} ${row.description ?? ''}`);
 }
 
-// A photo must be rated at least this well (1-10) to be considered a "good" pick.
+// A photo must score at least this well (1-10, owner and model ratings combined) to be a "good" pick.
 const MIN_GOOD_AESTHETIC = 7;
 
 function score(row: PhotoRow): number {
-  const subjects: string[] = row.subjects ? JSON.parse(row.subjects) : [];
+  const subjects = effectiveText(row).subjects;
   // Looks dominate; subject count and description length only break ties
   // between similarly rated photos (and rank photos that are not rated yet).
-  let s = (row.aesthetic_score ?? 0) * 10;
+  let s = (combinedScore(row) ?? 0) * 10;
   s += Math.min(subjects.length, 5) * 0.5;
   s += Math.min((row.description ?? '').split(' ').filter(Boolean).length, 60) * 0.02;
 
@@ -52,8 +53,9 @@ function score(row: PhotoRow): number {
 }
 
 function buildResponse(row: PhotoRow) {
-  const subjects: string[] = row.subjects ? JSON.parse(row.subjects) : [];
-  const looks = row.aesthetic_score != null ? ` It rated ${row.aesthetic_score.toFixed(1)}/10 for visual quality.` : '';
+  const subjects = effectiveText(row).subjects;
+  const rating = combinedScore(row);
+  const looks = rating != null ? ` It rated ${rating.toFixed(1)}/10${row.user_rating != null ? ` (you gave it ${row.user_rating} stars)` : ' for visual quality'}.` : '';
   const reason = `This photo was selected because it features ${
     subjects.length > 0 ? subjects.join(', ') : 'interesting subjects'
   } in a ${row.environment ?? 'natural'} setting${row.season ? ` during ${row.season}` : ''}.${looks}`;
@@ -96,8 +98,8 @@ export async function dailyPickRoute(c: Context<{ Bindings: Env }>) {
 
   // Prefer photos rated as good-looking; if none qualify, take the best rated
   // ones; if nothing has been rated yet, fall back to every candidate.
-  const rated = candidates.filter((r) => r.aesthetic_score != null);
-  const good = rated.filter((r) => (r.aesthetic_score ?? 0) >= MIN_GOOD_AESTHETIC);
+  const rated = candidates.filter((r) => combinedScore(r) != null);
+  const good = rated.filter((r) => (combinedScore(r) ?? 0) >= MIN_GOOD_AESTHETIC);
   const pool = good.length > 0 ? good : rated.length > 0 ? rated : candidates;
 
   const best = pool.reduce((a, b) => (score(b) > score(a) ? b : a));
