@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { prepareFaceImage, scanFaces } from '../src/faces/scanFaces';
+import { MAX_FACES_PER_PHOTO, prepareFaceImage, scanFaces, uprightBoxToRaw } from '../src/faces/scanFaces';
 
 describe('scanFaces', () => {
   let dir: string;
@@ -62,5 +62,57 @@ describe('scanFaces', () => {
 
     expect(count).toBe(0);
     expect(cloudflareClient.ingestFaces).toHaveBeenCalledWith('hash2', 'buffalo_l', []);
+  });
+
+  const near = (actual: object, expected: Record<string, number>) =>
+    Object.entries(expected).forEach(([k, v]) => expect((actual as Record<string, number>)[k]).toBeCloseTo(v, 6));
+
+  it.each([
+    [6, { x: 0.2, y: 0.7, w: 0.3, h: 0.2 }],
+    [8, { x: 0.5, y: 0.1, w: 0.3, h: 0.2 }],
+    [3, { x: 0.7, y: 0.5, w: 0.2, h: 0.3 }],
+    [1, { x: 0.1, y: 0.2, w: 0.2, h: 0.3 }],
+  ])('maps an upright box into the raw frame for orientation %i', (orientation, expected) => {
+    near(uprightBoxToRaw({ x: 0.1, y: 0.2, w: 0.2, h: 0.3 }, orientation), expected);
+  });
+
+  it('maps undefined orientation to identity', () => {
+    near(uprightBoxToRaw({ x: 0.1, y: 0.2, w: 0.2, h: 0.3 }, undefined), { x: 0.1, y: 0.2, w: 0.2, h: 0.3 });
+  });
+
+  it('writes raw-frame boxes for a file with EXIF orientation 6', async () => {
+    const rotated = path.join(dir, 'rot.jpg');
+    await sharp({ create: { width: 200, height: 100, channels: 3, background: { r: 1, g: 2, b: 3 } } })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toFile(rotated);
+    // Upright image is 100 x 200.
+    const sidecar = {
+      detect: vi.fn().mockResolvedValue({
+        model: 'm',
+        width: 100,
+        height: 200,
+        faces: [{ bbox: [10, 40, 30, 100], detScore: 0.9, embedding: 'e' }],
+      }),
+    };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
+    await scanFaces(rotated, 'h', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
+    near(cloudflareClient.ingestFaces.mock.calls[0][2][0].bbox, { x: 0.2, y: 0.7, w: 0.3, h: 0.2 });
+  });
+
+  it('keeps only the largest faces when there are more than the per-request cap', async () => {
+    const faces = Array.from({ length: MAX_FACES_PER_PHOTO + 5 }, (_, i) => ({
+      bbox: [0, 0, 10 + i, 10 + i],
+      detScore: 0.9,
+      embedding: `e${i}`,
+    }));
+    const sidecar = { detect: vi.fn().mockResolvedValue({ model: 'm', width: 1280, height: 640, faces }) };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
+    const count = await scanFaces(file, 'h', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
+    expect(count).toBe(MAX_FACES_PER_PHOTO);
+    const sent = cloudflareClient.ingestFaces.mock.calls[0][2];
+    expect(sent).toHaveLength(MAX_FACES_PER_PHOTO);
+    expect(sent.some((f: any) => f.embedding === 'e0')).toBe(false);
+    expect(sent.some((f: any) => f.embedding === `e${MAX_FACES_PER_PHOTO + 4}`)).toBe(true);
   });
 });

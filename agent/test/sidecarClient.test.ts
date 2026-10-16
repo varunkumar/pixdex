@@ -29,4 +29,16 @@ describe('FaceSidecarClient', () => {
     await expect(client.model()).resolves.toBe('buffalo_l');
     expect(fetchFn.mock.calls[0][0]).toBe('http://127.0.0.1:8799/health');
   });
+
+  it('passes an abort signal to detect and model calls', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ model: 'm', width: 1, height: 1, faces: [] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ model: 'm' }), { status: 200 }));
+    const client = new FaceSidecarClient('http://127.0.0.1:8799', fetchFn as unknown as typeof fetch);
+    await client.detect(Buffer.from([1]));
+    await client.model();
+    expect(fetchFn.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(fetchFn.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
+  });
 });

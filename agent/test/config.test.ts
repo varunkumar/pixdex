@@ -68,5 +68,9 @@ describe('loadConfig', () => {
       'http://127.0.0.1:8799'
     );
     expect(() => loadConfig({ ...base, FACE_SIDECAR_URL: 'nope' })).toThrow();
+    for (const ok of ['http://localhost:8799', 'http://[::1]:8799']) {
+      expect(loadConfig({ ...base, FACE_SIDECAR_URL: ok }).FACE_SIDECAR_URL).toBe(ok);
+    }
+    expect(() => loadConfig({ ...base, FACE_SIDECAR_URL: 'http://192.168.1.5:8799' })).toThrow(/loopback/);
   });
 });

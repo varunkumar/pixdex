@@ -10,7 +10,13 @@ const configSchema = z.object({
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
   ORIGINALS_PORT: z.coerce.number().int().positive().default(8787),
   ORIGINALS_TOKEN: z.string().min(1).optional(),
-  FACE_SIDECAR_URL: z.string().url().optional(),
+  FACE_SIDECAR_URL: z
+    .string()
+    .url()
+    .refine((value) => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(value).hostname), {
+      message: 'FACE_SIDECAR_URL must point at a loopback host (127.0.0.1, localhost or [::1])',
+    })
+    .optional(),
 });
 
 export type AgentConfig = z.infer<typeof configSchema>;

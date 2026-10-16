@@ -30,6 +30,7 @@ export class FaceSidecarClient {
       method: 'POST',
       headers: { 'Content-Type': 'image/jpeg' },
       body: jpeg,
+      signal: AbortSignal.timeout(60_000),
     });
     if (!response.ok) {
       throw new Error(`sidecar /faces failed: ${response.status}`);
@@ -39,7 +40,7 @@ export class FaceSidecarClient {
 
   /** The model name the sidecar reports, used to find photos not yet scanned with it. */
   async model(): Promise<string> {
-    const response = await this.fetchFn(`${this.baseUrl}/health`);
+    const response = await this.fetchFn(`${this.baseUrl}/health`, { signal: AbortSignal.timeout(5_000) });
     if (!response.ok) {
       throw new Error(`sidecar /health failed: ${response.status}`);
     }
