@@ -43,6 +43,11 @@ async function ingest(faces: { x: number; v: Float32Array; det?: number; w?: num
     }),
   });
   expect(res.status).toBe(200);
+  // Ingest now auto-matches against named people; these tests exercise the explicit match route
+  // on unassigned faces, so undo ingest-time matching (covered in auto-match.test.ts).
+  await env.DB.prepare(
+    "UPDATE faces SET assign_status = 'unassigned', person_id = NULL, match_score = NULL WHERE assign_status = 'auto'"
+  ).run();
 }
 
 const idAt = async (x: number) =>

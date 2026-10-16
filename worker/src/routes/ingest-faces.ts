@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../types';
 import { embeddingFromBase64, embeddingToBytes } from '../people/embedding';
+import { autoMatchFaces } from '../people/autoMatch';
 
 type Box = { x: number; y: number; w: number; h: number };
 
@@ -112,6 +113,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   ];
   let stored = 0;
   let kept = 0;
+  const newIds: string[] = [];
   faces.forEach((f, i) => {
     if (confirmedBoxes.some((b) => iou(b, f.bbox) >= 0.5)) {
       kept++;
@@ -119,6 +121,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
     }
     stored++;
     const faceId = crypto.randomUUID();
+    newIds.push(faceId);
     for (const r of rejections.results) {
       if (iou({ x: r.bbox_x, y: r.bbox_y, w: r.bbox_w, h: r.bbox_h }, f.bbox) >= 0.5) {
         statements.push(
@@ -142,5 +145,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   );
   await c.env.DB.batch(statements);
 
-  return c.json({ stored, kept });
+  const matched = await autoMatchFaces(c.env.DB, newIds);
+
+  return c.json({ stored, kept, matched });
 }
