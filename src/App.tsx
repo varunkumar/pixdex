@@ -16,7 +16,9 @@ import { theme } from './theme';
 const queryClient = new QueryClient({
   // One retry, then show the error: three backed-off retries kept spinners going for seconds.
   // Refetching on every tab focus only surfaces errors for data that rarely changes.
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  // A two minute staleTime stops every page visit re-running the heavy list queries (albums, people);
+  // mutations invalidate the keys they change.
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 120_000 } },
 });
 
 const RootLayout = () => (

@@ -62,6 +62,21 @@ Notes:
 - Migrations `0009_people.sql` (faces and people) and `0010_faces_person_status_created_idx.sql` (an index) are additive and auto-apply on merge.
 - The agent is not deployed; it runs on your Mac.
 
+## D1 read budget
+
+The free tier allows 5M rows read per day and every route past the limit returns 500 (`D1_ERROR: ... exceeded
+D1's free tier daily row read limit`, resets at midnight UTC). See what is spending it with
+`cd worker && npx wrangler d1 insights pixdex --timePeriod 1d --sort-type sum --sort-by reads --limit 12 --json`,
+and measure a query with `wrangler d1 execute pixdex --remote --json --command "..."` (`meta.rows_read`).
+Rules learned from that:
+
+- A list of ids is looked up with `json_each(?) j CROSS JOIN faces f ON f.id = j.value`; `id IN (SELECT ... json_each)`
+  next to a status filter made D1 scan every unassigned face (about 1,500 reads for a handful of ids).
+- Per-photo queries on `faces` write `+assign_status` so the low-selectivity status index is not used.
+- `UPDATE ... FROM <cte>` scans the table; update by `id IN (...)` with correlated lookups instead.
+- The albums page aggregates once, then ranks covers only for the 12 albums on the page.
+- The frontend keeps list data fresh for two minutes (`staleTime`), mutations invalidate what they change.
+
 ## Keeping docs current
 
 After every feature or change, in the same commit or PR, update:

@@ -116,35 +116,45 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // when the album has one (newest first), else the most recently indexed.
   // latestDate and the default order use the newest real photo date, falling back
   // to ingest time only for albums with no dated photo at all.
-  const [rows, count] = await Promise.all([
-    c.env.DB.prepare(
-      `WITH ranked AS (
-         SELECT album, id, content_hash, date_time,
-                ROW_NUMBER() OVER (
-                  PARTITION BY album
-                  ORDER BY (id = (SELECT photo_id FROM album_covers WHERE album_covers.album = photos.album)) DESC,
-                           date_time IS NULL, date_time DESC, last_indexed DESC, id
-                ) AS rn,
-                AVG(${COMBINED_SCORE_SQL}) OVER (PARTITION BY album) AS avg_score,
-                COUNT(*) OVER (PARTITION BY album) AS cnt,
-                MAX(date_time) OVER (PARTITION BY album) AS newest_date,
-                MAX(last_indexed) OVER (PARTITION BY album) AS newest_indexed
-         FROM photos
-         WHERE album IS NOT NULL ${filter}
-       )
-       SELECT album AS name, cnt AS photo_count, id AS cover_photo_id,
-              content_hash, newest_date AS latest_date, avg_score
-       FROM ranked
-       WHERE rn = 1
-       ORDER BY ${orderBy}
-       LIMIT ? OFFSET ?`
-    )
-      .bind(...filterParams, limit, offset)
-      .all<AlbumRow>(),
-    c.env.DB.prepare('SELECT COUNT(DISTINCT album) AS total FROM photos WHERE album IS NOT NULL').first<{
-      total: number;
-    }>(),
-  ]);
+  // One pass over photos builds the per-album aggregates (agg); only the requested page's albums
+  // are then ranked for their cover, so the window sort covers 12 albums instead of the library.
+  const rows = await c.env.DB.prepare(
+    `WITH agg AS (
+       SELECT album, COUNT(*) AS cnt, MAX(date_time) AS newest_date, MAX(last_indexed) AS newest_indexed,
+              AVG(${COMBINED_SCORE_SQL}) AS avg_score
+       FROM photos
+       WHERE album IS NOT NULL ${filter}
+       GROUP BY album
+     ),
+     page AS (SELECT album, cnt, newest_date, newest_indexed, avg_score FROM agg ORDER BY ${orderBy} LIMIT ? OFFSET ?),
+     ranked AS (
+       SELECT album AS r_album, id AS r_id, content_hash AS r_hash,
+              ROW_NUMBER() OVER (
+                PARTITION BY album
+                ORDER BY (id = (SELECT photo_id FROM album_covers WHERE album_covers.album = photos.album)) DESC,
+                         date_time IS NULL, date_time DESC, last_indexed DESC, id
+              ) AS rn
+       FROM photos
+       WHERE album IN (SELECT album FROM page)
+     )
+     SELECT album AS name, cnt AS photo_count, r_id AS cover_photo_id, r_hash AS content_hash,
+            newest_date AS latest_date, avg_score, (SELECT COUNT(*) FROM agg) AS agg_total
+     FROM page JOIN ranked ON r_album = album AND rn = 1
+     ORDER BY ${orderBy}`
+  )
+    .bind(...filterParams, limit, offset)
+    .all<AlbumRow & { agg_total: number }>();
+
+  // The total counts every album. With no name filter the aggregate already is that; otherwise
+  // (or when the page is empty) it is counted separately.
+  const total =
+    !only && rows.results.length > 0
+      ? rows.results[0].agg_total
+      : ((
+          await c.env.DB.prepare('SELECT COUNT(DISTINCT album) AS total FROM photos WHERE album IS NOT NULL').first<{
+            total: number;
+          }>()
+        )?.total ?? 0);
 
   return c.json({
     albums: rows.results.map((r) => ({
@@ -154,6 +164,6 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
       coverThumbnailUrl: r.content_hash ? `/thumbnails/${r.content_hash}` : null,
       latestDate: r.latest_date ?? null,
     })),
-    total: count?.total ?? 0,
+    total,
   });
 }

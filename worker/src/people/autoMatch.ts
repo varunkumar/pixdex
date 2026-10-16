@@ -19,8 +19,10 @@ export async function autoMatchFaces(
 
   const { results: faces } = await db
     .prepare(
-      `SELECT id, embedding, det_score, bbox_w, bbox_h FROM faces
-       WHERE id IN (SELECT value FROM json_each(?)) AND assign_status = 'unassigned'`
+      // CROSS JOIN pins the id list as the outer loop, so each face is a primary-key lookup; a plain
+      // IN (...) with the status filter made D1 scan every unassigned face (about 1,500 reads).
+      `SELECT f.id, f.embedding, f.det_score, f.bbox_w, f.bbox_h FROM json_each(?) j
+       CROSS JOIN faces f ON f.id = j.value WHERE f.assign_status = 'unassigned'`
     )
     .bind(ids)
     .all<{ id: string; embedding: ArrayBuffer; det_score: number; bbox_w: number; bbox_h: number }>();
@@ -53,15 +55,17 @@ export async function autoMatchFaces(
     if (best && classify(best.score) === 'auto') updates.push({ id: f.id, personId: best.personId, score: best.score });
   }
   if (updates.length > 0) {
-    // One set-based statement (D1 limits queries per invocation).
+    // One set-based statement (D1 limits queries per invocation). Written as id lookups with the
+    // status check unindexed (+): UPDATE ... FROM a CTE, or an indexed status filter, scans the table.
+    const payload = JSON.stringify(updates);
     await db
       .prepare(
-        `WITH x AS (SELECT json_extract(value, '$.id') AS id, json_extract(value, '$.personId') AS pid,
-                           json_extract(value, '$.score') AS s FROM json_each(?))
-         UPDATE faces SET assign_status = 'auto', person_id = x.pid, match_score = x.s
-         FROM x WHERE faces.id = x.id AND faces.assign_status = 'unassigned'`
+        `UPDATE faces SET assign_status = 'auto',
+           person_id = (SELECT json_extract(value, '$.personId') FROM json_each(?) WHERE json_extract(value, '$.id') = faces.id),
+           match_score = (SELECT json_extract(value, '$.score') FROM json_each(?) WHERE json_extract(value, '$.id') = faces.id)
+         WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?)) AND +assign_status = 'unassigned'`
       )
-      .bind(JSON.stringify(updates))
+      .bind(payload, payload, payload)
       .run();
   }
   return { matched: updates.length, skipped };
