@@ -91,4 +91,21 @@ describe('GET /daily-pick', () => {
     expect(body.photo.subjects).toEqual(['leopard', 'tree', 'sunset']);
     expect(body.photo.suggested_hashtags).toBeUndefined();
   });
+
+  it('never picks a photo showing a person, even when it looks better', async () => {
+    await seed('portrait', ['child', 'jeep'], 'A child smiling in a safari jeep.', null, 9.5);
+    await seed('people-desc', ['jeep'], 'Tourists watching a tiger from a jeep.', null, 9);
+    await seed('tiger', ['tiger', 'big cat'], 'A tiger walking through tall grass.', null, 7.2);
+
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const body = (await response.json()) as any;
+    expect(body.photo.id).toBe('tiger');
+  });
+
+  it('returns 404 when every photo shows a person', async () => {
+    await seed('portrait', ['woman'], 'A woman standing by a lake.', null, 9);
+
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    expect(response.status).toBe(404);
+  });
 });

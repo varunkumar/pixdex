@@ -20,6 +20,17 @@ function isEligible(row: PhotoRow): boolean {
   return daysSince > 90;
 }
 
+// The pick is for nature, wildlife and landscapes, so anything showing a person
+// is out. The index has no explicit "people" field, so match the model's
+// subjects and description text. "portrait" is left out on purpose: it is
+// common for animal portraits.
+const HUMAN_TERMS =
+  /\b(person|people|persons|human|humans|man|men|woman|women|boy|boys|girl|girls|child|children|kid|kids|baby|toddler|infant|adult|tourist|tourists|visitor|visitors|photographer|photographers|couple|family|crowd|selfie|villager|villagers|farmer|farmers|fisherman|fishermen|guide|driver|ranger|rider|hiker|trekker|bride|groom)\b/i;
+
+function hasHuman(row: PhotoRow): boolean {
+  return HUMAN_TERMS.test(`${row.subjects ?? ''} ${row.description ?? ''}`);
+}
+
 // A photo must be rated at least this well (1-10) to be considered a "good" pick.
 const MIN_GOOD_AESTHETIC = 7;
 
@@ -75,8 +86,13 @@ export async function dailyPickRoute(c: Context<{ Bindings: Env }>) {
     return c.text('No photos available', 404);
   }
 
-  const eligible = all.results.filter(isEligible);
-  const candidates = eligible.length > 0 ? eligible : all.results;
+  const natural = all.results.filter((r) => !hasHuman(r));
+  if (natural.length === 0) {
+    return c.text('No photos available', 404);
+  }
+
+  const eligible = natural.filter(isEligible);
+  const candidates = eligible.length > 0 ? eligible : natural;
 
   // Prefer photos rated as good-looking; if none qualify, take the best rated
   // ones; if nothing has been rated yet, fall back to every candidate.

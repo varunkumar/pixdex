@@ -14,7 +14,7 @@ run any backend of its own.
 - `src/` - the frontend (this app): browse/search UI, calls the worker via
   `WorkerApiClient`
 - `worker/` - the deployed Cloudflare Worker that serves `/search`, `/albums`,
-  `/photos/:id`, `/daily-pick`, and thumbnails
+  `/photos/:id`, `/daily-pick` (nature and wildlife only, no people), and thumbnails
 - `agent/` - a separate local agent used to index photos (from local
   directories or Google Drive) into the store the worker reads from; indexing
   is not done through this web UI

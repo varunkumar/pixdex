@@ -45,6 +45,11 @@ to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
 `no-cache`.
 
+The daily pick (`worker/src/routes/daily-pick.ts`) is for nature, wildlife and
+landscapes: photos whose subjects or description mention a person are never
+picked (text match, since the index has no people field). It returns 404 if no
+photo qualifies.
+
 ### `worker/` - Cloudflare Worker (Hono, D1, R2)
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
