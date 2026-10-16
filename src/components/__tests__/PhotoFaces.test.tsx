@@ -39,7 +39,7 @@ const people = [
   { id: 'pe2', name: 'Ravi', faceCount: 1, photoCount: 1, cover: null },
 ];
 
-const show = () => renderWithProviders(<PhotoFaces photoId="p1" thumbnailUrl="/api/thumbnails/h1" />);
+const show = () => renderWithProviders(<PhotoFaces photoId="p1" />);
 
 describe('PhotoFaces', () => {
   beforeEach(() => {
@@ -54,16 +54,15 @@ describe('PhotoFaces', () => {
     const { container } = show();
     await waitFor(() => expect(workerApiClient.getPhotoFaces).toHaveBeenCalledWith('p1'));
     expect(container.querySelector('[data-testid="photo-faces"]')).toBeNull();
-    expect(screen.queryByText('Faces')).toBeNull();
+    expect(screen.queryByText('People')).toBeNull();
   });
 
-  it('shows a numbered box and a row per face', async () => {
+  it('titles the card People and shows a row per face, without a second copy of the photo', async () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face(), face({ id: 'f2' })]);
     show();
     expect(await screen.findAllByTestId('face-row')).toHaveLength(2);
-    expect(screen.getAllByTestId('face-box')).toHaveLength(2);
-    expect(screen.getByTestId('face-box-1')).toHaveTextContent('1');
-    expect(screen.getByTestId('face-box-2')).toHaveTextContent('2');
+    expect(screen.getByText('People')).toBeInTheDocument();
+    expect(screen.queryByTestId('face-box')).toBeNull();
   });
 
   it('naming an unnamed face as a new person calls createPerson with the face id', async () => {

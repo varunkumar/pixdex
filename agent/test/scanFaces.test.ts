@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_FACES_PER_PHOTO, prepareFaceImage, scanFaces, uprightBoxToRaw } from '../src/faces/scanFaces';
+import { MAX_FACES_PER_PHOTO, cropFace, prepareFaceImage, scanFaces, uprightBoxToRaw } from '../src/faces/scanFaces';
 
 describe('scanFaces', () => {
   let dir: string;
@@ -114,5 +114,29 @@ describe('scanFaces', () => {
     expect(sent).toHaveLength(MAX_FACES_PER_PHOTO);
     expect(sent.some((f: any) => f.embedding === 'e0')).toBe(false);
     expect(sent.some((f: any) => f.embedding === `e${MAX_FACES_PER_PHOTO + 4}`)).toBe(true);
+  });
+
+  it('posts a 192 px square crop with each face, cut from the original', async () => {
+    const sidecar = {
+      detect: vi.fn().mockResolvedValue({
+        model: 'buffalo_l',
+        width: 1280,
+        height: 640,
+        faces: [{ bbox: [128, 64, 384, 320], detScore: 0.95, embedding: 'emb1' }],
+      }),
+    };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue(true) };
+
+    await scanFaces(file, 'hash3', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any });
+
+    const [, , faces] = cloudflareClient.ingestFaces.mock.calls[0];
+    const meta = await sharp(Buffer.from(faces[0].crop, 'base64')).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(['jpeg', 192, 192]);
+  });
+
+  it('keeps the crop square and inside the image for a face at the edge', async () => {
+    const edge = await cropFace(await sharp(file).jpeg().toBuffer(), { x: 0, y: 0.9, w: 0.05, h: 0.1 });
+    const meta = await sharp(edge).metadata();
+    expect([meta.width, meta.height]).toEqual([meta.width, meta.width]);
   });
 });

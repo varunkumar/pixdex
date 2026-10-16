@@ -45,7 +45,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 Same-origin read proxy. Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `albums`,
-`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `people`,
+`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
 `people/groups`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
@@ -144,13 +144,20 @@ plus `photos.faces_scanned_model`. Re-ingesting a photo replaces only its
 Matching (`worker/src/people/`): each named person is represented by up to
 `REFERENCES_PER_PERSON` (30) reference embeddings (the newest confirmed faces; people with none are skipped); a
 face's score is its best dot product against a person's references. Only faces
-with `det_score >= MIN_DET_SCORE` (0.6) and both sides `>= MIN_FACE_SIDE` (0.03,
+with `det_score >= MIN_DET_SCORE` (0.7) and both sides `>= MIN_FACE_SIDE` (0.05,
 fraction of the image) are matchable. A score `>= AUTO_THRESHOLD` (0.5) attaches
 the face as `auto`; `>= SUGGEST_THRESHOLD` (0.4) only surfaces it as a suggestion
 to review. Matching runs automatically at ingest (`autoMatch.ts`) and when a
 group or face is named, and can be re-run from the person's page
 (`POST people/:id/match`). Unnamed faces are grouped by centroid clustering
 (`clusterFaces`) for the People page.
+
+Each ingested face may carry a `crop` (base64 JPEG, a padded 192 px square cut from the original by the agent).
+The Worker stores it in R2 at `faces/<faceId>.jpg` (`faces.crop_key`, migration `0012_face_crop.sql`, additive),
+serves it at `GET /faces/:id/crop` (read token; the Pages proxy caches it for a day) and exposes it as
+`cropUrl`. A re-scan deletes the crops of the faces it replaces and gives an overlapping confirmed face the new
+crop without touching its name. `backfill-faces --recrop` (`missingCrops` on `/ingest/faces/unscanned`) re-scans
+photos that have a crop-less face.
 
 A person's cover (`persons.cover_face_id`, migration `0011_person_cover.sql`, additive) is the
 owner's pick via `POST people/:id/cover` while that face is still confirmed or auto-matched to the

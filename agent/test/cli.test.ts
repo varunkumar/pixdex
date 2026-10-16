@@ -101,6 +101,9 @@ describe('runCli', () => {
 
     expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(0);
     expect(backfillFacesMock.mock.calls[1][0].pathPrefix).toBe('/tmp/photos/');
+
+    expect(await runCli(['backfill-faces', '--recrop'])).toBe(0);
+    expect(backfillFacesMock.mock.calls[2][0]).toMatchObject({ missingCrops: true, pathPrefix: undefined });
   });
 
   it('backfill-faces exits 1 when FACE_SIDECAR_URL is not set', async () => {

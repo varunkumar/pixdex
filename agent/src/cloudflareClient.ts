@@ -7,6 +7,8 @@ export interface FacePayload {
   bbox: { x: number; y: number; w: number; h: number };
   detScore: number;
   embedding: string;
+  /** Base64 JPEG of a padded square crop of the face, cut from the original. */
+  crop?: string;
 }
 
 export interface IngestPhotoPayload {
@@ -106,7 +108,7 @@ export class CloudflareClient {
   /** One page of indexed local photos not yet face-scanned with this model (content hash and source path). */
   async facesUnscanned(
     model: string,
-    opts: { cursor?: number; pathPrefix?: string; limit?: number } = {}
+    opts: { cursor?: number; pathPrefix?: string; limit?: number; missingCrops?: boolean } = {}
   ): Promise<{ items: { contentHash: string; path: string }[]; nextCursor: number | null }> {
     const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces/unscanned`, {
       method: 'POST',

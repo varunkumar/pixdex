@@ -58,3 +58,19 @@ export async function photoFacesRoute(c: Ctx) {
     .all<FaceWithJoins>();
   return c.json({ faces: rows.results.map(serializeFace) });
 }
+
+/** The sharp crop the agent uploaded for a face. Keyed by face id, so the proxy caches it for a day only. */
+export async function faceCropRoute(c: Ctx) {
+  const row = await c.env.DB.prepare('SELECT crop_key FROM faces WHERE id = ?')
+    .bind(c.req.param('id'))
+    .first<{ crop_key: string | null }>();
+  if (!row?.crop_key) return c.text('Not Found', 404);
+  const object = await c.env.THUMBNAILS.get(row.crop_key);
+  if (!object) return c.text('Not Found', 404);
+  return new Response(object.body, {
+    headers: {
+      'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
+      'Cache-Control': 'private, max-age=86400',
+    },
+  });
+}

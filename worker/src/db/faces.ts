@@ -9,12 +9,15 @@ export interface FaceRow {
   person_id: string | null;
   assign_status: 'unassigned' | 'auto' | 'confirmed';
   match_score: number | null;
+  crop_key: string | null;
 }
 
 export interface SerializedFace {
   id: string;
   photoId: string;
   thumbnailUrl: string;
+  /** Sharp crop of the face, when the agent uploaded one. */
+  cropUrl: string | null;
   bbox: { x: number; y: number; w: number; h: number };
   detScore: number;
   personId: string | null;
@@ -25,7 +28,7 @@ export interface SerializedFace {
 
 /** Shared SELECT for face reads. Never selects the embedding. */
 export const FACE_SELECT = `SELECT f.id, f.photo_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,
-  f.det_score, f.person_id, f.assign_status, f.match_score,
+  f.det_score, f.person_id, f.assign_status, f.match_score, f.crop_key,
   p.name AS person_name, ph.content_hash AS content_hash
   FROM faces f
   JOIN photos ph ON ph.id = f.photo_id
@@ -36,6 +39,7 @@ export function serializeFace(row: FaceRow & { person_name: string | null; conte
     id: row.id,
     photoId: row.photo_id,
     thumbnailUrl: `/thumbnails/${row.content_hash}`,
+    cropUrl: row.crop_key ? `/faces/${row.id}/crop` : null,
     bbox: { x: row.bbox_x, y: row.bbox_y, w: row.bbox_w, h: row.bbox_h },
     detScore: row.det_score,
     personId: row.person_id,

@@ -163,6 +163,8 @@ END;`,
   'CREATE INDEX IF NOT EXISTS idx_faces_person_status_created ON faces (person_id, assign_status, created_at);',
   // Mirrors 0011_person_cover.sql.
   'ALTER TABLE persons ADD COLUMN cover_face_id TEXT;',
+  // Mirrors 0012_face_crop.sql.
+  'ALTER TABLE faces ADD COLUMN crop_key TEXT;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

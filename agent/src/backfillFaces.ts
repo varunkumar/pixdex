@@ -23,15 +23,17 @@ export async function backfillFaces(deps: {
   cloudflareClient: CloudflareClient;
   sidecar: FaceSidecarClient;
   pathPrefix?: string;
+  /** Also re-scan photos that have a face without a sharp crop (faces scanned before crops existed). */
+  missingCrops?: boolean;
   onProgress?: (message: string) => void;
 }): Promise<BackfillFacesResult> {
-  const { cloudflareClient, sidecar, pathPrefix, onProgress } = deps;
+  const { cloudflareClient, sidecar, pathPrefix, missingCrops, onProgress } = deps;
   const result: BackfillFacesResult = { total: 0, scanned: 0, faces: 0, missing: 0, notIndexed: 0, failed: 0 };
   const model = await sidecar.model();
 
   let cursor: number | undefined;
   do {
-    const page = await cloudflareClient.facesUnscanned(model, { cursor, pathPrefix });
+    const page = await cloudflareClient.facesUnscanned(model, { cursor, pathPrefix, missingCrops });
     for (const { contentHash, path: file } of page.items) {
       result.total++;
       try {

@@ -7,7 +7,7 @@ import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
-import { assignFaceRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute } from './routes/faces';
+import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute } from './routes/faces';
 import {
   assignFacesRoute,
   createPersonRoute,
@@ -64,6 +64,7 @@ app.post('/people/:id/match', matchPersonRoute);
 app.post('/people/:id/cover', setPersonCoverRoute);
 
 app.use('/faces/*', requireReadToken);
+app.get('/faces/:id/crop', faceCropRoute);
 app.post('/faces/:id/assign', assignFaceRoute);
 app.post('/faces/:id/reject', rejectFaceRoute);
 app.post('/faces/:id/unassign', unassignFaceRoute);

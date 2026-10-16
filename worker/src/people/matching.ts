@@ -5,8 +5,8 @@ export const GROUPS_PAGE_SIZE = 100;
 export const REFERENCES_PER_PERSON = 30;
 /** Cap on multiply-adds (faces x total reference vectors x 512) one auto-match call may spend. */
 export const MAX_AUTO_MATCH_MACS = 1_500_000;
-export const MIN_DET_SCORE = 0.6;
-export const MIN_FACE_SIDE = 0.03;
+export const MIN_DET_SCORE = 0.7;
+export const MIN_FACE_SIDE = 0.05;
 
 /** SQL condition over `faces` columns, mirroring isMatchable. */
 export const MATCHABLE_SQL = `det_score >= ${MIN_DET_SCORE} AND bbox_w >= ${MIN_FACE_SIDE} AND bbox_h >= ${MIN_FACE_SIDE}`;

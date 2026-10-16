@@ -1,4 +1,4 @@
-import { Badge, Box, Button, Card, Group, Image, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Badge, Button, Card, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -159,8 +159,8 @@ const FaceRow = ({
   );
 };
 
-/** Faces found in a photo, with controls to name them and correct automatic matches. */
-const PhotoFaces = ({ photoId, thumbnailUrl }: { photoId: string; thumbnailUrl: string }) => {
+/** People found in a photo, with controls to name them and correct automatic matches. */
+const PhotoFaces = ({ photoId }: { photoId: string }) => {
   const queryClient = useQueryClient();
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
@@ -196,36 +196,7 @@ const PhotoFaces = ({ photoId, thumbnailUrl }: { photoId: string; thumbnailUrl: 
   return (
     <Card withBorder data-testid="photo-faces">
       <Stack gap="md">
-        <Title order={5}>Faces</Title>
-        <Box pos="relative" w="fit-content" maw="100%">
-          <Image src={thumbnailUrl} alt="" radius="md" mah={400} fit="contain" />
-          {faces.map((f, i) => (
-            <Box
-              key={f.id}
-              data-testid="face-box"
-              aria-hidden="true"
-              pos="absolute"
-              style={{
-                left: `${f.bbox.x * 100}%`,
-                top: `${f.bbox.y * 100}%`,
-                width: `${f.bbox.w * 100}%`,
-                height: `${f.bbox.h * 100}%`,
-                border: '2px solid var(--mantine-color-blue-5)',
-                borderRadius: 4,
-                pointerEvents: 'none',
-              }}
-            >
-              <Badge
-                data-testid={`face-box-${i + 1}`}
-                size="xs"
-                circle
-                style={{ position: 'absolute', top: -8, left: -8 }}
-              >
-                {i + 1}
-              </Badge>
-            </Box>
-          ))}
-        </Box>
+        <Title order={5}>People</Title>
         <Stack gap="md">
           {faces.map((f, i) => (
             <FaceRow key={f.id} face={f} index={i} people={people} onNamed={onNamed} onChanged={refresh} />
