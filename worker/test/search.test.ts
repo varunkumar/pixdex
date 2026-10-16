@@ -181,6 +181,37 @@ describe('GET /search', () => {
     });
   });
 
+  describe('vocabulary from the real library', () => {
+    beforeEach(async () => {
+      await env.DB.prepare('DELETE FROM photos').run();
+      await seed('pardus', 'v1', ['panthera pardus'], 'panthera pardus resting', 'Bandipur');
+      await seed('peafowl', 'v2', ['indian peafowl'], 'indian peafowl displaying', 'Bandipur');
+      await seed('child', 'v3', ['child'], 'child with balloons', 'School');
+      await seed('grad', 'v4', ['graduate'], 'graduate in a gown', 'School');
+      await seed('chital', 'v5', ['chital'], 'chital grazing', 'Bandipur');
+      await seed('langur', 'v6', ['gray langur'], 'gray langur on a branch', 'Bandipur');
+    });
+
+    it('maps common names to the scientific names the model also writes', async () => {
+      expect(await ids('leopard')).toEqual(['pardus']);
+    });
+
+    it('maps peacock to peafowl', async () => {
+      expect(await ids('peacock')).toEqual(['peafowl']);
+    });
+
+    it('maps kids to child, and graduation to graduate', async () => {
+      expect(await ids('kids')).toEqual(['child']);
+      expect(await ids('graduation')).toEqual(['grad']);
+    });
+
+    it('expands birds, deer and monkeys to species', async () => {
+      expect(await ids('birds')).toEqual(['peafowl']);
+      expect(await ids('deer')).toEqual(['chital']);
+      expect(await ids('monkeys')).toEqual(['langur']);
+    });
+  });
+
   describe('colour queries', () => {
     beforeEach(async () => {
       await env.DB.prepare('DELETE FROM photos').run();

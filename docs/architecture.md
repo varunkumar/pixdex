@@ -73,7 +73,10 @@ photo qualifies.
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
   word families (`search/word-families.json`: "hard" nouns/places, "soft"
   actions) are matched on word boundaries with plurals folded. Search tries
-  tiers until one finds photos: all groups (AND), then without soft action
+  tiers until one finds photos (the dictionaries were built from the library's own
+  vocabulary: `SELECT lower(value), COUNT(*) FROM photos, json_each(photos.subjects)
+  GROUP BY 1 ORDER BY 2 DESC`, same for `tags`; the model already writes
+  category and scientific names, so entries map between those variants): all groups (AND), then without soft action
   groups, then any group (OR, bm25-ranked). All terms are quoted. Colour
   words have families too (red/crimson/scarlet), and filler such as
   "shade" or "background" is ignored, so "tiger on a green background" is

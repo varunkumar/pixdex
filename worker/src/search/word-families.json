@@ -92,6 +92,38 @@
       "greyscale",
       "b&w",
       "bw"
+    ],
+    [
+      "leopard",
+      "panthera pardus"
+    ],
+    [
+      "tiger",
+      "bengal tiger",
+      "panthera tigris"
+    ],
+    [
+      "peacock",
+      "peafowl",
+      "indian peafowl",
+      "peahen"
+    ],
+    [
+      "gaur",
+      "indian bison",
+      "bison"
+    ],
+    [
+      "elephant",
+      "tusker",
+      "proboscidean"
+    ],
+    [
+      "graduation",
+      "graduate",
+      "graduates",
+      "convocation",
+      "graduation ceremony"
     ]
   ],
   "soft": [
