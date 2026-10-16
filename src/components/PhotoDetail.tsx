@@ -23,6 +23,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import Lightbox from './Lightbox';
+import PhotoReview from './PhotoReview';
 
 function formatBytes(bytes: number | null | undefined): string | null {
   if (bytes == null) return null;
@@ -183,7 +184,7 @@ const PhotoDetail = () => {
               {photo.format && <Field label="Format">{photo.format.toUpperCase()}</Field>}
               {photo.season && <Field label="Season">{photo.season}</Field>}
               {photo.aestheticScore != null && (
-                <Field label="Aesthetics">{photo.aestheticScore.toFixed(1)} / 10</Field>
+                <Field label="AI aesthetics">{photo.aestheticScore.toFixed(1)} / 10</Field>
               )}
               {/* Unknown (null) is left out entirely rather than shown as "Unknown". */}
               {photo.hasWatermark != null && <Field label="Watermark">{photo.hasWatermark ? 'Yes' : 'No'}</Field>}
@@ -197,6 +198,8 @@ const PhotoDetail = () => {
           </Stack>
         </Group>
       </Card>
+
+      <PhotoReview photo={photo} />
 
       <Card withBorder>
         <Stack gap="md">

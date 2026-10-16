@@ -10,6 +10,22 @@ describe('WorkerApiClient', () => {
     client = new WorkerApiClient('/api', fetchMock as unknown as typeof fetch, () => false);
   });
 
+  it('updatePhoto PATCHes the review and returns the updated photo', async () => {
+    fetchMock.mockResolvedValue({ ok: true, type: 'basic', json: async () => ({ id: 'p1', userRating: 4 }) });
+    const photo = await client.updatePhoto('p1', { userRating: 4 });
+    expect(photo.userRating).toBe(4);
+    expect(fetchMock).toHaveBeenCalledWith('/api/photos/p1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"userRating":4}',
+    });
+  });
+
+  it('updatePhoto throws on a failed save', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 400 });
+    await expect(client.updatePhoto('p1', { userRating: 4 })).rejects.toThrow('Could not save: 400');
+  });
+
   it('search() builds the query string, and returns results', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ results: [{ id: 'p1', thumbnailUrl: '/thumbnails/h1' }] }), { status: 200 })

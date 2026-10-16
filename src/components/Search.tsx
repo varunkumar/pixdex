@@ -3,15 +3,23 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { MdSearch } from 'react-icons/md';
 import { PAGE_SIZES, useListParams } from '../hooks/useListParams';
-import { workerApiClient } from '../services/api/WorkerApiClient';
+import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
+
+const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string }[] = [
+  { value: 'relevance', label: 'Best match' },
+  { value: 'rating', label: 'Best rated' },
+  { value: 'date', label: 'Newest first' },
+  { value: 'name', label: 'Alphabetical' },
+];
 
 const Search = () => {
   const { params, page, size, offset, update } = useListParams();
   const rawQ = params.get('q') ?? '';
   const q = rawQ.trim();
   const album = params.get('album') ?? '';
+  const sort = (SORT_OPTIONS.find((o) => o.value === params.get('sort'))?.value ?? 'relevance') as PhotoSort | 'relevance';
   const [text, setText] = useState(rawQ);
   const [syncedQ, setSyncedQ] = useState(rawQ);
 
@@ -30,8 +38,9 @@ const Search = () => {
   const hasCriteria = q !== '' || album !== '';
 
   const { data, isFetching, error, isPlaceholderData } = useQuery({
-    queryKey: ['search', q, album, page, size],
-    queryFn: () => workerApiClient.searchPage({ q, album, limit: size, offset }),
+    queryKey: ['search', q, album, page, size, sort],
+    queryFn: () =>
+      workerApiClient.searchPage({ q, album, sort: sort === 'relevance' ? undefined : sort, limit: size, offset }),
     enabled: hasCriteria,
     placeholderData: keepPreviousData,
   });
@@ -56,6 +65,14 @@ const Search = () => {
             onChange={(value) => update({ album: value }, { resetPage: true })}
             clearable
             searchable
+          />
+          <Select
+            label="Sort by"
+            aria-label="Sort results"
+            data={SORT_OPTIONS}
+            value={sort}
+            allowDeselect={false}
+            onChange={(value) => update({ sort: value === 'relevance' ? null : value }, { resetPage: true })}
           />
           <TextInput
             label="Search"

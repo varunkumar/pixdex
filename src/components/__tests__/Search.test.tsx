@@ -25,6 +25,14 @@ describe('Search', () => {
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: page(10), total: 56 });
   });
 
+  it('sorts by rating when asked in the URL and leaves relevance as the default', async () => {
+    renderWithProviders(<Search />, { route: '/search?q=eagle&sort=rating' });
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ q: 'eagle', sort: 'rating' }))
+    );
+    expect(screen.getByLabelText('Sort results')).toHaveValue('Best rated');
+  });
+
   it('runs from the URL on load and fills the form from it', async () => {
     renderWithProviders(<Search />, { route: '/search?q=big+cat&album=Kanha&page=2&size=24' });
 

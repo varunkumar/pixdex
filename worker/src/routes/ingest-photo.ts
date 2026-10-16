@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
-import { buildSearchText, ingestPhotoSchema } from '../db/photos';
+import { buildSearchText, effectiveText, ingestPhotoSchema, type PhotoRow } from '../db/photos';
 
 export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
   let body: unknown;
@@ -15,7 +15,14 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
     return c.json({ error: parsed.error.flatten() }, 400);
   }
   const p = parsed.data;
-  const searchText = buildSearchText(p);
+  // A re-index must not undo the owner's edits, so index their versions when set.
+  const edits = await c.env.DB.prepare(
+    'SELECT user_caption, user_subjects, user_tags, short_caption, subjects, tags FROM photos WHERE id = ?'
+  )
+    .bind(p.id)
+    .first<PhotoRow>();
+  const eff = edits ? effectiveText({ ...edits, subjects: JSON.stringify(p.subjects), tags: JSON.stringify(p.tags), short_caption: p.shortCaption ?? null }) : null;
+  const searchText = buildSearchText(eff ? { ...p, subjects: eff.subjects, tags: eff.tags, shortCaption: eff.shortCaption ?? undefined } : p);
   const now = new Date().toISOString();
 
   try {

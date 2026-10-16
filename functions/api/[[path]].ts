@@ -120,3 +120,29 @@ export const onRequestPut = async ({ request, env }: Context): Promise<Response>
   out.headers.set('Cache-Control', 'no-store');
   return out;
 };
+
+// Human review of one photo (rating, title, subjects, tags). JSON only, same
+// CORS-preflight reasoning as the cover write above; only photos/<id> is reachable.
+export const onRequestPatch = async ({ request, env }: Context): Promise<Response> => {
+  const path = new URL(request.url).pathname.replace(/^\/api\//, '');
+  if (!/^photos\/[^/]+$/.test(path)) return new Response('Not found', { status: 404 });
+  if (!request.headers.get('content-type')?.startsWith('application/json')) {
+    return new Response('Unsupported media type', { status: 415 });
+  }
+  if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
+
+  let response: Response;
+  try {
+    response = await fetch(`${env.WORKER_URL.replace(/\/$/, '')}/${path}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' },
+      body: await request.text(),
+    });
+  } catch {
+    return new Response('Upstream unavailable', { status: 502 });
+  }
+  const out = new Response(response.body, response);
+  out.headers.delete('set-cookie');
+  out.headers.set('Cache-Control', 'no-store');
+  return out;
+};

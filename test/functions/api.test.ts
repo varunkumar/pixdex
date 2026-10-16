@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { onRequestGet, onRequestPut } from '../../functions/api/[[path]]';
+import { onRequestGet, onRequestPatch, onRequestPut } from '../../functions/api/[[path]]';
 
 const env = {
   WORKER_URL: 'https://worker.example.dev/',
@@ -190,6 +190,39 @@ describe('/api proxy PUT', () => {
   it('rejects other paths and non-JSON bodies without calling the worker', async () => {
     expect((await put('/api/ingest/photo')).status).toBe(404);
     expect((await put('/api/albums/cover', 'text/plain')).status).toBe(415);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api proxy PATCH', () => {
+  const patch = (path: string, type = 'application/json') =>
+    onRequestPatch({
+      request: new Request(`https://pixdex.example.dev${path}`, {
+        method: 'PATCH',
+        headers: { 'content-type': type },
+        body: '{"userRating":4}',
+      }),
+      env,
+    });
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  it('forwards the photo review write with the server-side token', async () => {
+    expect((await patch('/api/photos/p1')).status).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('https://worker.example.dev/photos/p1');
+    expect(init.method).toBe('PATCH');
+    expect(new Headers(init.headers).get('authorization')).toBe('Bearer secret-token');
+  });
+
+  it('rejects other paths and non-JSON bodies without calling the worker', async () => {
+    expect((await patch('/api/ingest/photo')).status).toBe(404);
+    expect((await patch('/api/photos/p1/x')).status).toBe(404);
+    expect((await patch('/api/photos/p1', 'text/plain')).status).toBe(415);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

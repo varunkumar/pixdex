@@ -99,6 +99,11 @@ export const EXIF_MIGRATION_STATEMENTS = [
   'ALTER TABLE photos ADD COLUMN short_caption TEXT;',
   // Mirrors 0006_album_covers.sql.
   'CREATE TABLE IF NOT EXISTS album_covers (album TEXT PRIMARY KEY, photo_id TEXT NOT NULL);',
+  // Mirrors 0007_user_overrides.sql.
+  'ALTER TABLE photos ADD COLUMN user_rating INTEGER;',
+  'ALTER TABLE photos ADD COLUMN user_caption TEXT;',
+  'ALTER TABLE photos ADD COLUMN user_subjects TEXT;',
+  'ALTER TABLE photos ADD COLUMN user_tags TEXT;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

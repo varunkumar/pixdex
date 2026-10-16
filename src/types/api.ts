@@ -40,6 +40,20 @@ export interface SerializedPhoto {
   aestheticScore?: number | null;
   /** 3-4 word title; null/undefined when not generated yet. */
   shortCaption?: string | null;
+  /** Owner's 1-5 star rating; null/undefined when not rated by hand. */
+  userRating?: number | null;
+  /** 1-10 blend of the owner's rating and the model's score. */
+  combinedScore?: number | null;
+  /** Owner edits. subjects/tags/shortCaption above are already the effective values. */
+  overrides?: { shortCaption: string | null; subjects: string[] | null; tags: string[] | null };
+}
+
+/** Partial update: omit a field to keep it, send null to clear it (back to the AI value). */
+export interface PhotoReviewPatch {
+  userRating?: number | null;
+  caption?: string | null;
+  subjects?: string[] | null;
+  tags?: string[] | null;
 }
 
 export interface SearchResponse {

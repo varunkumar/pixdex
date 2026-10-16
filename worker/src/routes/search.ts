@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
 import { expandQuery, wildlifeSynonyms } from '../search/synonyms';
+import { COMBINED_SCORE_SQL } from '../db/rating';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 export async function searchRoute(c: Context<{ Bindings: Env }>) {
@@ -33,7 +34,7 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
         : sort === 'name'
           ? `ORDER BY filename COLLATE NOCASE, photos.id`
           : sort === 'rating'
-            ? `ORDER BY aesthetic_score IS NULL, aesthetic_score DESC, photos.date_time DESC, photos.id`
+            ? `ORDER BY ${COMBINED_SCORE_SQL} IS NULL, ${COMBINED_SCORE_SQL} DESC, photos.date_time DESC, photos.id`
             : match
               ? `ORDER BY bm25(photos_fts), last_indexed DESC`
               : `ORDER BY last_indexed DESC`;

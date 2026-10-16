@@ -5,7 +5,7 @@ import { ingestExifRoute } from './routes/ingest-exif';
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
-import { getAlbumsRoute, getPhotoRoute, putAlbumCoverRoute } from './routes/photos';
+import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
 import { searchRoute } from './routes/search';
 import { dailyPickRoute } from './routes/daily-pick';
 import type { Env } from './types';
@@ -34,6 +34,7 @@ app.get('/search', searchRoute);
 
 app.use('/photos/*', requireReadToken);
 app.get('/photos/:id', getPhotoRoute);
+app.patch('/photos/:id', patchPhotoRoute);
 
 app.use('/albums', requireReadToken);
 app.get('/albums', getAlbumsRoute);
