@@ -11,7 +11,7 @@ const pendingSchema = z.object({
   model: z.string().min(1),
 });
 
-export const MAX_FACES_PER_REQUEST = 50;
+export const MAX_FACES_PER_REQUEST = 10;
 
 const unit = z.number().min(0).max(1);
 const faceSchema = z.object({

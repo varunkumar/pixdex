@@ -271,7 +271,7 @@ faces return to `unassigned` and its rejections are dropped.
   (about 0.77 M at 1,000, about 0.15 M at 200). At 30,000 photos the library
   total (90 MB of image vectors) fits free D1 storage, and the cap keeps
   per-click cost flat as the library grows.
-- Faces: matching is bounded to 200 faces per request (x 512-d, about 0.1 M per reference, up to 30 references) and groups to 100 faces per page, ingest-time matching to 1.5 M multiply-adds per request and ingest to 50 faces per request. The Workers Free CPU limit (~10 ms) and D1's per-invocation query limit drove these sizes; real CPU is still to be measured on a deployed preview.
+- Faces: matching is bounded to 200 faces per request (x 512-d, about 0.1 M per reference, up to 30 references) and groups to 100 faces per page, ingest-time matching to 1.5 M multiply-adds per request and ingest to 10 faces per request. The Workers Free CPU limit (~10 ms) and D1's per-invocation query limit drove these sizes; real CPU is still to be measured on a deployed preview.
 - Verify the actual CPU time with a Worker test or a local `wrangler dev`
   benchmark at 1,000 candidates before shipping. If a request is too slow,
   lower the cap (down to 200 is acceptable to the owner) or move scoring to the

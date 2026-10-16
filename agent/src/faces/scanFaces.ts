@@ -23,7 +23,7 @@ export class PhotoNotIndexedError extends Error {
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 /** The Worker accepts at most this many faces per ingest request; keep the largest by area. */
-export const MAX_FACES_PER_PHOTO = 50;
+export const MAX_FACES_PER_PHOTO = 10;
 
 interface Box {
   x: number;

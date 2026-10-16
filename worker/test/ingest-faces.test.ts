@@ -183,8 +183,8 @@ describe('face ingest routes', () => {
     expect(res.status).toBe(404);
   });
 
-  it('rejects more than 50 faces in one request', async () => {
-    const faces = Array.from({ length: 51 }, (_, i) => face(0.1, i + 1));
+  it('rejects more than 10 faces in one request', async () => {
+    const faces = Array.from({ length: 11 }, (_, i) => face(0.1, i + 1));
     const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces });
     expect(res.status).toBe(400);
   });

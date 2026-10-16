@@ -165,8 +165,8 @@ invocation):
   budget stay `unassigned` and are counted in the `skipped` field of the
   `/ingest/faces` response (at least one face is always scored). Re-run matching
   from the person's page to catch them.
-- `/ingest/faces` accepts at most 50 faces per request (400 above); the agent
-  keeps the 50 largest by box area.
+- `/ingest/faces` accepts at most 10 faces per request (400 above); the agent
+  keeps the 10 largest by box area, which keeps a crowd photo under D1 Free per-invocation query limit.
 - Embeddings are read as a `Float32Array` view (little-endian, as on Workers/D1)
   and must be exactly 512 floats.
 - CPU evidence: a reviewer micro-benchmark on Apple silicon (decode and scoring
