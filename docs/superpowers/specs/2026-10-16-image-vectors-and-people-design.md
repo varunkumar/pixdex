@@ -221,6 +221,15 @@ face ids, bboxes, person ids and scores only.
 2. **When a face is named.** After create, assign or bulk assign, the frontend
    runs the apply-matching loop for that person over the unnamed faces already
    in the library.
+**Candidates are only photos with usable faces.** Matching never looks at the
+photo table at large. It reads the `faces` table, which only has rows for photos
+where the agent detected a face (wildlife photos have none and are never
+touched). Within that, only faces good enough to match are considered:
+`det_score >= MIN_DET_SCORE` (0.6) and both box sides `>= MIN_FACE_SIDE` (0.03 of
+the image, about 38 px at the 1280 px scan size). Smaller or weaker faces are
+stored (so the photo page can show them and you can name them by hand) but are
+left out of automatic matching, groups and suggestions. Both numbers are
+starting points to tune on real photos.
 References per person are capped at the **30 newest confirmed faces**
 (`REFERENCES_PER_PERSON`) so an ingest reads a bounded number of rows (people
 x 30), which keeps the free D1 read quota safe during a backfill.
