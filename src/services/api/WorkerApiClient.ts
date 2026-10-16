@@ -2,8 +2,12 @@ import type {
   AlbumsPageResponse,
   AlbumsResponse,
   DailyPickResponse,
+  FaceGroup,
+  MatchResponse,
+  PersonSummary,
   PhotoReviewPatch,
   SearchResponse,
+  SerializedFace,
   SerializedPhoto,
 } from '../../types/api';
 
@@ -13,10 +17,14 @@ export type AlbumSort = 'date' | 'name' | 'count' | 'rating';
 export interface SearchParams {
   q?: string;
   album?: string;
+  people?: string[];
   sort?: PhotoSort;
   limit?: number;
   offset?: number;
 }
+
+// Safety valve for matchPersonAll: 100 pages of 300 faces.
+const MATCH_ALL_MAX_PAGES = 100;
 
 const RELOAD_KEY = 'pixdex:session-reload-at';
 const RELOAD_COOLDOWN_MS = 30_000;
@@ -81,6 +89,7 @@ export class WorkerApiClient {
     const query = new URLSearchParams();
     if (params.q) query.set('q', params.q);
     if (params.album) query.set('album', params.album);
+    if (params.people?.length) query.set('people', params.people.join(','));
     if (params.sort) query.set('sort', params.sort);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
@@ -120,19 +129,93 @@ export class WorkerApiClient {
     if (!response.ok) throw new Error(`Could not set cover: ${response.status}`);
   }
 
-  async updatePhoto(id: string, patch: PhotoReviewPatch): Promise<SerializedPhoto> {
+  private async sendJson(method: string, path: string, body?: unknown): Promise<Response> {
     let response: Response;
     try {
-      response = await this.fetchFn(`${this.baseUrl}/photos/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
+      response = await this.fetchFn(`${this.baseUrl}${path}`, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch (err) {
       throw new Error(`Could not save: ${err instanceof Error ? err.message : 'network error'}`);
     }
     if (!response.ok) throw new Error(`Could not save: ${response.status}`);
+    return response;
+  }
+
+  async updatePhoto(id: string, patch: PhotoReviewPatch): Promise<SerializedPhoto> {
+    const response = await this.sendJson('PATCH', `/photos/${encodeURIComponent(id)}`, patch);
     return (await response.json()) as SerializedPhoto;
+  }
+
+  async getPeople(): Promise<PersonSummary[]> {
+    return (await this.getJson<{ people: PersonSummary[] }>('/people')).people;
+  }
+
+  async getFaceGroups(cursor?: string): Promise<{ groups: FaceGroup[]; scanned: number; nextCursor: string | null }> {
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    return this.getJson(`/people/groups${suffix}`);
+  }
+
+  async getPhotoFaces(photoId: string): Promise<SerializedFace[]> {
+    return (await this.getJson<{ faces: SerializedFace[] }>(`/photos/${encodeURIComponent(photoId)}/faces`)).faces;
+  }
+
+  async createPerson(name: string, faceIds?: string[]): Promise<{ id: string; name: string }> {
+    const response = await this.sendJson('POST', '/people', { name, faceIds });
+    return (await response.json()) as { id: string; name: string };
+  }
+
+  async renamePerson(id: string, name: string): Promise<void> {
+    await this.sendJson('PATCH', `/people/${encodeURIComponent(id)}`, { name });
+  }
+
+  async deletePerson(id: string): Promise<void> {
+    await this.sendJson('DELETE', `/people/${encodeURIComponent(id)}`);
+  }
+
+  async assignFaces(personId: string, faceIds: string[]): Promise<void> {
+    await this.sendJson('POST', `/people/${encodeURIComponent(personId)}/faces`, { faceIds });
+  }
+
+  async assignFace(faceId: string, personId: string): Promise<SerializedFace> {
+    const response = await this.sendJson('POST', `/faces/${encodeURIComponent(faceId)}/assign`, { personId });
+    return (await response.json()) as SerializedFace;
+  }
+
+  async rejectFace(faceId: string, personId: string): Promise<SerializedFace> {
+    const response = await this.sendJson('POST', `/faces/${encodeURIComponent(faceId)}/reject`, { personId });
+    return (await response.json()) as SerializedFace;
+  }
+
+  async unassignFace(faceId: string): Promise<SerializedFace> {
+    const response = await this.sendJson('POST', `/faces/${encodeURIComponent(faceId)}/unassign`);
+    return (await response.json()) as SerializedFace;
+  }
+
+  async matchPerson(personId: string, opts: { apply?: boolean; cursor?: string } = {}): Promise<MatchResponse> {
+    const response = await this.sendJson('POST', `/people/${encodeURIComponent(personId)}/match`, opts);
+    return (await response.json()) as MatchResponse;
+  }
+
+  /** Applies auto matches page by page until the worker reports no more pages. */
+  async matchPersonAll(
+    personId: string,
+    onPage?: (scanned: number, matched: number) => void
+  ): Promise<{ matched: number }> {
+    let cursor: string | undefined;
+    let scanned = 0;
+    let matched = 0;
+    for (let page = 0; page < MATCH_ALL_MAX_PAGES; page++) {
+      const res = await this.matchPerson(personId, cursor ? { apply: true, cursor } : { apply: true });
+      scanned += res.scanned;
+      matched += res.auto.length;
+      onPage?.(scanned, matched);
+      if (!res.nextCursor) break;
+      cursor = res.nextCursor;
+    }
+    return { matched };
   }
 
   async getPhoto(id: string): Promise<SerializedPhoto> {
