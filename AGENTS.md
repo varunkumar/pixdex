@@ -15,7 +15,8 @@ never leave local disk or Google Drive.
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI and originals server
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
-- `docs/` - internal docs, plus `superpowers/` plans and specs
+- `docs/` - internal docs, plus `superpowers/` plans and specs and `screenshots/`
+  (README images made from dummy data: gradient placeholders, no real photos or people)
 
 ## Commands
 
