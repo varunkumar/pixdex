@@ -1,5 +1,8 @@
 <h1 align="center">
-  <img src="docs/pixdex-logo.png" alt="PixdeX" width="420">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/pixdex-logo.png">
+    <img src="docs/pixdex-logo-for-light.png" alt="PixdeX" width="420">
+  </picture>
 </h1>
 
 [![Frontend build](https://img.shields.io/github/check-runs/varunkumar/pixdex/main?nameFilter=Cloudflare%20Pages&label=frontend%20build)](https://github.com/varunkumar/pixdex/commits/main)
