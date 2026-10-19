@@ -67,6 +67,22 @@ describe('PersonPage', () => {
     expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
   });
 
+  it('sorts newest first by default and re-sorts through the URL', async () => {
+    show();
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(
+        expect.objectContaining({ people: ['pe1'], sort: 'date' })
+      )
+    );
+    fireEvent.click(await screen.findByRole('combobox', { name: /sort photos/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Best rated', hidden: true }));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ people: ['pe1'], sort: 'rating' })
+      )
+    );
+  });
+
   it('shows the cover face beside the name', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: face('c9', { personId: 'pe1' }) },

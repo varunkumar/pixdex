@@ -31,7 +31,7 @@ export async function listPeopleRoute(c: Ctx) {
        FROM persons p
        LEFT JOIN faces f ON f.person_id = p.id AND f.assign_status IN ('confirmed', 'auto')
        GROUP BY p.id
-       ORDER BY face_count DESC, p.name COLLATE NOCASE, p.id`
+       ORDER BY p.name COLLATE NOCASE, p.id`
     ).all<{ id: string; name: string; face_count: number; photo_count: number }>(),
     // Cover: the owner's pick while that face is still assigned to the person, otherwise the
     // biggest confirmed face (a larger box means more pixels in the 400 px thumbnail), then the

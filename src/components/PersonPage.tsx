@@ -1,10 +1,10 @@
-import { Anchor, Badge, Button, Group, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
-import { workerApiClient } from '../services/api/WorkerApiClient';
+import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
@@ -12,6 +12,12 @@ import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
 
 const PHOTO_PAGE_SIZES = [12, 24, 48] as const;
+
+const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
+  { value: 'date', label: 'Newest first' },
+  { value: 'rating', label: 'Best rated' },
+  { value: 'name', label: 'Alphabetical' },
+];
 
 /** Shown under each photo: the person's cover control, plus a flag on an automatic match with a way to reject it. */
 const PersonFaceFooter = ({
@@ -83,7 +89,9 @@ const PersonPage = () => {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { page, size, offset, update } = useListParams(24, PHOTO_PAGE_SIZES);
+  const { params, page, size, offset, update } = useListParams(24, PHOTO_PAGE_SIZES);
+  const requestedSort = params.get('sort');
+  const sort = SORT_OPTIONS.find((o) => o.value === requestedSort)?.value ?? 'date';
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -102,8 +110,8 @@ const PersonPage = () => {
     error,
     isPlaceholderData,
   } = useQuery({
-    queryKey: ['person-photos', id, size, offset],
-    queryFn: () => workerApiClient.searchPage({ people: [id], limit: size, offset }),
+    queryKey: ['person-photos', id, size, offset, sort],
+    queryFn: () => workerApiClient.searchPage({ people: [id], sort, limit: size, offset }),
     enabled: id !== '',
     placeholderData: keepPreviousData,
   });
@@ -300,6 +308,16 @@ const PersonPage = () => {
 
       {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
       {photos && photos.length === 0 && <Text c="dimmed">No photos for this person yet.</Text>}
+      {person && (
+        <Select
+          aria-label="Sort photos"
+          data={SORT_OPTIONS}
+          value={sort}
+          allowDeselect={false}
+          w={170}
+          onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
+        />
+      )}
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}

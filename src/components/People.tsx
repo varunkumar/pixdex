@@ -12,6 +12,11 @@ import ListPagination from './ListPagination';
 
 const GROUP_TILES = 8;
 
+const SORT_OPTIONS = [
+  { value: 'name', label: 'Alphabetical' },
+  { value: 'count', label: 'Most faces' },
+];
+
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 const GroupCard = ({
@@ -139,7 +144,8 @@ const PEOPLE_PAGE_SIZES = [12, 24, 48] as const;
 const GROUP_PAGE_SIZES = [6, 12, 24] as const;
 
 const People = () => {
-  const { page, size, offset, update } = useListParams(12, PEOPLE_PAGE_SIZES);
+  const { params, page, size, offset, update } = useListParams(12, PEOPLE_PAGE_SIZES);
+  const sort = SORT_OPTIONS.find((o) => o.value === params.get('sort'))?.value ?? 'name';
   const [groupPage, setGroupPage] = useState(1);
   const [groupSize, setGroupSize] = useState<number>(GROUP_PAGE_SIZES[0]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -172,7 +178,9 @@ const People = () => {
   );
   const onGroupPage = useCallback((p: number) => setGroupPage(p), []);
 
-  const shownPeople = people.slice(offset, offset + size);
+  // The Worker returns people alphabetically (stable sort keeps that order among equal counts).
+  const sortedPeople = sort === 'count' ? [...people].sort((a, b) => b.faceCount - a.faceCount) : people;
+  const shownPeople = sortedPeople.slice(offset, offset + size);
   const groupOffset = (groupPage - 1) * groupSize;
   const shownGroups = groups.slice(groupOffset, groupOffset + groupSize);
 
@@ -187,6 +195,14 @@ const People = () => {
 
       {people.length > 0 && (
         <>
+          <Select
+            aria-label="Sort people"
+            data={SORT_OPTIONS}
+            value={sort}
+            allowDeselect={false}
+            w={170}
+            onChange={(value) => update({ sort: value === 'name' ? null : value }, { resetPage: true })}
+          />
           <SimpleGrid cols={{ base: 2, sm: 4, lg: 6 }} spacing="md">
             {shownPeople.map((p) => (
               <UnstyledButton key={p.id} component={Link} to={`/people/${p.id}`}>

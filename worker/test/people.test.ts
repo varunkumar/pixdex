@@ -53,6 +53,15 @@ describe('people routes', () => {
     expect((await call('POST', '/people', { name: 'x'.repeat(61) })).status).toBe(400);
   });
 
+  it('lists people alphabetically, not by face count', async () => {
+    await addFace('f1', 0.1, 0.8);
+    await createPerson('zed', ['f1']);
+    await createPerson('Amy');
+    await createPerson('bob');
+    const body = (await (await call('GET', '/people')).json()) as any;
+    expect(body.people.map((p: any) => p.name)).toEqual(['Amy', 'bob', 'zed']);
+  });
+
   it('lists people with counts and the best confirmed face as cover', async () => {
     await addFace('f1', 0.1, 0.8);
     await addFace('f2', 0.3, 0.95);

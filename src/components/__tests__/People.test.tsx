@@ -52,6 +52,20 @@ describe('People', () => {
     vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
   });
 
+  it('sorts people alphabetically by default and by face count on request', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      { id: 'a', name: 'Amy', faceCount: 1, photoCount: 1, cover: null },
+      { id: 'b', name: 'Bo', faceCount: 5, photoCount: 2, cover: null },
+    ]);
+    show();
+    const names = () => screen.getAllByRole('link', { name: /faces?$/ }).map((l) => l.getAttribute('href'));
+    await screen.findByRole('link', { name: /Amy/ });
+    expect(names()).toEqual(['/people/a', '/people/b']);
+    fireEvent.click(screen.getByRole('combobox', { name: /sort people/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Most faces', hidden: true }));
+    await waitFor(() => expect(names()).toEqual(['/people/b', '/people/a']));
+  });
+
   it('lists named people and unnamed groups', async () => {
     show();
     const link = await screen.findByRole('link', { name: /Asha/ });

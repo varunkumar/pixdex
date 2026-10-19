@@ -196,6 +196,9 @@ faces. Name a group or add it to an existing person, and the app then looks for
 that person's other faces; once someone is named, new faces are matched to them
 automatically at ingest. The "People" card on each photo's page names or corrects
 its faces, and "Show people on photo" draws numbered boxes over the photo.
+People are listed alphabetically everywhere (the page, the Search filter, the
+naming picker). A person's page sorts their photos by newest first (default),
+best rated or alphabetical.
 
 - Lower-confidence matches (score 0.4 to 0.5) land in a "Review suggestions" queue
   on the person's page. "Not X" on a face rejects that match permanently. "Remove
