@@ -121,6 +121,25 @@ revisited and photos already in the index are skipped by content hash.
   `agent/scripts/install-launchd.sh <folders...>` once (`--uninstall` removes
   it). Logs go to `agent/.index-state/batch.log`.
 
+### Moving an album
+
+```bash
+cd agent
+npm run move-album -- /Volumes/T9/abc /Volumes/T9/xyz --dry-run   # preview, changes nothing
+npm run move-album -- /Volumes/T9/abc /Volumes/T9/xyz             # move the folder and update the index
+npm run move-album -- /Volumes/T9/abc /Volumes/T9/xyz --index-only # you already moved it by hand
+```
+
+Standalone script (`agent/src/moveAlbumCli.ts`). It moves the folder (a rename on
+the same volume; across volumes it copies, checks every file's size, then
+deletes the source) and re-points the indexed photos' `path` through
+`POST /ingest/relocate`, so thumbnails, captions, owner edits and faces stay
+attached and nothing is re-indexed. The album name stays as it was indexed, even
+if the new folder has a different name. It refuses to run if the destination
+exists. If the index update fails after the move, re-run with `--index-only`.
+`index-batch` keeps its own queue in `agent/.index-state/queue.json`; a moved
+album shows up there as a new path on the next run.
+
 ## Prerequisites
 
 - Node.js 18+

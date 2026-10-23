@@ -173,6 +173,19 @@ export class CloudflareClient {
     return true;
   }
 
+  /** Re-points indexed local photos from folder `from` to `to`; with `dryRun` it only counts them. */
+  async relocatePhotos(from: string, to: string, dryRun = false): Promise<{ matched: number; updated: number }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/relocate`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ from, to, dryRun }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/relocate failed: ${response.status}`);
+    }
+    return (await response.json()) as { matched: number; updated: number };
+  }
+
   /** Sets the aesthetic score and/or short caption on an already-indexed photo; false if the hash is unknown. */
   async updateRating(contentHash: string, rating: { score?: number; shortCaption?: string }): Promise<boolean> {
     const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/rating`, {

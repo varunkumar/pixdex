@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "dev": "tsx --env-file=.env src/cli.ts",
+    "move-album": "tsx --env-file=.env src/moveAlbumCli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

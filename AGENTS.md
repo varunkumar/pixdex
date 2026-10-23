@@ -13,7 +13,7 @@ never leave local disk or Google Drive.
   `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
   `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
-- `agent/` - local Node/TS indexing CLI and originals server
+- `agent/` - local Node/TS indexing CLI, originals server, and the `move-album` script
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
 - `docs/` - internal docs, plus `superpowers/` plans and specs and `screenshots/`
   (README images made from dummy data: gradient placeholders, no real photos or people)

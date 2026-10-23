@@ -103,7 +103,10 @@ photo qualifies.
 
 - `cli.ts` is the entry point. Commands: `index-local`, `index-drive`,
   `index-batch`, `index-status`, `backfill-exif`, `backfill-ratings`,
-  `backfill-faces`, `serve-originals`.
+  `backfill-faces`, `serve-originals`. `move-album` is a separate script
+  (`moveAlbumCli.ts`, `npm run move-album`): it moves an album folder on disk and
+  calls `POST /ingest/relocate` (whole-segment path-prefix rewrite of local
+  photos' `path`, with `dryRun`) so the index follows the files.
 - Pipeline per photo (`processFile.ts`): hash content, skip if already indexed
   (`check-hashes`), read EXIF, make a thumbnail (sharp), ask Ollama for a
   description/tags/caption/quality rating, then push to the Worker.

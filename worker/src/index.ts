@@ -5,6 +5,7 @@ import { ingestFacesRoute, pendingFacesRoute, putFaceCropRoute, unscannedFacesRo
 import { ingestExifRoute } from './routes/ingest-exif';
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
+import { ingestRelocateRoute } from './routes/ingest-relocate';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
 import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute } from './routes/faces';
@@ -35,6 +36,7 @@ app.use('/ingest/*', requireIngestToken);
 app.post('/ingest/check-hashes', checkHashesRoute);
 app.post('/ingest/photo', ingestPhotoRoute);
 app.post('/ingest/exif', ingestExifRoute);
+app.post('/ingest/relocate', ingestRelocateRoute);
 app.post('/ingest/faces/pending', pendingFacesRoute);
 app.post('/ingest/faces/unscanned', unscannedFacesRoute);
 app.post('/ingest/faces', ingestFacesRoute);

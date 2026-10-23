@@ -62,6 +62,16 @@ describe('CloudflareClient', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).hashes).toHaveLength(100);
   });
 
+  it('relocatePhotos posts the prefixes and the dry-run flag', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ matched: 3, updated: 0 }), { status: 200 }));
+
+    expect(await client.relocatePhotos('/a/abc', '/a/xyz', true)).toEqual({ matched: 3, updated: 0 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/relocate');
+    expect(JSON.parse(init.body)).toEqual({ from: '/a/abc', to: '/a/xyz', dryRun: true });
+  });
+
   it('facesUnscanned posts the model, cursor and path prefix and returns the page', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ items: [{ contentHash: 'h1', path: '/a/1.jpg' }], nextCursor: 9 }), { status: 200 })

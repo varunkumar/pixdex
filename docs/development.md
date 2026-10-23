@@ -114,6 +114,7 @@ npm run dev -- index-local "/path/to/folder"
 npm run dev -- index-batch <roots...>   # resumable, see README
 npm run dev -- index-status
 npm run dev -- backfill-faces [folder]    # follows the index; needs the face sidecar, see agent/sidecar/README.md
+npm run move-album -- <from> <to> [--dry-run] [--index-only]   # move an album folder and update the index
 npm run dev -- serve-originals          # needs cloudflared, see agent/cloudflared/README.md
 ```
 
