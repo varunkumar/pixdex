@@ -13,7 +13,7 @@ const SEASON_MONTHS: Record<string, number[]> = {
 // Only the columns the route actually reads, to keep D1 row-read cost down
 // (this endpoint is unauthenticated and can be called by anyone).
 const SELECT_COLUMNS =
-  'id, filename, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested, source, drive_file_id, aesthetic_score, short_caption, has_watermark, user_rating, user_caption, user_subjects, user_tags';
+  'id, filename, content_hash, subjects, description, season, environment, suggested_caption, suggested_hashtags, instagram_suggested, source, drive_file_id, aesthetic_score, short_caption, has_watermark, user_rating, user_caption, user_subjects, user_tags, album';
 
 function isEligible(row: PhotoRow): boolean {
   if (!row.instagram_suggested) return true;
@@ -94,7 +94,16 @@ export async function dailyPickRoute(c: Context<{ Bindings: Env }>) {
   }
 
   const eligible = natural.filter(isEligible);
-  const candidates = eligible.length > 0 ? eligible : natural;
+  const fresh = eligible.length > 0 ? eligible : natural;
+
+  // Back-to-back picks look alike when they come from the same shoot, so avoid the
+  // album of the most recent pick. If nothing else qualifies, keep the full set.
+  const previous = all.results.reduce<PhotoRow | null>(
+    (a, r) => (r.instagram_suggested && (!a || r.instagram_suggested > (a.instagram_suggested ?? '')) ? r : a),
+    null
+  );
+  const otherAlbum = previous?.album ? fresh.filter((r) => r.album !== previous.album) : fresh;
+  const candidates = otherAlbum.length > 0 ? otherAlbum : fresh;
 
   // Prefer photos rated as good-looking; if none qualify, take the best rated
   // ones; if nothing has been rated yet, fall back to every candidate.

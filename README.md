@@ -25,7 +25,7 @@ machine. Originals stay on local disk or Google Drive.
 - **Browse albums.** Cover photos, counts and average ratings, sorted by date,
   name, size or rating.
 - **Get a daily pick.** One nature or wildlife photo a day (no people), chosen from
-  your best-rated shots.
+  your best-rated shots, never from the same album two days running.
 - **Rate and correct the AI.** Add 1-5 stars and fix the title, species and tags.
   Your edits survive re-indexing.
 - **Find people.** Faces are detected locally, grouped, and matched to the names

@@ -6,13 +6,14 @@ async function seed(
   subjects: string[],
   description: string,
   instagramSuggested: string | null,
-  aestheticScore: number | null = null
+  aestheticScore: number | null = null,
+  album: string | null = null
 ) {
   await env.DB.prepare(
-    `INSERT INTO photos (id, content_hash, source, filename, subjects, description, suggested_caption, suggested_hashtags, model_provider, model_name, search_text, last_indexed, instagram_suggested, aesthetic_score)
-     VALUES (?,?,'local',?,?,?, 'caption', '[]', 'ollama', 'qwen3.5:27b-mlx', '', '2026-09-18T00:00:00.000Z', ?, ?)`
+    `INSERT INTO photos (id, content_hash, source, filename, subjects, description, suggested_caption, suggested_hashtags, model_provider, model_name, search_text, last_indexed, instagram_suggested, aesthetic_score, album)
+     VALUES (?,?,'local',?,?,?, 'caption', '[]', 'ollama', 'qwen3.5:27b-mlx', '', '2026-09-18T00:00:00.000Z', ?, ?, ?)`
   )
-    .bind(id, `hash-${id}`, `${id}.jpg`, JSON.stringify(subjects), description, instagramSuggested, aestheticScore)
+    .bind(id, `hash-${id}`, `${id}.jpg`, JSON.stringify(subjects), description, instagramSuggested, aestheticScore, album)
     .run();
 }
 
@@ -60,6 +61,27 @@ describe('GET /daily-pick', () => {
     const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('eligible');
+  });
+
+  it('picks from a different album than the previous pick', async () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await seed('prev', ['tiger'], 'A tiger.', yesterday, 9, 'Bandipur');
+    await seed('same-album', ['tiger', 'tree', 'grass'], 'A tiger walking through tall grass in the morning light.', null, 9, 'Bandipur');
+    await seed('other-album', ['egret'], 'An egret.', null, 8, 'Kabini');
+
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const body = (await response.json()) as any;
+    expect(body.photo.id).toBe('other-album');
+  });
+
+  it('falls back to the previous pick album when no other album has a candidate', async () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await seed('prev', ['tiger'], 'A tiger.', yesterday, 9, 'Bandipur');
+    await seed('same-album', ['tiger'], 'A tiger.', null, 9, 'Bandipur');
+
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const body = (await response.json()) as any;
+    expect(body.photo.id).toBe('same-album');
   });
 
   it('is stable within the same day (idempotent) across repeated calls', async () => {

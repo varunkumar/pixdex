@@ -69,8 +69,9 @@ index the override when one exists. `db/rating.ts` holds the blend
 
 The daily pick (`worker/src/routes/daily-pick.ts`) is for nature, wildlife and
 landscapes: photos whose subjects or description mention a person are never
-picked (text match, since the index has no people field). It returns 404 if no
-photo qualifies.
+picked (text match, since the index has no people field). The pick avoids the
+album of the most recent pick (falling back to it only if no other album has a
+candidate). It returns 404 if no photo qualifies.
 
 ### `worker/` - Cloudflare Worker (Hono, D1, R2)
 
