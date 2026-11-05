@@ -89,3 +89,7 @@ graphify-out/
 # Face sidecar virtualenv and bytecode
 agent/sidecar/.venv/
 __pycache__/
+
+# Superpowers brainstorm mockups
+.superpowers/
+.claude/worktrees/
