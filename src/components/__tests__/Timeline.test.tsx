@@ -26,7 +26,9 @@ class FakeIntersectionObserver {
   }
   observe() {}
   unobserve() {}
-  disconnect() {}
+  disconnect() {
+    intersect = () => {};
+  }
 }
 
 const photos = (prefix: string, n: number) =>
@@ -134,8 +136,8 @@ describe('Timeline', () => {
 
   it('shows an empty state when nothing matches', async () => {
     vi.mocked(workerApiClient.getTimeline).mockResolvedValue({ groups: [], nextCursor: null });
-    renderAt('/timeline');
-    expect(await screen.findByText(/no photos match/i)).toBeInTheDocument();
+    renderAt('/timeline?album=Kanha');
+    expect(await screen.findByText('No photos match these filters.')).toBeInTheDocument();
   });
 
   it('requests with album, people and to from the URL', async () => {
@@ -153,5 +155,47 @@ describe('Timeline', () => {
     fireEvent.click(screen.getByLabelText('Select photo album'));
     fireEvent.click(await screen.findByText('Kaziranga'));
     await waitFor(() => expect(search(router).get('album')).toBe('Kaziranga'));
+  });
+
+  it('keeps loaded groups, stops auto-fetching and offers retry when a next page fails', async () => {
+    vi.mocked(workerApiClient.getTimeline)
+      .mockResolvedValueOnce(monthPage)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({
+        groups: [{ key: '2026-09', total: 1, shown: 1, photos: photos('s', 1) }],
+        nextCursor: null,
+      });
+    renderAt('/timeline');
+    await screen.findByText('November 2026');
+    act(() => intersect(true));
+    const retry = await screen.findByRole('button', { name: /retry/i });
+    expect(screen.getByText('November 2026')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load the timeline.')).not.toBeInTheDocument();
+    act(() => intersect(true));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(workerApiClient.getTimeline).toHaveBeenCalledTimes(2);
+    fireEvent.click(retry);
+    expect(await screen.findByText('September 2026')).toBeInTheDocument();
+    expect(workerApiClient.getTimeline).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows the full-page error when the first page fails', async () => {
+    vi.mocked(workerApiClient.getTimeline).mockRejectedValue(new Error('boom'));
+    renderAt('/timeline');
+    expect(await screen.findByText('Could not load the timeline.')).toBeInTheDocument();
+  });
+
+  it('ignores ctrl+wheel with no vertical movement', async () => {
+    const { router } = renderAt('/timeline');
+    const grid = await screen.findByTestId('timeline-grid');
+    fireEvent.wheel(grid, { ctrlKey: true, deltaY: 0 });
+    await new Promise((r) => setTimeout(r, 350));
+    expect(search(router).has('zoom')).toBe(false);
+  });
+
+  it('uses a neutral empty message when no filters are set', async () => {
+    vi.mocked(workerApiClient.getTimeline).mockResolvedValue({ groups: [], nextCursor: null });
+    renderAt('/timeline');
+    expect(await screen.findByText('No photos to show.')).toBeInTheDocument();
   });
 });

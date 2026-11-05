@@ -1,4 +1,4 @@
-import { Box, Card, Group, Loader, MultiSelect, SegmentedControl, Select, Stack, Text, Title } from '@mantine/core';
+import { Box, Button, Card, Group, Loader, MultiSelect, SegmentedControl, Select, Stack, Text, Title } from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useTimelineParams, ZOOMS } from '../hooks/useTimelineParams';
@@ -43,7 +43,7 @@ const Timeline = () => {
   const { data: namedPeople = [] } = useQuery({ queryKey: ['people'], queryFn: () => workerApiClient.getPeople() });
   const peopleOptions = namedPeople.map((p) => ({ value: p.id, label: p.name }));
 
-  const { data, isPending, error, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery({
+  const { data, isPending, error, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = useInfiniteQuery({
     queryKey: ['timeline', zoom, album, peopleKey, to],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
@@ -80,13 +80,14 @@ const Timeline = () => {
       timer = setTimeout(() => {
         const dir = Math.sign(pending);
         pending = 0;
+        if (dir === 0) return;
         const next = ZOOMS[ZOOMS.indexOf(zoomRef.current) + dir];
         if (next) setZoomRef.current(next);
       }, ZOOM_DEBOUNCE_MS);
     };
 
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return;
+      if (!e.ctrlKey || e.deltaY === 0) return;
       e.preventDefault();
       // Up (negative deltaY) zooms in toward Day, down out toward Year.
       step(e.deltaY < 0 ? -1 : 1);
@@ -112,19 +113,22 @@ const Timeline = () => {
     el.addEventListener('touchstart', onTouchStart, { passive: true });
     el.addEventListener('touchmove', onTouchMove, { passive: true });
     el.addEventListener('touchend', onTouchEnd);
+    el.addEventListener('touchcancel', onTouchEnd);
     return () => {
       clearTimeout(timer);
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('touchstart', onTouchStart);
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
     };
   }, []);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
+    // After a failed page, wait for an explicit retry: re-observing would refetch in a loop.
+    if (!el || !hasNextPage || isFetchNextPageError) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting) && !isFetchingNextPage) void fetchNextPage();
@@ -133,7 +137,7 @@ const Timeline = () => {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, groups.length]);
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, groups.length]);
 
   return (
     <Stack gap="lg">
@@ -176,7 +180,7 @@ const Timeline = () => {
       </Card>
 
       <Box ref={surfaceRef} data-testid="timeline-grid" style={{ touchAction: 'pan-y' }}>
-        {error ? (
+        {error && !data ? (
           <Text c="red">Could not load the timeline.</Text>
         ) : isPending ? (
           <Group justify="center" py="xl">
@@ -184,7 +188,7 @@ const Timeline = () => {
           </Group>
         ) : groups.length === 0 ? (
           <Text c="dimmed" ta="center" py="xl">
-            No photos match these filters.
+            {album || people.length > 0 || to ? 'No photos match these filters.' : 'No photos to show.'}
           </Text>
         ) : (
           <Stack gap="lg">
@@ -208,6 +212,16 @@ const Timeline = () => {
           </Stack>
         )}
         <div ref={sentinelRef} style={{ height: 1 }} />
+        {isFetchNextPageError && (
+          <Group justify="center" py="md" gap="sm">
+            <Text c="red" size="sm">
+              Could not load more photos.
+            </Text>
+            <Button size="compact-sm" variant="light" onClick={() => void fetchNextPage()}>
+              Retry
+            </Button>
+          </Group>
+        )}
         {isFetchingNextPage && (
           <Group justify="center" py="md">
             <Loader size="sm" />

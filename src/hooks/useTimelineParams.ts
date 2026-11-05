@@ -46,7 +46,7 @@ export function useTimelineParams() {
   const jumpTo = (month: string) => {
     const [y, m] = month.split('-').map(Number);
     if (!y || !m || m < 1 || m > 12) return;
-    write({ to: `${month}-${String(lastDayOfMonth(y, m)).padStart(2, '0')}` });
+    write({ to: `${y}-${String(m).padStart(2, '0')}-${String(lastDayOfMonth(y, m)).padStart(2, '0')}` });
   };
 
   return { zoom, album, people, to, setZoom, setFilters, jumpTo };

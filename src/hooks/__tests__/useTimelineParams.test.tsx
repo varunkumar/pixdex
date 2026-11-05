@@ -50,6 +50,7 @@ describe('useTimelineParams', () => {
     ['2025-04', '2025-04-30'],
     ['2000-02', '2000-02-29'],
     ['1900-02', '1900-02-28'],
+    ['2025-3', '2025-03-31'],
   ])('jumpTo(%s) sets to=%s', (month, expected) => {
     const { result } = renderHook(() => useTimelineParams(), { wrapper: wrapperAt('/timeline') });
     act(() => result.current.jumpTo(month));
