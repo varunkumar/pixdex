@@ -109,6 +109,69 @@ describe('Timeline', () => {
     await waitFor(() => expect(search(router).has('zoom')).toBe(false));
   });
 
+  // Pins the heading tops, as layout would after scrolling, and fires a scroll.
+  const placeHeadings = (nov: number, oct: number) => {
+    const october = screen.getByText('October 2026').closest('[data-group-key]') as HTMLElement;
+    const november = screen.getByText('November 2026', { selector: 'h4' }).closest('[data-group-key]') as HTMLElement;
+    november.getBoundingClientRect = () => ({ top: nov }) as DOMRect;
+    october.getBoundingClientRect = () => ({ top: oct }) as DOMRect;
+    fireEvent.scroll(window);
+  };
+
+  it('keeps the month being read when zooming after scrolling down', async () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    const { router } = renderAt('/timeline');
+    await screen.findByText('October 2026');
+    await screen.findByRole('button', { name: 'October 2026' });
+    placeHeadings(-500, 20);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'October 2026' })).toHaveAttribute('aria-current', 'true')
+    );
+    fireEvent.click(screen.getByText('Day'));
+    await waitFor(() => expect(search(router).get('zoom')).toBe('day'));
+    expect(search(router).get('to')).toBe('2026-10-31');
+    expect(router.state.historyAction).toBe('REPLACE');
+    await waitFor(() =>
+      expect(workerApiClient.getTimeline).toHaveBeenLastCalledWith(
+        expect.objectContaining({ zoom: 'day', to: '2026-10-31' })
+      )
+    );
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+  });
+
+  it('keeps the month being read when zooming with ctrl+wheel', async () => {
+    vi.stubGlobal('scrollTo', vi.fn());
+    const { router } = renderAt('/timeline');
+    await screen.findByText('October 2026');
+    await screen.findByRole('button', { name: 'October 2026' });
+    placeHeadings(-500, 20);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'October 2026' })).toHaveAttribute('aria-current', 'true')
+    );
+    fireEvent.wheel(screen.getByTestId('timeline-grid'), { ctrlKey: true, deltaY: 100 });
+    await waitFor(() => expect(search(router).get('zoom')).toBe('year'));
+    expect(search(router).get('to')).toBe('2026-10-31');
+  });
+
+  it('does not add a jump position when zooming at the top of the feed', async () => {
+    const { router } = renderAt('/timeline');
+    await screen.findByText('October 2026');
+    await screen.findByRole('button', { name: 'November 2026' });
+    placeHeadings(20, 600);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'November 2026' })).toHaveAttribute('aria-current', 'true')
+    );
+    fireEvent.click(screen.getByText('Day'));
+    await waitFor(() => expect(search(router).get('zoom')).toBe('day'));
+    expect(search(router).has('to')).toBe(false);
+    expect(router.state.historyAction).toBe('PUSH');
+    await waitFor(() =>
+      expect(workerApiClient.getTimeline).toHaveBeenLastCalledWith(expect.objectContaining({ zoom: 'day' }))
+    );
+    expect(vi.mocked(workerApiClient.getTimeline).mock.lastCall?.[0]).not.toHaveProperty('to');
+  });
+
   it('steps zoom with ctrl+wheel: up toward Day, down toward Year', async () => {
     const { router } = renderAt('/timeline');
     const grid = await screen.findByTestId('timeline-grid');

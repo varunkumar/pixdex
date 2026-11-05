@@ -76,12 +76,24 @@ const Timeline = () => {
 
   const groups = data?.pages.flatMap((p) => p.groups) ?? [];
 
+  const [activeMonth, setActiveMonth] = useState<string | null>(null);
+
+  // Zooming keeps the period being read: once the reader has moved past the
+  // newest month (or has jumped), the new zoom starts at the end of the active month.
+  const changeZoom = (z: TimelineZoom) => {
+    if (z === zoom) return;
+    const newest = groups[0]?.key.slice(0, 7);
+    const keepMonth = activeMonth && (to || activeMonth !== newest) ? activeMonth : undefined;
+    setZoom(z, keepMonth);
+    if (keepMonth) window.scrollTo({ top: 0 });
+  };
+
   // Zoom gestures read the latest zoom through a ref so a stale listener never steps from an old level.
   const zoomRef = useRef<TimelineZoom>(zoom);
-  const setZoomRef = useRef(setZoom);
+  const setZoomRef = useRef(changeZoom);
   useEffect(() => {
     zoomRef.current = zoom;
-    setZoomRef.current = setZoom;
+    setZoomRef.current = changeZoom;
   });
 
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -141,7 +153,6 @@ const Timeline = () => {
     };
   }, []);
 
-  const [activeMonth, setActiveMonth] = useState<string | null>(null);
   const updateActiveMonth = useCallback(() => {
     const headings = surfaceRef.current?.querySelectorAll<HTMLElement>('[data-group-key]');
     if (!headings || headings.length === 0) return setActiveMonth(null);
@@ -199,7 +210,7 @@ const Timeline = () => {
           aria-label="Timeline zoom"
           data={ZOOM_OPTIONS}
           value={zoom}
-          onChange={(v) => setZoom(v as TimelineZoom)}
+          onChange={(v) => changeZoom(v as TimelineZoom)}
         />
       </Group>
 

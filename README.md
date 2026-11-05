@@ -24,7 +24,8 @@ machine. Originals stay on local disk or Google Drive.
   species, tags and environment, filtered by album and by up to 5 people.
 - **Scroll a timeline.** A `/timeline` page groups photos by date, newest first.
   Zoom between Day (every photo), Month (highlights) and Year (a few per month)
-  with the segmented control, Ctrl+wheel or a two-finger pinch. Highlights are
+  with the segmented control, Ctrl+wheel or a two-finger pinch; once you have
+  scrolled past the newest month, zooming keeps the month you are reading. Highlights are
   photos whose combined score is at least 6.0, topped up to the best 3 per group;
   Year shows the top 6 per month. A year/month scrubber rail on the side jumps to
   any month with photos. Zoom, filters and jump position live in the URL.

@@ -35,6 +35,14 @@ describe('useTimelineParams', () => {
     expect(result.current.zoom).toBe('month');
   });
 
+  it('setZoom with a month also sets to the end of that month in one write', () => {
+    const { result } = renderHook(() => useTimelineParams(), { wrapper: wrapperAt('/timeline?album=Kanha') });
+    act(() => result.current.setZoom('day', '2024-02'));
+    expect(result.current).toMatchObject({ zoom: 'day', to: '2024-02-29', album: 'Kanha' });
+    act(() => result.current.setZoom('month', '2023-11'));
+    expect(result.current).toMatchObject({ zoom: 'month', to: '2023-11-30' });
+  });
+
   it('setFilters patches album and people', () => {
     const { result } = renderHook(() => useTimelineParams(), { wrapper: wrapperAt('/timeline?to=2025-02-28') });
     act(() => result.current.setFilters({ album: 'Kanha', people: ['a1'] }));

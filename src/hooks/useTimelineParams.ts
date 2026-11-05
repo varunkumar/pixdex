@@ -11,6 +11,13 @@ interface FilterPatch {
 
 const lastDayOfMonth = (year: number, month: number) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
+/** `YYYY-MM` (or `YYYY-M`) to the `YYYY-MM-DD` of its last day, or null when malformed. */
+function endOfMonth(month: string): string | null {
+  const [y, m] = month.split('-').map(Number);
+  if (!y || !m || m < 1 || m > 12) return null;
+  return `${y}-${String(m).padStart(2, '0')}-${String(lastDayOfMonth(y, m)).padStart(2, '0')}`;
+}
+
 /**
  * Timeline view state that lives in the URL, so a zoom level, filters and a jump
  * position are deep-linkable. `zoom` is omitted for the default (`month`).
@@ -33,7 +40,17 @@ export function useTimelineParams() {
     setParams(next, { replace });
   };
 
-  const setZoom = (z: TimelineZoom) => write({ zoom: z === 'month' ? null : z });
+  /**
+   * Change zoom. With `keepMonth`, the list also starts at the end of that month,
+   * in the same URL update, so zooming keeps the period being read. That write
+   * replaces the history entry, like a jump.
+   */
+  const setZoom = (z: TimelineZoom, keepMonth?: string) => {
+    const zoomValue = z === 'month' ? null : z;
+    const end = keepMonth ? endOfMonth(keepMonth) : null;
+    if (end) write({ zoom: zoomValue, to: end }, true);
+    else write({ zoom: zoomValue });
+  };
 
   const setFilters = (patch: FilterPatch) =>
     write({
@@ -44,10 +61,9 @@ export function useTimelineParams() {
 
   /** Start the list at the end of the given `YYYY-MM` month. */
   const jumpTo = (month: string) => {
-    const [y, m] = month.split('-').map(Number);
-    if (!y || !m || m < 1 || m > 12) return;
+    const end = endOfMonth(month);
     // Replace, so scrubbing around does not stack a history entry per jump.
-    write({ to: `${y}-${String(m).padStart(2, '0')}-${String(lastDayOfMonth(y, m)).padStart(2, '0')}` }, true);
+    if (end) write({ to: end }, true);
   };
 
   return { zoom, album, people, to, setZoom, setFilters, jumpTo };
