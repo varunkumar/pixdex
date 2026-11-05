@@ -11,6 +11,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     getTimeline: vi.fn(),
     getAlbums: vi.fn(),
     getPeople: vi.fn(),
+    getTimelineBuckets: vi.fn(),
     thumbnailUrl: vi.fn((p: { thumbnailUrl?: string }) => `/api${p.thumbnailUrl}`),
   },
 }));
@@ -56,6 +57,14 @@ describe('Timeline', () => {
       { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, cover: null },
     ]);
     vi.mocked(workerApiClient.getTimeline).mockResolvedValue(monthPage);
+    vi.mocked(workerApiClient.getTimelineBuckets).mockResolvedValue({
+      buckets: [
+        { month: '2026-11', total: 142 },
+        { month: '2026-10', total: 7 },
+        { month: '2025-03', total: 5 },
+      ],
+      undated: 0,
+    });
   });
 
   afterEach(() => vi.unstubAllGlobals());
@@ -197,5 +206,60 @@ describe('Timeline', () => {
     vi.mocked(workerApiClient.getTimeline).mockResolvedValue({ groups: [], nextCursor: null });
     renderAt('/timeline');
     expect(await screen.findByText('No photos to show.')).toBeInTheDocument();
+  });
+
+  it('jumps from the scrubber: sets to, reloads the feed and scrolls to the top', async () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    const { router } = renderAt('/timeline');
+    await screen.findByText('November 2026');
+    fireEvent.click(await screen.findByRole('button', { name: 'March 2025' }));
+    await waitFor(() => expect(search(router).get('to')).toBe('2025-03-31'));
+    await waitFor(() =>
+      expect(workerApiClient.getTimeline).toHaveBeenLastCalledWith(expect.objectContaining({ to: '2025-03-31' }))
+    );
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
+  });
+
+  it('fetches scrubber buckets by album and people only', async () => {
+    renderAt('/timeline?album=Kanha&people=a1&to=2026-10-31&zoom=day');
+    await screen.findByRole('button', { name: 'March 2025' });
+    expect(workerApiClient.getTimelineBuckets).toHaveBeenCalledTimes(1);
+    expect(workerApiClient.getTimelineBuckets).toHaveBeenCalledWith({ album: 'Kanha', people: ['a1'] });
+  });
+
+  it('marks the month of the heading nearest the top as active', async () => {
+    renderAt('/timeline');
+    await screen.findByText('November 2026');
+    await screen.findByRole('button', { name: 'November 2026' });
+    const october = screen.getByText('October 2026').closest('[data-group-key]') as HTMLElement;
+    const november = screen.getByText('November 2026', { selector: 'h4' }).closest('[data-group-key]') as HTMLElement;
+    const place = (nov: number, oct: number) => {
+      november.getBoundingClientRect = () => ({ top: nov }) as DOMRect;
+      october.getBoundingClientRect = () => ({ top: oct }) as DOMRect;
+      fireEvent.scroll(window);
+    };
+    place(20, 600);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'November 2026' })).toHaveAttribute('aria-current', 'true')
+    );
+    place(-500, 20);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'October 2026' })).toHaveAttribute('aria-current', 'true')
+    );
+  });
+
+  it('shows the jump position and clears it with Back to latest', async () => {
+    const { router } = renderAt('/timeline?to=2025-03-31');
+    expect(await screen.findByText('Showing photos up to Mar 2025')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to latest' }));
+    await waitFor(() => expect(search(router).has('to')).toBe(false));
+    expect(screen.queryByText('Showing photos up to Mar 2025')).not.toBeInTheDocument();
+  });
+
+  it('shows no jump chip when to is unset', async () => {
+    renderAt('/timeline');
+    await screen.findByText('November 2026');
+    expect(screen.queryByRole('button', { name: 'Back to latest' })).not.toBeInTheDocument();
   });
 });

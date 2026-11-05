@@ -1,10 +1,11 @@
 import { Box, Button, Card, Group, Loader, MultiSelect, SegmentedControl, Select, Stack, Text, Title } from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTimelineParams, ZOOMS } from '../hooks/useTimelineParams';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import type { TimelineGroup, TimelineZoom } from '../types/api';
 import PhotoGrid from './PhotoGrid';
+import TimelineScrubber from './TimelineScrubber';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -28,6 +29,15 @@ function groupHeading(key: string): string {
   return `${weekday} ${d} ${MONTHS[m - 1].slice(0, 3)} ${y}`;
 }
 
+// "2025-03-31" -> "Mar 2025", parsed by hand like the headings.
+function toLabel(to: string): string {
+  const [y, m] = to.split('-').map(Number);
+  return y && m >= 1 && m <= 12 ? `${MONTHS[m - 1].slice(0, 3)} ${y}` : to;
+}
+
+// A heading counts as "at the top" once it has scrolled up past the sticky bar.
+const ACTIVE_OFFSET = 120;
+
 const groupCount = ({ total, shown }: TimelineGroup) => {
   const photos = `${total} ${total === 1 ? 'photo' : 'photos'}`;
   return shown === 0 ? `${photos}, zoom in to see` : `${photos}, ${shown} shown`;
@@ -36,12 +46,18 @@ const groupCount = ({ total, shown }: TimelineGroup) => {
 const pinchDistance = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 
 const Timeline = () => {
-  const { zoom, album, people, to, setZoom, setFilters } = useTimelineParams();
+  const { zoom, album, people, to, setZoom, setFilters, jumpTo } = useTimelineParams();
   const peopleKey = people.join(',');
 
   const { data: albums = [] } = useQuery({ queryKey: ['album-names'], queryFn: () => workerApiClient.getAlbums() });
   const { data: namedPeople = [] } = useQuery({ queryKey: ['people'], queryFn: () => workerApiClient.getPeople() });
   const peopleOptions = namedPeople.map((p) => ({ value: p.id, label: p.name }));
+
+  // Keyed by album and people only, so the scrubber lists every month with photos whatever the zoom, jump or rating cut-off.
+  const { data: bucketData } = useQuery({
+    queryKey: ['timeline-buckets', album, peopleKey],
+    queryFn: () => workerApiClient.getTimelineBuckets({ ...(album && { album }), ...(people.length > 0 && { people }) }),
+  });
 
   const { data, isPending, error, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = useInfiniteQuery({
     queryKey: ['timeline', zoom, album, peopleKey, to],
@@ -124,6 +140,29 @@ const Timeline = () => {
     };
   }, []);
 
+  const [activeMonth, setActiveMonth] = useState<string | null>(null);
+  const updateActiveMonth = useCallback(() => {
+    const headings = surfaceRef.current?.querySelectorAll<HTMLElement>('[data-group-key]');
+    if (!headings || headings.length === 0) return setActiveMonth(null);
+    let current = headings[0];
+    for (const h of headings) {
+      if (h.getBoundingClientRect().top > ACTIVE_OFFSET) break;
+      current = h;
+    }
+    const key = current.dataset.groupKey ?? '';
+    setActiveMonth(key === 'undated' ? null : key.slice(0, 7));
+  }, []);
+  useEffect(() => {
+    updateActiveMonth();
+    window.addEventListener('scroll', updateActiveMonth, { passive: true });
+    return () => window.removeEventListener('scroll', updateActiveMonth);
+  }, [updateActiveMonth, groups.length]);
+
+  const handleJump = (month: string) => {
+    jumpTo(month);
+    window.scrollTo({ top: 0 });
+  };
+
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = sentinelRef.current;
@@ -150,6 +189,15 @@ const Timeline = () => {
           onChange={(v) => setZoom(v as TimelineZoom)}
         />
       </Group>
+
+      {to && (
+        <Group gap="sm">
+          <Text size="sm">Showing photos up to {toLabel(to)}</Text>
+          <Button size="compact-sm" variant="light" onClick={() => setFilters({ to: '' })}>
+            Back to latest
+          </Button>
+        </Group>
+      )}
 
       <Card withBorder>
         <Group align="flex-end" gap="md" grow preventGrowOverflow={false}>
@@ -193,7 +241,7 @@ const Timeline = () => {
         ) : (
           <Stack gap="lg">
             {groups.map((group) => (
-              <Box key={group.key}>
+              <Box key={group.key} data-group-key={group.key}>
                 <Group
                   gap="sm"
                   align="baseline"
@@ -228,6 +276,7 @@ const Timeline = () => {
           </Group>
         )}
       </Box>
+      <TimelineScrubber buckets={bucketData?.buckets ?? []} activeMonth={activeMonth} onJump={handleJump} />
     </Stack>
   );
 };
