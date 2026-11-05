@@ -126,4 +126,7 @@ state and grouping. Run `npm test`, `cd worker && npm test && npm run typecheck`
 - Tuning the month-level threshold and the year-level per-month cap.
 - Whether `/timeline` and `/search` share one query builder.
 - Timezone handling for day grouping (suggest grouping on the stored ISO date
-  prefix, i.e. the camera's own date).
+  prefix). Correction after review: that prefix is the UTC date, not the
+  camera's own date, because the agent stores `toISOString()` of the EXIF local
+  time. Photos near midnight can land on the neighbouring day; see the
+  limitation note in `docs/architecture.md`.

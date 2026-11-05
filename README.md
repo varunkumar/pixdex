@@ -34,6 +34,10 @@ machine. Originals stay on local disk or Google Drive.
   week, This month, This year) and an "On this day" chip (same month and day in
   every year). Typed shortcuts work too: `lion june 2025`, `2025`, `jun 2025` or
   `2025-06-14` become a date range and are removed from the text query.
+  Known limitation: dates are stored and grouped as UTC, not the local date
+  taken. In IST, a photo taken between midnight and 05:29 shows under the
+  previous day (and month or year at the boundary), and "Today" can miss this
+  morning's early photos. See [Architecture](docs/architecture.md).
 - **Browse albums.** Cover photos, counts and average ratings, sorted by date,
   name, size or rating.
 - **Get a daily pick.** One nature or wildlife photo a day (no people), chosen from

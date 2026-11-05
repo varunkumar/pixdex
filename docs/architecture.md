@@ -89,7 +89,7 @@ candidate). It returns 404 if no photo qualifies.
   `MIN_PER_GROUP` (3) rated photos. Year returns the best `YEAR_CAP` (6) per month.
   Unrated photos only appear at day zoom. Month and year zoom omit undated
   photos entirely (the buckets `undated` count still covers them for the
-  scrubber). Once `to` is set, undated photos fail the date filter, so at day
+  scrubber). Once `to` is set, photos with no date fail the date filter, so at day
   zoom the Undated group is not reachable until "Back to latest" clears `to`.
   `GET /timeline/buckets` returns
   `{ buckets: [{ month, total }], undated }` for the scrubber (honours `album`
@@ -106,6 +106,18 @@ candidate). It returns 404 if no photo qualifies.
   (`MM-DD`, Feb 29 allowed, matches that month and day in any year). Invalid
   values, `to` before `from`, or `onThisDay` combined with `from`/`to` return
   400 with `{ error }`; `/timeline` also returns 400 for a bad `zoom` or `groups`.
+- Dates are UTC, not the local date taken (known limitation). The agent reads
+  the EXIF capture time (which has no offset) as local time on the indexing
+  machine and stores `toISOString()`, so `photos.date_time` is the UTC instant
+  and its `YYYY-MM-DD` prefix is the UTC date. Day groups, month and year groups,
+  the scrubber buckets, `from`/`to` and `onThisDay` all compare that UTC prefix.
+  For an owner in IST (UTC+05:30), a photo taken between 00:00 and 05:29 local
+  time lands on the previous day, so a 00:30 photo on 1 January is grouped under
+  31 December of the year before; west of UTC, evening photos move to the next
+  day instead. The Search "Today" chip builds its range from the browser's local
+  date, so it can miss this morning's early photos. A follow-up should either
+  store the local wall-clock time in the agent or add an owner UTC offset that
+  the Worker applies before grouping and filtering.
 - `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces) with query-time
   synonym expansion; no re-index is needed to change it. Category words
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
