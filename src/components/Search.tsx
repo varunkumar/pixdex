@@ -91,13 +91,25 @@ const Search = () => {
       { resetPage: true }
     );
   };
-  const setRange = ([a, b]: DatesRangeValue) =>
-    update({ from: toYmd(a), to: toYmd(b ?? a), onThisDay: null }, { resetPage: true });
+  // A half-picked range (first click) stays local; the URL only ever gets complete ranges.
+  const [pending, setPending] = useState<DatesRangeValue | null>(null);
+  const setRange = ([a, b]: DatesRangeValue) => {
+    if (a && !b) {
+      setPending([a, null]);
+      return;
+    }
+    setPending(null);
+    update({ from: toYmd(a), to: toYmd(b), onThisDay: null }, { resetPage: true });
+  };
   const now = new Date();
-  const toggleQuick = (kind: (typeof QUICK_CHIPS)[number]['kind'], active: boolean) =>
+  const toggleQuick = (kind: (typeof QUICK_CHIPS)[number]['kind'], active: boolean) => {
+    setPending(null);
     update(active ? { from: null, to: null } : { ...quickRange(kind, now), onThisDay: null }, { resetPage: true });
-  const toggleOnThisDay = (active: boolean) =>
+  };
+  const toggleOnThisDay = (active: boolean) => {
+    setPending(null);
     update(active ? { onThisDay: null } : { onThisDay: onThisDayToday(now), from: null, to: null }, { resetPage: true });
+  };
   const onPage = useCallback(
     (p: number, replace?: boolean) => update({ page: p }, { replace }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +177,7 @@ const Search = () => {
             label="Dates"
             placeholder="Any date"
             valueFormat="D MMM YYYY"
-            value={[from || null, to || null]}
+            value={pending ?? [from || null, to || null]}
             onChange={setRange}
             clearable
             clearButtonProps={{ 'aria-label': 'Clear dates' }}

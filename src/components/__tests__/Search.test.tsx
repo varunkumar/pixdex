@@ -225,6 +225,25 @@ describe('Search', () => {
       );
     });
 
+    it('picking two different days writes a multi-day range, and nothing is written after the first click', async () => {
+      freezeDate();
+      const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion']);
+      fireEvent.click(await screen.findByRole('button', { name: 'Dates' }));
+      vi.mocked(workerApiClient.searchPage).mockClear();
+
+      fireEvent.click(await screen.findByRole('button', { name: /10 June 2025/ }));
+      expect(router.state.location.search).toBe('?q=lion');
+      expect(workerApiClient.searchPage).not.toHaveBeenCalled();
+
+      fireEvent.click(await screen.findByRole('button', { name: /20 June 2025/ }));
+      await waitFor(() => expect(router.state.location.search).toBe('?q=lion&from=2025-06-10&to=2025-06-20'));
+      await waitFor(() =>
+        expect(workerApiClient.searchPage).toHaveBeenCalledWith(
+          expect.objectContaining({ from: '2025-06-10', to: '2025-06-20' })
+        )
+      );
+    });
+
     it('clearing the picker removes both params', async () => {
       const { router } = renderWithRouter(
         [{ path: '/search', element: <Search /> }],
