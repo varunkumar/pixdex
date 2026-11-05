@@ -62,6 +62,26 @@ export interface SearchResponse {
   total: number;
 }
 
+export type TimelineZoom = 'year' | 'month' | 'day';
+
+export interface TimelineGroup {
+  /** `YYYY-MM` at year/month zoom, `YYYY-MM-DD` or `undated` at day zoom. */
+  key: string;
+  total: number;
+  shown: number;
+  photos: SerializedPhoto[];
+}
+
+export interface TimelineResponse {
+  groups: TimelineGroup[];
+  nextCursor: string | null;
+}
+
+export interface TimelineBucketsResponse {
+  buckets: { month: string; total: number }[];
+  undated: number;
+}
+
 export interface AlbumSummary {
   name: string;
   photoCount: number;

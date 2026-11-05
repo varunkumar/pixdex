@@ -23,6 +23,8 @@ interface Context {
 // anything else is deliberately not forwarded.
 const ALLOWED_PATHS = [
   /^search$/,
+  /^timeline$/,
+  /^timeline\/buckets$/,
   /^albums$/,
   /^daily-pick$/,
   /^photos\/[^/]+$/,
