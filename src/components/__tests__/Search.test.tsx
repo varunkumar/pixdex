@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { makePhoto } from '../../test/fixtures';
 import { renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
@@ -147,5 +147,91 @@ describe('Search', () => {
     renderWithProviders(<Search />, { route: '/search?q=lion' });
     await screen.findByLabelText('Select photo album');
     expect(screen.queryByText('People')).not.toBeInTheDocument();
+  });
+
+  describe('date controls', () => {
+    afterEach(() => vi.useRealTimers());
+
+    const freezeDate = () => vi.useFakeTimers({ toFake: ['Date'], now: new Date(2025, 5, 15, 12) });
+
+    it('passes from and to from the URL to the request and shows the range', async () => {
+      renderWithProviders(<Search />, { route: '/search?from=2025-06-01&to=2025-06-30' });
+      await waitFor(() =>
+        expect(workerApiClient.searchPage).toHaveBeenCalledWith({
+          q: '',
+          album: '',
+          limit: 12,
+          offset: 0,
+          from: '2025-06-01',
+          to: '2025-06-30',
+        })
+      );
+      expect(screen.getByRole('button', { name: 'Dates' })).toHaveTextContent('1 Jun 2025');
+      expect(screen.getByRole('button', { name: 'Dates' })).toHaveTextContent('30 Jun 2025');
+    });
+
+    it('the This month chip sets from and to in the URL', async () => {
+      freezeDate();
+      const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion&page=2']);
+      fireEvent.click(await screen.findByLabelText('This month'));
+      await waitFor(() => expect(router.state.location.search).toBe('?q=lion&from=2025-06-01&to=2025-06-30'));
+    });
+
+    it('On this day sets onThisDay and clears the range, and a range clears it back', async () => {
+      freezeDate();
+      const { router } = renderWithRouter(
+        [{ path: '/search', element: <Search /> }],
+        ['/search?from=2025-06-01&to=2025-06-30']
+      );
+      fireEvent.click(await screen.findByLabelText('On this day'));
+      await waitFor(() => expect(router.state.location.search).toBe('?onThisDay=06-15'));
+      await waitFor(() =>
+        expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ onThisDay: '06-15' }))
+      );
+
+      fireEvent.click(screen.getByLabelText('This year'));
+      await waitFor(() => expect(router.state.location.search).toBe('?from=2025-01-01&to=2025-12-31'));
+    });
+
+    it('clicking an active chip turns it off', async () => {
+      const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?onThisDay=06-15']);
+      fireEvent.click(await screen.findByLabelText('On this day'));
+      await waitFor(() => expect(router.state.location.search).toBe(''));
+    });
+
+    it('submitting a typed date writes q, from and to together', async () => {
+      const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?page=3']);
+      const input = await screen.findByPlaceholderText('Search photos...');
+      fireEvent.change(input, { target: { value: 'june 2025 beach' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await waitFor(() => expect(router.state.location.search).toBe('?q=beach&from=2025-06-01&to=2025-06-30'));
+      await waitFor(() =>
+        expect(workerApiClient.searchPage).toHaveBeenCalledWith(
+          expect.objectContaining({ q: 'beach', from: '2025-06-01', to: '2025-06-30' })
+        )
+      );
+    });
+
+    it('a date range alone triggers a search', async () => {
+      renderWithProviders(<Search />, { route: '/search?from=2025-01-01&to=2025-12-31' });
+      await waitFor(() => expect(workerApiClient.searchPage).toHaveBeenCalled());
+      expect(screen.queryByText(/enter a search term/i)).not.toBeInTheDocument();
+    });
+
+    it('on this day alone triggers a search', async () => {
+      renderWithProviders(<Search />, { route: '/search?onThisDay=06-15' });
+      await waitFor(() =>
+        expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ onThisDay: '06-15' }))
+      );
+    });
+
+    it('clearing the picker removes both params', async () => {
+      const { router } = renderWithRouter(
+        [{ path: '/search', element: <Search /> }],
+        ['/search?q=lion&from=2025-06-01&to=2025-06-30']
+      );
+      fireEvent.click(await screen.findByLabelText('Clear dates'));
+      await waitFor(() => expect(router.state.location.search).toBe('?q=lion'));
+    });
   });
 });
