@@ -28,7 +28,8 @@ machine. Originals stay on local disk or Google Drive.
   scrolled past the newest month, zooming keeps the month you are reading. Highlights are
   photos whose combined score is at least 6.0, topped up to the best 3 per group;
   Year shows the top 6 per month. A year/month scrubber rail on the side jumps to
-  any month with photos. Zoom, filters and jump position live in the URL.
+  any month with photos; while dragging it shows the month under the pointer,
+  and on a long history it thins the year labels so they stay readable. Zoom, filters and jump position live in the URL.
 - **Search by date.** Search has a date range picker, quick chips (Today, This
   week, This month, This year) and an "On this day" chip (same month and day in
   every year). Typed shortcuts work too: `lion june 2025`, `2025`, `jun 2025` or

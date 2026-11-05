@@ -6,8 +6,9 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'Ju
 // Keep the rail clear of the 60px app header and the viewport bottom on short screens.
 const RAIL_TOP = 76;
 const RAIL_BOTTOM = 16;
-// Year labels need rows at least this tall to stay legible.
-const MIN_LABEL_ROW = 12;
+// A year label is drawn only when it sits at least this far below the previous
+// one, so a crowded rail thins its labels instead of overlapping them.
+const MIN_LABEL_GAP = 12;
 
 interface Props {
   /** Months that have photos, newest first. */
@@ -96,6 +97,18 @@ const TimelineScrubber = ({ buckets, activeMonth, onJump }: Props) => {
 
   const shown = preview ?? activeMonth;
 
+  // Rows of year starts that get a label, each at least MIN_LABEL_GAP below the last one drawn.
+  const yearLabelRows = new Set<number>();
+  let lastLabelRow = -Infinity;
+  buckets.forEach(({ month }, i) => {
+    const yearStart = i === 0 || buckets[i - 1].month.slice(0, 4) !== month.slice(0, 4);
+    if (yearStart && (i - lastLabelRow) * rowHeight >= MIN_LABEL_GAP) {
+      yearLabelRows.add(i);
+      lastLabelRow = i;
+    }
+  });
+  const previewRow = preview ? buckets.findIndex((b) => b.month === preview) : -1;
+
   return (
     // The outer box only positions the rail; the inner column is the whole hit area.
     <Box
@@ -125,15 +138,40 @@ const TimelineScrubber = ({ buckets, activeMonth, onJump }: Props) => {
           height: `min(100%, ${count * 16}px)`,
           display: 'flex',
           flexDirection: 'column',
+          position: 'relative',
           pointerEvents: 'auto',
           touchAction: 'none',
           userSelect: 'none',
           cursor: 'ns-resize',
         }}
       >
+        {previewRow >= 0 && (
+          // Floats left of the rail at the previewed row, using the same equal-row math as monthAt.
+          <Text
+            data-testid="scrubber-preview"
+            size="sm"
+            fw={600}
+            px="xs"
+            py={2}
+            style={{
+              position: 'absolute',
+              right: '100%',
+              top: `${((previewRow + 0.5) / count) * 100}%`,
+              transform: 'translateY(-50%)',
+              marginRight: 8,
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              borderRadius: 4,
+              background: 'var(--mantine-color-body)',
+              boxShadow: 'var(--mantine-shadow-sm)',
+            }}
+          >
+            {monthLabel(preview as string)}
+          </Text>
+        )}
         {buckets.map(({ month, total }, i) => {
           const year = month.slice(0, 4);
-          const showYear = rowHeight >= MIN_LABEL_ROW && (i === 0 || buckets[i - 1].month.slice(0, 4) !== year);
+          const showYear = yearLabelRows.has(i);
           const active = month === shown;
           return (
             <Box key={month} style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
