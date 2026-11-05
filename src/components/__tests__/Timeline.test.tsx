@@ -18,17 +18,29 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
 
 vi.mock('../../services/originals', () => ({ getOriginalUrl: vi.fn(() => null) }));
 
+// Like a real observer, observe() reports the target's current state at once, so a
+// sentinel already in view triggers a fetch as soon as a new observer starts.
+let sentinelInView = false;
 let intersect: (isIntersecting: boolean) => void = () => {};
 
 class FakeIntersectionObserver {
+  private readonly report: (isIntersecting: boolean) => void;
   constructor(cb: IntersectionObserverCallback) {
-    intersect = (isIntersecting) =>
+    this.report = (isIntersecting) =>
       cb([{ isIntersecting } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+    intersect = (isIntersecting) => {
+      sentinelInView = isIntersecting;
+      this.report(isIntersecting);
+    };
   }
-  observe() {}
+  observe() {
+    this.report(sentinelInView);
+  }
   unobserve() {}
   disconnect() {
-    intersect = () => {};
+    intersect = (isIntersecting) => {
+      sentinelInView = isIntersecting;
+    };
   }
 }
 
@@ -51,6 +63,7 @@ const search = (router: { state: { location: { search: string } } }) =>
 describe('Timeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sentinelInView = false;
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver);
     vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
@@ -249,6 +262,33 @@ describe('Timeline', () => {
     fireEvent.click(retry);
     expect(await screen.findByText('September 2026')).toBeInTheDocument();
     expect(workerApiClient.getTimeline).toHaveBeenCalledTimes(3);
+  });
+
+  it('disables Retry while the next page is being fetched again', async () => {
+    let resolveRetry: (page: TimelineResponse) => void = () => {};
+    vi.mocked(workerApiClient.getTimeline)
+      .mockResolvedValueOnce(monthPage)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockImplementationOnce(() => new Promise((r) => (resolveRetry = r)));
+    renderAt('/timeline');
+    await screen.findByText('November 2026');
+    act(() => intersect(true));
+    const retry = await screen.findByRole('button', { name: /retry/i });
+    fireEvent.click(retry);
+    await waitFor(() => expect(retry).toBeDisabled());
+    fireEvent.click(retry);
+    expect(workerApiClient.getTimeline).toHaveBeenCalledTimes(3);
+    await act(async () => resolveRetry({ groups: [{ key: '2026-09', total: 1, shown: 1, photos: [] }], nextCursor: null }));
+    expect(await screen.findByText('September 2026')).toBeInTheDocument();
+  });
+
+  it('retries a failed first page', async () => {
+    vi.mocked(workerApiClient.getTimeline).mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(monthPage);
+    renderAt('/timeline');
+    expect(await screen.findByText('Could not load the timeline.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(await screen.findByText('November 2026')).toBeInTheDocument();
+    expect(workerApiClient.getTimeline).toHaveBeenCalledTimes(2);
   });
 
   it('shows the full-page error when the first page fails', async () => {

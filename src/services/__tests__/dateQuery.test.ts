@@ -55,6 +55,11 @@ describe('parseDateQuery', () => {
 
   it('ignores impossible ISO dates', () => {
     expect(parseDateQuery('2025-13-45')).toEqual({ text: '2025-13-45' });
+    expect(parseDateQuery('2025-02-30')).toEqual({ text: '2025-02-30' });
+  });
+
+  it('accepts a real leap day as a single day range', () => {
+    expect(parseDateQuery('2024-02-29')).toEqual({ text: '', from: '2024-02-29', to: '2024-02-29' });
   });
 });
 

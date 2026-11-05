@@ -28,7 +28,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 ### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
 
-- `components/` - Timeline (day/month/year zoom via Ctrl+wheel or pinch, state in the URL; a zoom change away from the newest month writes `to` = end of the active month in the same replace navigation, so the period being read is kept, year/month scrubber rail with a floating month label while dragging, year labels thinned to at least 12px apart, and a "Back to latest" chip after a jump), Search (People filter kept in the URL as `people=<id>,<id>`; date range picker, quick chips and an "On this day" chip in the URL as `from`, `to`, `onThisDay`; typed dates such as `june 2025` parsed by `services/dateQuery.ts`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
+- `components/` - Timeline (day/month/year zoom via Ctrl+wheel or pinch, state in the URL; a zoom change away from the newest month writes `to` = end of the active month in the same replace navigation, so the period being read is kept, year/month scrubber rail with a floating month label while dragging, year labels thinned to at least 12px apart, a "Back to latest" chip after a jump, and Retry buttons for a failed first or next page), Search (People filter kept in the URL as `people=<id>,<id>`; date range picker, quick chips and an "On this day" chip in the URL as `from`, `to`, `onThisDay`; typed dates such as `june 2025` parsed by `services/dateQuery.ts`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
   and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
@@ -87,7 +87,11 @@ candidate). It returns 404 if no photo qualifies.
   many are returned. Day returns all photos. Month returns photos with a
   combined score >= `HIGHLIGHT_THRESHOLD` (6.0), topped up to the best
   `MIN_PER_GROUP` (3) rated photos. Year returns the best `YEAR_CAP` (6) per month.
-  Unrated photos only appear at day zoom. `GET /timeline/buckets` returns
+  Unrated photos only appear at day zoom. Month and year zoom omit undated
+  photos entirely (the buckets `undated` count still covers them for the
+  scrubber). Once `to` is set, undated photos fail the date filter, so at day
+  zoom the Undated group is not reachable until "Back to latest" clears `to`.
+  `GET /timeline/buckets` returns
   `{ buckets: [{ month, total }], undated }` for the scrubber (honours `album`
   and `people` only). Both are read-only and need no migration. A photo counts
   as dated only when `date_time` starts with a full `YYYY-MM-DD`; NULL, EXIF

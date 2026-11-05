@@ -60,7 +60,17 @@ const Timeline = () => {
     queryFn: () => workerApiClient.getTimelineBuckets({ ...(album && { album }), ...(people.length > 0 && { people }) }),
   });
 
-  const { data, isPending, error, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = useInfiniteQuery({
+  const {
+    data,
+    isPending,
+    isFetching,
+    error,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    fetchNextPage,
+    refetch,
+  } = useInfiniteQuery({
     queryKey: ['timeline', zoom, album, peopleKey, to],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
@@ -253,7 +263,12 @@ const Timeline = () => {
 
       <Box ref={surfaceRef} data-testid="timeline-grid" style={{ touchAction: 'pan-y' }}>
         {error && !data ? (
-          <Text c="red">Could not load the timeline.</Text>
+          <Group gap="sm">
+            <Text c="red">Could not load the timeline.</Text>
+            <Button size="compact-sm" variant="light" loading={isFetching} onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </Group>
         ) : isPending ? (
           <Group justify="center" py="xl">
             <Loader />
@@ -289,7 +304,12 @@ const Timeline = () => {
             <Text c="red" size="sm">
               Could not load more photos.
             </Text>
-            <Button size="compact-sm" variant="light" onClick={() => void fetchNextPage()}>
+            <Button
+              size="compact-sm"
+              variant="light"
+              loading={isFetchingNextPage}
+              onClick={() => void fetchNextPage()}
+            >
               Retry
             </Button>
           </Group>
