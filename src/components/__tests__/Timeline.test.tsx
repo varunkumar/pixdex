@@ -255,11 +255,60 @@ describe('Timeline', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to latest' }));
     await waitFor(() => expect(search(router).has('to')).toBe(false));
     expect(screen.queryByText('Showing photos up to Mar 2025')).not.toBeInTheDocument();
+    await waitFor(() => expect(workerApiClient.getTimeline).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(workerApiClient.getTimeline).mock.calls[1][0]).not.toHaveProperty('to');
   });
 
   it('shows no jump chip when to is unset', async () => {
     renderAt('/timeline');
     await screen.findByText('November 2026');
     expect(screen.queryByRole('button', { name: 'Back to latest' })).not.toBeInTheDocument();
+  });
+
+  it('commits a rail drag as one replace navigation and one feed reload', async () => {
+    const { router } = renderAt('/timeline');
+    await screen.findByText('November 2026');
+    const rail = screen.getByTestId('timeline-scrubber');
+    rail.getBoundingClientRect = () => ({ top: 0, height: 300, bottom: 300 }) as DOMRect;
+    const historyBefore = window.history.length;
+    const before = vi.mocked(workerApiClient.getTimeline).mock.calls.length;
+    fireEvent.pointerDown(rail, { clientY: 10, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(rail, { clientY: 150, pointerId: 1 });
+    fireEvent.pointerMove(rail, { clientY: 290, pointerId: 1 });
+    fireEvent.pointerUp(rail, { clientY: 290, pointerId: 1 });
+    await waitFor(() => expect(search(router).get('to')).toBe('2025-03-31'));
+    await waitFor(() => expect(workerApiClient.getTimeline).toHaveBeenCalledTimes(before + 1));
+    expect(window.history.length).toBe(historyBefore);
+    expect(workerApiClient.getTimeline).toHaveBeenLastCalledWith(expect.objectContaining({ to: '2025-03-31' }));
+  });
+
+  it('jumps from a real pointer press on a tick', async () => {
+    renderAt('/timeline');
+    await screen.findByText('November 2026');
+    const rail = screen.getByTestId('timeline-scrubber');
+    rail.getBoundingClientRect = () => ({ top: 0, height: 300, bottom: 300 }) as DOMRect;
+    const tick = screen.getByRole('button', { name: 'October 2026' });
+    fireEvent.pointerDown(tick, { clientY: 150, pointerId: 1, button: 0 });
+    fireEvent.pointerUp(tick, { clientY: 150, pointerId: 1 });
+    await waitFor(() =>
+      expect(workerApiClient.getTimeline).toHaveBeenLastCalledWith(expect.objectContaining({ to: '2026-10-31' }))
+    );
+  });
+
+  it('marks the right tick at year zoom, where groups are still keyed by month', async () => {
+    vi.mocked(workerApiClient.getTimeline).mockResolvedValue({
+      groups: [{ key: '2025-03', total: 5, shown: 5, photos: photos('y', 1) }],
+      nextCursor: null,
+    });
+    renderAt('/timeline?zoom=year');
+    const tick = await screen.findByRole('button', { name: 'March 2025' });
+    await waitFor(() => expect(tick).toHaveAttribute('aria-current', 'true'));
+  });
+
+  it('reserves a right gutter so the rail does not cover photos', async () => {
+    renderAt('/timeline');
+    const content = await screen.findByTestId('timeline-content');
+    expect(content.className).toMatch(/mantine-Stack-root/);
+    expect(document.documentElement.innerHTML).toMatch(/min-width: 62em\)\{\.[^{]*\{padding-right:[^;]*4rem/);
   });
 });

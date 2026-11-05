@@ -51,18 +51,39 @@ describe('TimelineScrubber', () => {
     expect(onJump).toHaveBeenCalledWith('2025-03');
   });
 
-  it('jumps once per month change while dragging down the rail', () => {
+  it('previews while dragging and commits a single jump on release', () => {
     const { onJump } = setup();
     const rail = sizeRail();
-    fireEvent.pointerDown(rail, { clientY: 10, pointerId: 1 });
-    fireEvent.pointerMove(rail, { clientY: 20, pointerId: 1 });
+    fireEvent.pointerDown(rail, { clientY: 10, pointerId: 1, button: 0 });
     fireEvent.pointerMove(rail, { clientY: 60, pointerId: 1 });
     fireEvent.pointerMove(rail, { clientY: 130, pointerId: 1 });
-    fireEvent.pointerMove(rail, { clientY: 180, pointerId: 1 });
+    expect(screen.getByRole('button', { name: 'March 2025' })).toHaveAttribute('aria-current', 'true');
     fireEvent.pointerMove(rail, { clientY: 390, pointerId: 1 });
+    expect(onJump).not.toHaveBeenCalled();
     fireEvent.pointerUp(rail, { clientY: 390, pointerId: 1 });
     fireEvent.pointerMove(rail, { clientY: 10, pointerId: 1 });
-    expect(onJump.mock.calls.map((c) => c[0])).toEqual(['2026-01', '2025-03', '2024-12']);
+    expect(onJump.mock.calls).toEqual([['2024-12']]);
+  });
+
+  it('jumps on a pointer press and release on a tick, without a double jump from the click', () => {
+    const { onJump } = setup();
+    sizeRail();
+    const tick = screen.getByRole('button', { name: 'March 2025' });
+    fireEvent.pointerDown(tick, { clientY: 150, pointerId: 1, button: 0 });
+    fireEvent.pointerUp(tick, { clientY: 150, pointerId: 1 });
+    fireEvent.click(tick, { detail: 1 });
+    expect(onJump.mock.calls).toEqual([['2025-03']]);
+  });
+
+  it('ignores non-primary buttons and a cancelled drag', () => {
+    const { onJump } = setup();
+    const rail = sizeRail();
+    fireEvent.pointerDown(rail, { clientY: 10, pointerId: 1, button: 2 });
+    fireEvent.pointerUp(rail, { clientY: 10, pointerId: 1 });
+    fireEvent.pointerDown(rail, { clientY: 10, pointerId: 1, button: 0 });
+    fireEvent.pointerCancel(rail, { pointerId: 1 });
+    fireEvent.pointerUp(rail, { clientY: 10, pointerId: 1 });
+    expect(onJump).not.toHaveBeenCalled();
   });
 
   it('renders nothing for an empty bucket list', () => {

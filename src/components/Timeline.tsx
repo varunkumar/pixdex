@@ -37,6 +37,7 @@ function toLabel(to: string): string {
 
 // A heading counts as "at the top" once it has scrolled up past the sticky bar.
 const ACTIVE_OFFSET = 120;
+const SCRUBBER_GUTTER = 64;
 
 const groupCount = ({ total, shown }: TimelineGroup) => {
   const photos = `${total} ${total === 1 ? 'photo' : 'photos'}`;
@@ -154,8 +155,19 @@ const Timeline = () => {
   }, []);
   useEffect(() => {
     updateActiveMonth();
-    window.addEventListener('scroll', updateActiveMonth, { passive: true });
-    return () => window.removeEventListener('scroll', updateActiveMonth);
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        updateActiveMonth();
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(frame);
+    };
   }, [updateActiveMonth, groups.length]);
 
   const handleJump = (month: string) => {
@@ -179,7 +191,8 @@ const Timeline = () => {
   }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, groups.length]);
 
   return (
-    <Stack gap="lg">
+    // Right padding at md and up keeps photos clear of the fixed scrubber rail.
+    <Stack gap="lg" data-testid="timeline-content" pr={{ base: 0, md: SCRUBBER_GUTTER }}>
       <Group justify="space-between" align="flex-end">
         <Title order={2}>Timeline</Title>
         <SegmentedControl

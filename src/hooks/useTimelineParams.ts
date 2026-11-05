@@ -24,13 +24,13 @@ export function useTimelineParams() {
   const people = (params.get('people') ?? '').split(',').filter(Boolean).slice(0, 5);
   const to = params.get('to') ?? '';
 
-  const write = (patch: Record<string, string | null>) => {
+  const write = (patch: Record<string, string | null>, replace = false) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(patch)) {
       if (value === null || value === '') next.delete(key);
       else next.set(key, value);
     }
-    setParams(next);
+    setParams(next, { replace });
   };
 
   const setZoom = (z: TimelineZoom) => write({ zoom: z === 'month' ? null : z });
@@ -46,7 +46,8 @@ export function useTimelineParams() {
   const jumpTo = (month: string) => {
     const [y, m] = month.split('-').map(Number);
     if (!y || !m || m < 1 || m > 12) return;
-    write({ to: `${y}-${String(m).padStart(2, '0')}-${String(lastDayOfMonth(y, m)).padStart(2, '0')}` });
+    // Replace, so scrubbing around does not stack a history entry per jump.
+    write({ to: `${y}-${String(m).padStart(2, '0')}-${String(lastDayOfMonth(y, m)).padStart(2, '0')}` }, true);
   };
 
   return { zoom, album, people, to, setZoom, setFilters, jumpTo };
