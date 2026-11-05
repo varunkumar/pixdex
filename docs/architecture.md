@@ -28,7 +28,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 ### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
 
-- `components/` - Timeline (day/month/year zoom via Ctrl+wheel or pinch, state in the URL, year/month scrubber rail with a "Back to latest" chip after a jump), Search (People filter kept in the URL as `people=<id>,<id>`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
+- `components/` - Timeline (day/month/year zoom via Ctrl+wheel or pinch, state in the URL, year/month scrubber rail with a "Back to latest" chip after a jump), Search (People filter kept in the URL as `people=<id>,<id>`; date range picker, quick chips and an "On this day" chip in the URL as `from`, `to`, `onThisDay`; typed dates such as `june 2025` parsed by `services/dateQuery.ts`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
   and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
@@ -39,12 +39,13 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 - `hooks/useListParams.ts` - sort/page state kept in the URL so listings are
   linkable and "back" returns to the same sort and page.
 - `types/api.ts` - API response types shared by components.
+- Date pickers use `@mantine/dates` and its `dayjs` peer dependency.
 - Tests sit next to code in `__tests__/`; helpers in `src/test/`.
 
 ### `functions/api/[[path]].ts` - Pages Function proxy
 
 Same-origin read proxy. Adds `READ_TOKEN` server-side so it never ships in the
-bundle. Only an allowlist of read routes is forwarded (`search`, `albums`,
+bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
 `people/groups`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
@@ -77,6 +78,23 @@ candidate). It returns 404 if no photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
+- `routes/timeline.ts` - `GET /timeline` returns date groups, newest first, as
+  `{ groups: [{ key, total, shown, photos }], nextCursor }`. Params: `zoom`
+  (`year`, `month` default, `day`; groups are months, months, days, with an
+  `undated` group last at day zoom only), `groups` (page size, integer 1-24,
+  default 6), `cursor` (the last key of the previous page), plus `album`,
+  `people` and the date filters below. `total` is the true count; `shown` is how
+  many are returned. Day returns all photos. Month returns photos with a
+  combined score >= `HIGHLIGHT_THRESHOLD` (6.0), topped up to the best
+  `MIN_PER_GROUP` (3) rated photos. Year returns the best `YEAR_CAP` (6) per month.
+  Unrated photos only appear at day zoom. `GET /timeline/buckets` returns
+  `{ buckets: [{ month, total }], undated }` for the scrubber (honours `album`
+  and `people` only). Both are read-only and need no migration.
+- `db/dateFilter.ts` - shared by `/search` and `/timeline`: `from` and `to`
+  (inclusive `YYYY-MM-DD`, compared against `photos.date_time`) or `onThisDay`
+  (`MM-DD`, Feb 29 allowed, matches that month and day in any year). Invalid
+  values, `to` before `from`, or `onThisDay` combined with `from`/`to` return
+  400 with `{ error }`; `/timeline` also returns 400 for a bad `zoom` or `groups`.
 - `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces) with query-time
   synonym expansion; no re-index is needed to change it. Category words
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
