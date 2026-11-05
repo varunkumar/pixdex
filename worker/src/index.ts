@@ -20,6 +20,7 @@ import {
   renamePersonRoute,
 } from './routes/people';
 import { searchRoute } from './routes/search';
+import { bucketsRoute, timelineRoute } from './routes/timeline';
 import { dailyPickRoute } from './routes/daily-pick';
 import type { Env } from './types';
 
@@ -49,6 +50,11 @@ app.get('/thumbnails/:contentHash', getThumbnailRoute);
 
 app.use('/search', requireReadToken);
 app.get('/search', searchRoute);
+
+app.use('/timeline', requireReadToken);
+app.use('/timeline/*', requireReadToken);
+app.get('/timeline', timelineRoute);
+app.get('/timeline/buckets', bucketsRoute);
 
 app.use('/photos/*', requireReadToken);
 app.get('/photos/:id', getPhotoRoute);
