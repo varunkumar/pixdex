@@ -89,7 +89,14 @@ candidate). It returns 404 if no photo qualifies.
   `MIN_PER_GROUP` (3) rated photos. Year returns the best `YEAR_CAP` (6) per month.
   Unrated photos only appear at day zoom. `GET /timeline/buckets` returns
   `{ buckets: [{ month, total }], undated }` for the scrubber (honours `album`
-  and `people` only). Both are read-only and need no migration.
+  and `people` only). Both are read-only and need no migration. A photo counts
+  as dated only when `date_time` starts with a full `YYYY-MM-DD`; NULL, EXIF
+  style `2025:06:02 ...` or other junk is undated in both routes. Pages read
+  through `idx_photos_date_time`: with a cursor, the keys pass reads only rows
+  older than it, and the photos pass reads only the page's own date range. The
+  first keys page still reads every dated row, and at day zoom the undated count
+  (and the photos pass of the page that holds the `undated` group) reads the
+  whole table, but only once the dated days run out.
 - `db/dateFilter.ts` - shared by `/search` and `/timeline`: `from` and `to`
   (inclusive `YYYY-MM-DD`, compared against `photos.date_time`) or `onThisDay`
   (`MM-DD`, Feb 29 allowed, matches that month and day in any year). Invalid

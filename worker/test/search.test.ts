@@ -366,6 +366,12 @@ describe('GET /search date filters', () => {
     expect(typeof body.error).toBe('string');
   });
 
+  it('rejects a range that ends before it starts with 400', async () => {
+    const { status, body } = await get('from=2025-07-01&to=2025-06-01');
+    expect(status).toBe(400);
+    expect(typeof body.error).toBe('string');
+  });
+
   it('rejects onThisDay combined with from', async () => {
     expect((await get('onThisDay=06-14&from=2025-01-01')).status).toBe(400);
   });

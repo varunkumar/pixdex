@@ -14,7 +14,14 @@ export const YEAR_CAP = 6;
 const DEFAULT_GROUPS = 6;
 const MAX_GROUPS = 24;
 
-const DATED = `(photos.date_time IS NOT NULL AND substr(photos.date_time, 1, 4) GLOB '[0-9][0-9][0-9][0-9]')`;
+// A row is dated only when it starts with a full YYYY-MM-DD date; EXIF style
+// "2025:06:02" or other junk falls into the undated group instead of a bogus key.
+const DATED = `(photos.date_time IS NOT NULL AND photos.date_time GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*')`;
+
+// Smallest string greater than every string that starts with `key`: the last
+// character bumped by one ("2025-09" -> "2025-0:"). Used as an exclusive upper
+// bound on date_time so a group key range can use idx_photos_date_time.
+const pastPrefix = (key: string) => key.slice(0, -1) + String.fromCharCode(key.charCodeAt(key.length - 1) + 1);
 
 // Shared album/people filters, same shape as /search. All values are bound.
 function scopeSql(album: string | undefined, people: string[]) {
@@ -70,34 +77,62 @@ export async function timelineRoute(c: Context<{ Bindings: Env }>) {
   const where = `WHERE 1=1${zoom === 'day' ? '' : ` AND ${DATED}`}${scope.sql}${dates.sql}`;
   const whereParams = [...scope.params, ...dates.params];
 
-  // Pass 1: the next page of group keys with their full totals.
+  // Pass 1: the next page of group keys with their full totals. Dated keys come
+  // first, newest first; at day zoom the undated group follows the last day.
   if (cursor === 'undated') return c.json({ groups: [], nextCursor: null });
+  const datedKey = zoom === 'day' ? `substr(photos.date_time, 1, 10)` : `substr(photos.date_time, 1, 7)`;
   const keyParams: unknown[] = [...whereParams];
   let keyset = '';
   if (cursor) {
-    keyset = ` AND (${keyExpr} = 'undated' OR ${keyExpr} < ?)`;
+    keyset = ` AND ${datedKey} < ?`;
     keyParams.push(cursor);
+    // A well formed cursor is also a plain bound on the column, which turns the
+    // keyset into an index range. Every dated row with a key below the cursor
+    // sorts below it too, because the key is a same-length prefix of date_time.
+    if ((zoom === 'day' ? /^\d{4}-\d{2}-\d{2}$/ : /^\d{4}-\d{2}$/).test(cursor)) {
+      keyset += ` AND photos.date_time < ?`;
+      keyParams.push(cursor);
+    }
   }
-  const keyRows = await c.env.DB.prepare(
-    `SELECT ${keyExpr} AS k, COUNT(*) AS total FROM photos ${where}${keyset}
-     GROUP BY k ORDER BY k = 'undated', k DESC LIMIT ?`
-  )
-    .bind(...keyParams, perPage + 1)
-    .all<{ k: string; total: number }>();
-  const pageKeys = keyRows.results.slice(0, perPage);
-  const nextCursor = keyRows.results.length > perPage ? pageKeys[pageKeys.length - 1].k : null;
+  const datedWhere = zoom === 'day' ? `${where} AND ${DATED}` : where;
+  const keyRows = (
+    await c.env.DB.prepare(
+      `SELECT ${datedKey} AS k, COUNT(*) AS total FROM photos ${datedWhere}${keyset}
+       GROUP BY k ORDER BY k DESC LIMIT ?`
+    )
+      .bind(...keyParams, perPage + 1)
+      .all<{ k: string; total: number }>()
+  ).results;
+  // The undated count is only needed once the dated days run out, which keeps
+  // its full-table read off every page but the last.
+  if (zoom === 'day' && keyRows.length <= perPage) {
+    const undated = await c.env.DB.prepare(`SELECT COUNT(*) AS total FROM photos ${where} AND NOT ${DATED}`)
+      .bind(...whereParams)
+      .first<{ total: number }>();
+    if (undated && undated.total > 0) keyRows.push({ k: 'undated', total: undated.total });
+  }
+  const pageKeys = keyRows.slice(0, perPage);
+  const nextCursor = keyRows.length > perPage ? pageKeys[pageKeys.length - 1].k : null;
   if (pageKeys.length === 0) return c.json({ groups: [], nextCursor: null });
 
-  // Pass 2: ranked photos for those keys, trimmed by the zoom rule.
+  // Pass 2: ranked photos for those keys, trimmed by the zoom rule. When the page
+  // holds only dated keys, a date_time range around them lets the index narrow
+  // the read; the undated group (last page only) has no such range.
   const keep =
     zoom === 'day'
       ? '1=1'
       : zoom === 'year'
         ? `score IS NOT NULL AND rnk <= ${YEAR_CAP}`
         : `score IS NOT NULL AND (score >= ${HIGHLIGHT_THRESHOLD} OR rnk <= ${MIN_PER_GROUP})`;
+  let range = '';
+  const rangeParams: unknown[] = [];
+  if (!pageKeys.some((g) => g.k === 'undated')) {
+    range = ` AND photos.date_time >= ? AND photos.date_time < ?`;
+    rangeParams.push(pageKeys[pageKeys.length - 1].k, pastPrefix(pageKeys[0].k));
+  }
   const photoRows = await c.env.DB.prepare(
     `WITH scored AS (
-       SELECT photos.*, ${keyExpr} AS gk, ${COMBINED_SCORE_SQL} AS score FROM photos ${where}
+       SELECT photos.*, ${keyExpr} AS gk, ${COMBINED_SCORE_SQL} AS score FROM photos ${where}${range}
      ), ranked AS (
        SELECT scored.*, ROW_NUMBER() OVER (
          PARTITION BY gk ORDER BY score IS NULL, score DESC, date_time DESC, id
@@ -105,7 +140,7 @@ export async function timelineRoute(c: Context<{ Bindings: Env }>) {
      )
      SELECT * FROM ranked WHERE ${keep} ORDER BY date_time DESC, id`
   )
-    .bind(...whereParams, ...pageKeys.map((g) => g.k))
+    .bind(...whereParams, ...rangeParams, ...pageKeys.map((g) => g.k))
     .all<PhotoRow & { gk: string }>();
 
   const byKey = new Map<string, ReturnType<typeof serializePhoto>[]>();
