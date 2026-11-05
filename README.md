@@ -253,7 +253,7 @@ a merged migration runs on production before the new code goes live. See
 
 ## Project Structure
 
-- `src/components` - React UI (Search, Albums, AlbumPhotos, PhotoDetail,
+- `src/components` - React UI (Timeline, Search, Albums, AlbumPhotos, PhotoDetail,
   DailySuggestion, Dashboard, Lightbox, Layout, People)
 - `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
   and helpers, API types

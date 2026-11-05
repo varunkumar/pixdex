@@ -1,0 +1,221 @@
+import { Box, Card, Group, Loader, MultiSelect, SegmentedControl, Select, Stack, Text, Title } from '@mantine/core';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useTimelineParams, ZOOMS } from '../hooks/useTimelineParams';
+import { workerApiClient } from '../services/api/WorkerApiClient';
+import type { TimelineGroup, TimelineZoom } from '../types/api';
+import PhotoGrid from './PhotoGrid';
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+const ZOOM_OPTIONS = [
+  { value: 'day', label: 'Day' },
+  { value: 'month', label: 'Month' },
+  { value: 'year', label: 'Year' },
+];
+
+const ZOOM_DEBOUNCE_MS = 150;
+// Finger spread ratio that counts as one zoom step.
+const PINCH_STEP = 1.3;
+
+// Parsed by hand so the label never shifts with the viewer's timezone or locale.
+function groupHeading(key: string): string {
+  if (key === 'undated') return 'Undated';
+  const [y, m, d] = key.split('-').map(Number);
+  if (d === undefined) return `${MONTHS[m - 1]} ${y}`;
+  const weekday = DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${weekday} ${d} ${MONTHS[m - 1].slice(0, 3)} ${y}`;
+}
+
+const groupCount = ({ total, shown }: TimelineGroup) => {
+  const photos = `${total} ${total === 1 ? 'photo' : 'photos'}`;
+  return shown === 0 ? `${photos}, zoom in to see` : `${photos}, ${shown} shown`;
+};
+
+const pinchDistance = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+
+const Timeline = () => {
+  const { zoom, album, people, to, setZoom, setFilters } = useTimelineParams();
+  const peopleKey = people.join(',');
+
+  const { data: albums = [] } = useQuery({ queryKey: ['album-names'], queryFn: () => workerApiClient.getAlbums() });
+  const { data: namedPeople = [] } = useQuery({ queryKey: ['people'], queryFn: () => workerApiClient.getPeople() });
+  const peopleOptions = namedPeople.map((p) => ({ value: p.id, label: p.name }));
+
+  const { data, isPending, error, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery({
+    queryKey: ['timeline', zoom, album, peopleKey, to],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) =>
+      workerApiClient.getTimeline({
+        zoom,
+        ...(album && { album }),
+        ...(people.length > 0 && { people }),
+        ...(to && { to }),
+        ...(pageParam && { cursor: pageParam }),
+      }),
+    getNextPageParam: (p) => p.nextCursor ?? undefined,
+  });
+
+  const groups = data?.pages.flatMap((p) => p.groups) ?? [];
+
+  // Zoom gestures read the latest zoom through a ref so a stale listener never steps from an old level.
+  const zoomRef = useRef<TimelineZoom>(zoom);
+  const setZoomRef = useRef(setZoom);
+  useEffect(() => {
+    zoomRef.current = zoom;
+    setZoomRef.current = setZoom;
+  });
+
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = surfaceRef.current;
+    if (!el) return;
+    let pending = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Steps accumulate for a moment, then move at most one level, so a fast wheel flick is not a leap.
+    const step = (dir: -1 | 1) => {
+      pending += dir;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const dir = Math.sign(pending);
+        pending = 0;
+        const next = ZOOMS[ZOOMS.indexOf(zoomRef.current) + dir];
+        if (next) setZoomRef.current(next);
+      }, ZOOM_DEBOUNCE_MS);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      // Up (negative deltaY) zooms in toward Day, down out toward Year.
+      step(e.deltaY < 0 ? -1 : 1);
+    };
+
+    let startDistance = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) startDistance = pinchDistance(e.touches);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || startDistance === 0) return;
+      const ratio = pinchDistance(e.touches) / startDistance;
+      if (ratio > PINCH_STEP) step(-1);
+      else if (ratio < 1 / PINCH_STEP) step(1);
+      else return;
+      startDistance = pinchDistance(e.touches);
+    };
+    const onTouchEnd = () => {
+      startDistance = 0;
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: true });
+    el.addEventListener('touchend', onTouchEnd);
+    return () => {
+      clearTimeout(timer);
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
+
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting) && !isFetchingNextPage) void fetchNextPage();
+      },
+      { rootMargin: '600px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, groups.length]);
+
+  return (
+    <Stack gap="lg">
+      <Group justify="space-between" align="flex-end">
+        <Title order={2}>Timeline</Title>
+        <SegmentedControl
+          aria-label="Timeline zoom"
+          data={ZOOM_OPTIONS}
+          value={zoom}
+          onChange={(v) => setZoom(v as TimelineZoom)}
+        />
+      </Group>
+
+      <Card withBorder>
+        <Group align="flex-end" gap="md" grow preventGrowOverflow={false}>
+          <Select
+            label="Album"
+            aria-label="Select photo album"
+            placeholder="All albums"
+            data={albums}
+            value={album || null}
+            onChange={(value) => setFilters({ album: value ?? '' })}
+            clearable
+            searchable
+          />
+          {peopleOptions.length > 0 && (
+            <MultiSelect
+              label="People"
+              placeholder={people.length === 0 ? 'Anyone' : undefined}
+              data={peopleOptions}
+              value={people.filter((id) => peopleOptions.some((o) => o.value === id))}
+              onChange={(ids) => setFilters({ people: ids })}
+              maxValues={5}
+              clearable
+              searchable
+              hidePickedOptions
+            />
+          )}
+        </Group>
+      </Card>
+
+      <Box ref={surfaceRef} data-testid="timeline-grid" style={{ touchAction: 'pan-y' }}>
+        {error ? (
+          <Text c="red">Could not load the timeline.</Text>
+        ) : isPending ? (
+          <Group justify="center" py="xl">
+            <Loader />
+          </Group>
+        ) : groups.length === 0 ? (
+          <Text c="dimmed" ta="center" py="xl">
+            No photos match these filters.
+          </Text>
+        ) : (
+          <Stack gap="lg">
+            {groups.map((group) => (
+              <Box key={group.key}>
+                <Group
+                  gap="sm"
+                  align="baseline"
+                  py="xs"
+                  mb="sm"
+                  style={{ position: 'sticky', top: 60, zIndex: 5, background: 'var(--mantine-color-body)' }}
+                >
+                  <Title order={4}>{groupHeading(group.key)}</Title>
+                  <Text size="sm" c="dimmed">
+                    {groupCount(group)}
+                  </Text>
+                </Group>
+                {group.photos.length > 0 && <PhotoGrid photos={group.photos} />}
+              </Box>
+            ))}
+          </Stack>
+        )}
+        <div ref={sentinelRef} style={{ height: 1 }} />
+        {isFetchingNextPage && (
+          <Group justify="center" py="md">
+            <Loader size="sm" />
+          </Group>
+        )}
+      </Box>
+    </Stack>
+  );
+};
+
+export default Timeline;
