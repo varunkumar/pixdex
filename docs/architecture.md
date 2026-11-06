@@ -34,6 +34,18 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
   matching), Dashboard,
   DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
+- AI Search (`components/AiSearch.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
+  entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available (the
+  nav entry and route are gated on it). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):
+  no new allowlist entries and no Worker, D1 or agent change. URL state: `q`, `kw`, `people=0`,
+  `room=0`. Pipeline: (1) the Prompt API expands the phrase into keywords (`promptApi.ts`);
+  (2) one `GET search` per keyword (sorted by rating, 100 per keyword) plus a library total;
+  (3) photos are scored by rarity-weighted keyword match, each hit adding `log(libraryTotal / keywordTotal)`,
+  (`ranking.ts`); (4) optionally drop people photos, using stored
+  `subjects` and `tags` matched against a word list (not face data); (5) the top 150 candidates are
+  kept, the keyword score is normalised to the best of those (`renormalize`), and, if "leave room for text" is on, each thumbnail is measured in a canvas for calm empty space
+  (`textSpace.ts`); (6) final score = 1.0 x keyword + 0.6 x empty space (when enabled) + 0.15 x rating/10,
+  and the top 48 are shown (`pipeline.ts`).
 - `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
   It calls same-origin `/api/*`.
 - `hooks/useListParams.ts` - sort/page state kept in the URL so listings are

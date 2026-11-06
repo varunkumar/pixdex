@@ -38,6 +38,9 @@ machine. Originals stay on local disk or Google Drive.
   taken. In IST, a photo taken between midnight and 05:29 shows under the
   previous day (and month or year at the boundary), and "Today" can miss this
   morning's early photos. See [Architecture](docs/architecture.md).
+- **Try AI Search (Chrome only).** Describe an occasion or mood in a sentence and a
+  small on-device model turns it into keywords, then PixdeX ranks matching photos.
+  See [AI Search](#ai-search).
 - **Browse albums.** Cover photos, counts and average ratings, sorted by date,
   name, size or rating.
 - **Get a daily pick.** One nature or wildlife photo a day (no people), chosen from
@@ -246,6 +249,30 @@ best rated or alphabetical.
   `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover` and
   `faces/:id/assign|reject|unassign`, all through the Pages proxy.
 
+## AI Search
+
+The `/ai-search` page turns a phrase such as "photos for a Diwali greeting" into
+keywords with Chrome's built-in Prompt API (Gemini Nano), then runs one normal
+search per keyword and ranks the photos. Photos matching rarer keywords count for
+more. The keywords are editable and the result list shows which ones each photo
+matched. Two options (both on by default, kept in the URL as `people=0` and
+`room=0` when switched off):
+
+- **Hide photos of people**, judged from each photo's stored subjects and tags
+  (not face data).
+- **Leave room for text**, which favours photos with calm, empty areas where a
+  caption could go, measured in the browser from the thumbnail.
+
+It only appears in browsers where the Prompt API is available; elsewhere the nav
+entry and page are absent. To enable it, use a recent desktop Chrome, turn on the
+Prompt API for Gemini Nano in `chrome://flags` (for example
+`#prompt-api-for-gemini-nano`; flag names change between Chrome builds), and
+install the model from `chrome://on-device-internals`. Everything runs in the
+browser: the phrase and the images never leave your device, and the only requests
+made are existing read routes through the same-origin proxy: `GET /api/search`
+calls with the single keywords, plus thumbnail reads. No Worker, database or
+agent changes are involved.
+
 ## Originals (optional)
 
 Search results and the daily pick show thumbnails only by default. To enable
@@ -270,7 +297,8 @@ a merged migration runs on production before the new code goes live. See
 ## Project Structure
 
 - `src/components` - React UI (Timeline, Search, Albums, AlbumPhotos, PhotoDetail,
-  DailySuggestion, Dashboard, Lightbox, Layout, People)
+  DailySuggestion, Dashboard, Lightbox, Layout, People, AiSearch)
+- `src/services/aiSearch` - AI Search keyword expansion, ranking and empty-space scoring
 - `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
   and helpers, API types
 - `functions/api` - Pages Function: same-origin proxy that adds the read token

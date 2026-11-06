@@ -7,7 +7,9 @@ never leave local disk or Google Drive.
 
 ## Layout
 
-- `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`)
+- `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`);
+  the `/ai-search` page (Chrome Prompt API only, client side): page in `src/components/AiSearch.tsx`, logic in
+  `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
   include `GET timeline` and `GET timeline/buckets`; also
   forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,
