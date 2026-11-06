@@ -1,8 +1,8 @@
 # AI Search: design
 
-Status: draft for owner approval. Nothing here is built yet. A throwaway spike
-(`public/spike-occasion.html`, untracked) proved the approach on the real
-library; it is deleted when this is built.
+Status: built on branch `ai-search`. A throwaway spike
+(`public/spike-occasion.html`) proved the approach on the real library; it has
+been removed.
 
 ## Intent
 
@@ -126,8 +126,8 @@ separate page from the existing search, which is unchanged.
   keyword list. A keyword matching the whole library has weight 0 and is
   harmless. If no photos are found, show an empty state that suggests editing
   the keywords.
-- Normalisation: keyword score divided by the maximum in the candidate set (0 to
-  1); empty space is already 0 to 1; rating is divided by 10. Final rank =
+- Normalisation: keyword score divided by the maximum over the candidates that
+  survive the people drop and the 150 cut (0 to 1); empty space is already 0 to 1; rating is divided by 10. Final rank =
   keyword + 0.6 * space (if on) + 0.15 * rating.
 - Model states: `downloadable` and `downloading` count as supported (show the
   page and the download progress). If the model errors or returns unparseable

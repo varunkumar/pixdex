@@ -64,6 +64,12 @@ export function scoreCandidates(results: KeywordResult[], libraryTotal: number):
   return list;
 }
 
+/** Rescale keywordNorm to the best candidate in this list (returns new objects). */
+export function renormalize(candidates: Candidate[]): Candidate[] {
+  const max = candidates.reduce((m, c) => Math.max(m, c.keywordScore), 0);
+  return candidates.map((c) => ({ ...c, keywordNorm: max > 0 ? c.keywordScore / max : 0 }));
+}
+
 export function photoRating(photo: SerializedPhoto): number {
   return photo.combinedScore ?? photo.aestheticScore ?? 0;
 }

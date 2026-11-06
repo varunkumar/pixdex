@@ -128,6 +128,31 @@ describe('AiSearch page', () => {
     await waitFor(() => expect(screen.queryByText(/Running on this device/)).not.toBeInTheDocument());
   });
 
+  it('Search again while the model runs does not re-enable Find photos', async () => {
+    vi.mocked(expandRequest).mockImplementation(() => new Promise(() => {}));
+    render('/ai-search?kw=diya');
+    fireEvent.change(await screen.findByLabelText('What do you need photos for?'), { target: { value: 'Xmas' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Find photos' }));
+    await waitFor(() => expect(expandRequest).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: /Find photos/ })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search again' }));
+
+    expect(screen.getByRole('button', { name: /Find photos/ })).toBeDisabled();
+  });
+
+  it('Ctrl+Enter twice while the model runs calls it once', async () => {
+    vi.mocked(expandRequest).mockImplementation(() => new Promise(() => {}));
+    render('/ai-search');
+    const box = await screen.findByLabelText('What do you need photos for?');
+    fireEvent.change(box, { target: { value: 'Xmas' } });
+    fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
+    await waitFor(() => expect(expandRequest).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(expandRequest).toHaveBeenCalledTimes(1);
+  });
+
   it('re-runs with hidePeople false when Hide people photos is switched off', async () => {
     const { router } = render('/ai-search?kw=diya');
     await waitFor(() => expect(runAiSearch).toHaveBeenCalledWith(['diya'], { hidePeople: true, leaveRoom: true }));

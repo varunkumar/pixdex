@@ -49,6 +49,21 @@ describe('runAiSearch', () => {
     expect(res.hiddenPeople).toBe(1);
   });
 
+  it('normalises keyword scores over the candidates that survive the people drop', async () => {
+    mockSearch({
+      eagle: { results: [photo('p', { subjects: ['portrait'], combinedScore: 5 })], total: 1 },
+      sky: { results: [photo('p', { subjects: ['portrait'], combinedScore: 5 }), photo('a', { combinedScore: 5 })], total: 10 },
+    });
+    const hidden = await runAiSearch(['eagle', 'sky'], { hidePeople: true, leaveRoom: false }, noSpace);
+    expect(hidden.items.map((i) => i.photo.id)).toEqual(['a']);
+    expect(hidden.items[0].finalScore).toBeCloseTo(1 + (0.15 * 5) / 10);
+
+    const shown = await runAiSearch(['eagle', 'sky'], { hidePeople: false, leaveRoom: false }, noSpace);
+    expect(shown.items.map((i) => i.photo.id)).toEqual(['p', 'a']);
+    expect(shown.items[0].finalScore).toBeCloseTo(1 + (0.15 * 5) / 10);
+    expect(shown.items[1].finalScore).toBeLessThan(shown.items[0].finalScore - 0.1);
+  });
+
   it('keeps people photos when hidePeople is false', async () => {
     mockSearch({
       eagle: { results: [photo('a'), photo('b', { subjects: ['portrait'] })], total: 2 },

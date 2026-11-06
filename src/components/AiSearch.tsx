@@ -108,11 +108,13 @@ const AiSearchPage = () => {
     const text = request.trim();
     // Only a successful expansion replaces the keywords; an error leaves the URL as it was.
     // A per-call onSuccess does not fire after unmount, so leaving mid-run cannot navigate back here.
-    if (text) expansion.mutate(text, { onSuccess: (result) => update({ q: text, kw: result.keywords.join(',') }) });
+    if (!text || expansion.isPending) return;
+    expansion.mutate(text, { onSuccess: (result) => update({ q: text, kw: result.keywords.join(',') }) });
   };
 
   const searchAgain = () => {
-    expansion.reset();
+    // Resetting a pending expansion would hide it and re-enable Find photos mid-run.
+    if (expansion.isError) expansion.reset();
     const next = normalizeKeywords(kwText).join(',');
     if (next === terms.join(',')) {
       setKwText(terms.join(', '));

@@ -6,6 +6,7 @@ import {
   isPeoplePhoto,
   normalizeKeywords,
   photoRating,
+  renormalize,
   scoreCandidates,
 } from '../ranking';
 
@@ -115,5 +116,26 @@ describe('finalScore', () => {
   });
   it('exposes the weights', () => {
     expect(WEIGHTS).toEqual({ keyword: 1, space: 0.6, rating: 0.15 });
+  });
+});
+
+describe('renormalize', () => {
+  const cand = (id: string, keywordScore: number, keywordNorm: number) => ({
+    photo: photo(id),
+    hits: ['x'],
+    keywordScore,
+    keywordNorm,
+  });
+
+  it('rescales to the best kept candidate without mutating the input', () => {
+    const input = [cand('a', 2, 0.5), cand('b', 1, 0.25)];
+    const out = renormalize(input);
+    expect(out.map((c) => c.keywordNorm)).toEqual([1, 0.5]);
+    expect(input.map((c) => c.keywordNorm)).toEqual([0.5, 0.25]);
+  });
+
+  it('gives norm 0 when the maximum score is 0 and handles an empty list', () => {
+    expect(renormalize([cand('a', 0, 0.3)])[0].keywordNorm).toBe(0);
+    expect(renormalize([])).toEqual([]);
   });
 });

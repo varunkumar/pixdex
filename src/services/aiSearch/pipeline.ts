@@ -1,6 +1,6 @@
 import type { SerializedPhoto } from '../../types/api';
 import { workerApiClient } from '../api/WorkerApiClient';
-import { finalScore, isPeoplePhoto, photoRating, scoreCandidates, type KeywordResult } from './ranking';
+import { finalScore, isPeoplePhoto, photoRating, renormalize, scoreCandidates, type KeywordResult } from './ranking';
 import { measureTextSpace, type TextSpace } from './textSpace';
 
 export const CANDIDATE_LIMIT = 150;
@@ -75,7 +75,8 @@ export async function runAiSearch(
     hiddenPeople = candidates.length - kept.length;
     candidates = kept;
   }
-  candidates = candidates.slice(0, CANDIDATE_LIMIT);
+  // Normalise over the candidates that survive the people drop and the cut.
+  candidates = renormalize(candidates.slice(0, CANDIDATE_LIMIT));
 
   const spaces: (TextSpace | null)[] = options.leaveRoom
     ? await Promise.all(candidates.map((c) => measure(workerApiClient.thumbnailUrl(c.photo))))
