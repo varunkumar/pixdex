@@ -269,8 +269,9 @@ Prompt API for Gemini Nano in `chrome://flags` (for example
 `#prompt-api-for-gemini-nano`; flag names change between Chrome builds), and
 install the model from `chrome://on-device-internals`. Everything runs in the
 browser: the phrase and the images never leave your device, and the only requests
-made are the usual `GET /api/search` calls with the single keywords. No Worker,
-database or agent changes are involved.
+made are existing read routes through the same-origin proxy: `GET /api/search`
+calls with the single keywords, plus thumbnail reads. No Worker, database or
+agent changes are involved.
 
 ## Originals (optional)
 

@@ -36,7 +36,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
 - AI Search (`components/AiSearch.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
   entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available (the
-  nav entry and route are gated on it). It makes only `GET search` calls through the existing proxy:
+  nav entry and route are gated on it). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):
   no new allowlist entries and no Worker, D1 or agent change. URL state: `q`, `kw`, `people=0`,
   `room=0`. Pipeline: (1) the Prompt API expands the phrase into keywords (`promptApi.ts`);
   (2) one `GET search` per keyword (sorted by rating, 100 per keyword) plus a library total;
