@@ -22,6 +22,22 @@ machine. Originals stay on local disk or Google Drive.
 
 - **Search in plain words.** Full-text search across AI titles, descriptions,
   species, tags and environment, filtered by album and by up to 5 people.
+- **Scroll a timeline.** A `/timeline` page groups photos by date, newest first.
+  Zoom between Day (every photo), Month (highlights) and Year (a few per month)
+  with the segmented control, Ctrl+wheel or a two-finger pinch; once you have
+  scrolled past the newest month, zooming keeps the month you are reading. Highlights are
+  photos whose combined score is at least 6.0, topped up to the best 3 per group;
+  Year shows the top 6 per month. A year/month scrubber rail on the side jumps to
+  any month with photos; while dragging it shows the month under the pointer,
+  and on a long history it thins the year labels so they stay readable. Zoom, filters and jump position live in the URL.
+- **Search by date.** Search has a date range picker, quick chips (Today, This
+  week, This month, This year) and an "On this day" chip (same month and day in
+  every year). Typed shortcuts work too: `lion june 2025`, `2025`, `jun 2025` or
+  `2025-06-14` become a date range and are removed from the text query.
+  Known limitation: dates are stored and grouped as UTC, not the local date
+  taken. In IST, a photo taken between midnight and 05:29 shows under the
+  previous day (and month or year at the boundary), and "Today" can miss this
+  morning's early photos. See [Architecture](docs/architecture.md).
 - **Browse albums.** Cover photos, counts and average ratings, sorted by date,
   name, size or rating.
 - **Get a daily pick.** One nature or wildlife photo a day (no people), chosen from
@@ -52,7 +68,7 @@ photos ─► agent (Ollama + InsightFace sidecar) ─► Worker (D1, R2) ◄─
 | Piece | Where it runs | Job |
 |---|---|---|
 | `src/` + `functions/api/` | Cloudflare Pages | UI, plus a same-origin proxy that adds the read token |
-| `worker/` | Cloudflare Workers | Ingest and read API, search, albums, daily pick, people |
+| `worker/` | Cloudflare Workers | Ingest and read API, search, timeline, albums, daily pick, people |
 | `agent/` | Your machine | Indexes photos, scans faces, serves originals |
 
 This repository's frontend never holds a secret: the browser only calls same-origin
@@ -253,7 +269,7 @@ a merged migration runs on production before the new code goes live. See
 
 ## Project Structure
 
-- `src/components` - React UI (Search, Albums, AlbumPhotos, PhotoDetail,
+- `src/components` - React UI (Timeline, Search, Albums, AlbumPhotos, PhotoDetail,
   DailySuggestion, Dashboard, Lightbox, Layout, People)
 - `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
   and helpers, API types

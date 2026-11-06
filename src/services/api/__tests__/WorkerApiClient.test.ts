@@ -251,4 +251,37 @@ describe('WorkerApiClient', () => {
       await expect(client.renamePerson('n1', 'B')).rejects.toThrow('409');
     });
   });
+
+  it('searchPage() serializes the date range and on-this-day filters', async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ results: [], total: 0 }), { status: 200 }));
+    await client.searchPage({ q: 'x', from: '2025-06-01', to: '2025-06-30' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/search?q=x&from=2025-06-01&to=2025-06-30');
+    await client.searchPage({ onThisDay: '06-15' });
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/search?onThisDay=06-15');
+  });
+
+  it('getTimeline() builds the query with comma-joined people', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ groups: [], nextCursor: null }), { status: 200 }));
+    const res = await client.getTimeline({
+      zoom: 'month',
+      album: 'Kanha',
+      people: ['a', 'b'],
+      from: '2025-01-01',
+      to: '2025-12-31',
+      cursor: '2025-05',
+      groups: 6,
+    });
+    expect(res).toEqual({ groups: [], nextCursor: null });
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/timeline?zoom=month&album=Kanha&people=a%2Cb&from=2025-01-01&to=2025-12-31&cursor=2025-05&groups=6'
+    );
+  });
+
+  it('getTimelineBuckets() builds the query and works without params', async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ buckets: [], undated: 0 }), { status: 200 }));
+    await client.getTimelineBuckets({ album: 'Kanha', people: ['a', 'b'] });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/timeline/buckets?album=Kanha&people=a%2Cb');
+    await client.getTimelineBuckets();
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/timeline/buckets');
+  });
 });

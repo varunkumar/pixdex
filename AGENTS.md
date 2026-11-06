@@ -8,7 +8,8 @@ never leave local disk or Google Drive.
 ## Layout
 
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`)
-- `functions/api/` - Cloudflare Pages Function: token-adding read proxy (also
+- `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
+  include `GET timeline` and `GET timeline/buckets`; also
   forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
   `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`)

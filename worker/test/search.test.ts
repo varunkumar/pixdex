@@ -322,3 +322,62 @@ describe('GET /search people filter', () => {
     expect((await get('people=p1,p1')).total).toBe(2);
   });
 });
+
+describe('GET /search date filters', () => {
+  async function seedDated(id: string, dateTime: string | null, album: string) {
+    await env.DB.prepare(
+      `INSERT INTO photos (id, content_hash, source, filename, subjects, album, colors, patterns, model_provider, model_name, search_text, search_primary, last_indexed, date_time)
+       VALUES (?,?,'local',?,'[]',?,'[]','[]','ollama','m','','','2026-09-18T00:00:00.000Z',?)`
+    )
+      .bind(id, `hash-${id}`, `${id}.jpg`, album, dateTime)
+      .run();
+  }
+  async function get(qs: string) {
+    const response = await SELF.fetch(`https://example.com/search?${qs}`, {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    });
+    return { status: response.status, body: (await response.json()) as any };
+  }
+  const idsOf = (b: any) => b.results.map((r: { id: string }) => r.id).sort();
+
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM photos').run();
+    await seedDated('d1', '2025-06-14T10:00:00.000Z', 'A');
+    await seedDated('d2', '2025-06-30T23:59:59.000Z', 'B');
+    await seedDated('d3', '2025-07-01T00:00:00.000Z', 'A');
+    await seedDated('d4', '2024-06-14T09:00:00.000Z', 'A');
+    await seedDated('d5', null, 'A');
+  });
+
+  it('filters by an inclusive date range', async () => {
+    const { body } = await get('from=2025-06-01&to=2025-06-30');
+    expect(idsOf(body)).toEqual(['d1', 'd2']);
+    expect(body.total).toBe(2);
+  });
+
+  it('filters by on-this-day across years', async () => {
+    const { body } = await get('onThisDay=06-14');
+    expect(idsOf(body)).toEqual(['d1', 'd4']);
+  });
+
+  it('rejects a bad date with 400', async () => {
+    const { status, body } = await get('from=2025-02-30');
+    expect(status).toBe(400);
+    expect(typeof body.error).toBe('string');
+  });
+
+  it('rejects a range that ends before it starts with 400', async () => {
+    const { status, body } = await get('from=2025-07-01&to=2025-06-01');
+    expect(status).toBe(400);
+    expect(typeof body.error).toBe('string');
+  });
+
+  it('rejects onThisDay combined with from', async () => {
+    expect((await get('onThisDay=06-14&from=2025-01-01')).status).toBe(400);
+  });
+
+  it('combines with album', async () => {
+    const { body } = await get('from=2025-06-01&to=2025-06-30&album=A');
+    expect(idsOf(body)).toEqual(['d1']);
+  });
+});

@@ -11,6 +11,7 @@ import People from './components/People';
 import PersonPage from './components/PersonPage';
 import PhotoDetail from './components/PhotoDetail';
 import Search from './components/Search';
+import Timeline from './components/Timeline';
 import { theme } from './theme';
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       { path: '/', element: <Dashboard /> },
       { path: '/albums', element: <Albums /> },
       { path: '/albums/:name', element: <AlbumPhotos /> },
+      { path: '/timeline', element: <Timeline /> },
       { path: '/search', element: <Search /> },
       { path: '/photos/:id', element: <PhotoDetail /> },
       { path: '/people', element: <People /> },

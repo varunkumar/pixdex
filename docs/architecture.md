@@ -28,7 +28,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 ### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
 
-- `components/` - Search (People filter kept in the URL as `people=<id>,<id>`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
+- `components/` - Timeline (day/month/year zoom via Ctrl+wheel or pinch, state in the URL; a zoom change away from the newest month writes `to` = end of the active month in the same replace navigation, so the period being read is kept, year/month scrubber rail with a floating month label while dragging, year labels thinned to at least 12px apart, a "Back to latest" chip after a jump, and Retry buttons for a failed first or next page), Search (People filter kept in the URL as `people=<id>,<id>`; date range picker, quick chips and an "On this day" chip in the URL as `from`, `to`, `onThisDay`; typed dates such as `june 2025` parsed by `services/dateQuery.ts`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
   and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
@@ -39,12 +39,13 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 - `hooks/useListParams.ts` - sort/page state kept in the URL so listings are
   linkable and "back" returns to the same sort and page.
 - `types/api.ts` - API response types shared by components.
+- Date pickers use `@mantine/dates` and its `dayjs` peer dependency.
 - Tests sit next to code in `__tests__/`; helpers in `src/test/`.
 
 ### `functions/api/[[path]].ts` - Pages Function proxy
 
 Same-origin read proxy. Adds `READ_TOKEN` server-side so it never ships in the
-bundle. Only an allowlist of read routes is forwarded (`search`, `albums`,
+bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
 `people/groups`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
@@ -77,6 +78,46 @@ candidate). It returns 404 if no photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
+- `routes/timeline.ts` - `GET /timeline` returns date groups, newest first, as
+  `{ groups: [{ key, total, shown, photos }], nextCursor }`. Params: `zoom`
+  (`year`, `month` default, `day`; groups are months, months, days, with an
+  `undated` group last at day zoom only), `groups` (page size, integer 1-24,
+  default 6), `cursor` (the last key of the previous page), plus `album`,
+  `people` and the date filters below. `total` is the true count; `shown` is how
+  many are returned. Day returns all photos. Month returns photos with a
+  combined score >= `HIGHLIGHT_THRESHOLD` (6.0), topped up to the best
+  `MIN_PER_GROUP` (3) rated photos. Year returns the best `YEAR_CAP` (6) per month.
+  Unrated photos only appear at day zoom. Month and year zoom omit undated
+  photos entirely (the buckets `undated` count still covers them for the
+  scrubber). Once `to` is set, photos with no date fail the date filter, so at day
+  zoom the Undated group is not reachable until "Back to latest" clears `to`.
+  `GET /timeline/buckets` returns
+  `{ buckets: [{ month, total }], undated }` for the scrubber (honours `album`
+  and `people` only). Both are read-only and need no migration. A photo counts
+  as dated only when `date_time` starts with a full `YYYY-MM-DD`; NULL, EXIF
+  style `2025:06:02 ...` or other junk is undated in both routes. Pages read
+  through `idx_photos_date_time`: with a cursor, the keys pass reads only rows
+  older than it, and the photos pass reads only the page's own date range. The
+  first keys page still reads every dated row, and at day zoom the undated count
+  (and the photos pass of the page that holds the `undated` group) reads the
+  whole table, but only once the dated days run out.
+- `db/dateFilter.ts` - shared by `/search` and `/timeline`: `from` and `to`
+  (inclusive `YYYY-MM-DD`, compared against `photos.date_time`) or `onThisDay`
+  (`MM-DD`, Feb 29 allowed, matches that month and day in any year). Invalid
+  values, `to` before `from`, or `onThisDay` combined with `from`/`to` return
+  400 with `{ error }`; `/timeline` also returns 400 for a bad `zoom` or `groups`.
+- Dates are UTC, not the local date taken (known limitation). The agent reads
+  the EXIF capture time (which has no offset) as local time on the indexing
+  machine and stores `toISOString()`, so `photos.date_time` is the UTC instant
+  and its `YYYY-MM-DD` prefix is the UTC date. Day groups, month and year groups,
+  the scrubber buckets, `from`/`to` and `onThisDay` all compare that UTC prefix.
+  For an owner in IST (UTC+05:30), a photo taken between 00:00 and 05:29 local
+  time lands on the previous day, so a 00:30 photo on 1 January is grouped under
+  31 December of the year before; west of UTC, evening photos move to the next
+  day instead. The Search "Today" chip builds its range from the browser's local
+  date, so it can miss this morning's early photos. A follow-up should either
+  store the local wall-clock time in the agent or add an owner UTC offset that
+  the Worker applies before grouping and filtering.
 - `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces) with query-time
   synonym expansion; no re-index is needed to change it. Category words
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and

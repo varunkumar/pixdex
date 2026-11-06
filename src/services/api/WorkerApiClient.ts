@@ -9,6 +9,9 @@ import type {
   SearchResponse,
   SerializedFace,
   SerializedPhoto,
+  TimelineBucketsResponse,
+  TimelineResponse,
+  TimelineZoom,
 } from '../../types/api';
 
 export type PhotoSort = 'date' | 'name' | 'rating';
@@ -21,6 +24,11 @@ export interface SearchParams {
   sort?: PhotoSort;
   limit?: number;
   offset?: number;
+  /** Inclusive `YYYY-MM-DD` bounds on the photo date. */
+  from?: string;
+  to?: string;
+  /** `MM-DD`: photos taken on that day of any year. */
+  onThisDay?: string;
 }
 
 // Safety valve for matchPersonAll: 150 pages of 200 faces.
@@ -93,9 +101,39 @@ export class WorkerApiClient {
     if (params.sort) query.set('sort', params.sort);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.onThisDay) query.set('onThisDay', params.onThisDay);
 
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.getJson<SearchResponse>(`/search${suffix}`);
+  }
+
+  async getTimeline(p: {
+    zoom: TimelineZoom;
+    album?: string;
+    people?: string[];
+    from?: string;
+    to?: string;
+    cursor?: string;
+    groups?: number;
+  }): Promise<TimelineResponse> {
+    const query = new URLSearchParams({ zoom: p.zoom });
+    if (p.album) query.set('album', p.album);
+    if (p.people?.length) query.set('people', p.people.join(','));
+    if (p.from) query.set('from', p.from);
+    if (p.to) query.set('to', p.to);
+    if (p.cursor) query.set('cursor', p.cursor);
+    if (p.groups != null) query.set('groups', String(p.groups));
+    return this.getJson<TimelineResponse>(`/timeline?${query.toString()}`);
+  }
+
+  async getTimelineBuckets(p: { album?: string; people?: string[] } = {}): Promise<TimelineBucketsResponse> {
+    const query = new URLSearchParams();
+    if (p.album) query.set('album', p.album);
+    if (p.people?.length) query.set('people', p.people.join(','));
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.getJson<TimelineBucketsResponse>(`/timeline/buckets${suffix}`);
   }
 
   /** Album names only, for dropdowns. */

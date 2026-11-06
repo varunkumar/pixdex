@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { expandQueryTiers } from '../search/synonyms';
 import { COMBINED_SCORE_SQL } from '../db/rating';
+import { dateFilterSql, parseDateFilter } from '../db/dateFilter';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 export async function searchRoute(c: Context<{ Bindings: Env }>) {
@@ -21,6 +22,10 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 20, 1), 100);
   const offset = Math.max(Number(c.req.query('offset')) || 0, 0);
 
+  const parsedDates = parseDateFilter((name) => c.req.query(name));
+  if (!parsedDates.ok) return c.json({ error: parsedDates.error }, 400);
+  const dates = dateFilterSql(parsedDates.filter);
+
   async function run(match: string | null) {
     const params: unknown[] = [];
     let from: string;
@@ -34,6 +39,8 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
       from += ` AND album = ?`;
       params.push(album);
     }
+    from += dates.sql;
+    params.push(...dates.params);
     if (people.length > 0) {
       from += ` AND photos.id IN (SELECT photo_id FROM faces WHERE person_id IN (${people.map(() => '?').join(',')}) AND assign_status IN ('auto','confirmed') GROUP BY photo_id HAVING COUNT(DISTINCT person_id) = ?)`;
       params.push(...people, people.length);
