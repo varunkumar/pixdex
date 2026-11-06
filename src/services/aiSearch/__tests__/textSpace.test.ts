@@ -22,13 +22,18 @@ describe('textSpaceFromLuma', () => {
     expect(textSpaceFromLuma(build(() => 128), SIZE).score).toBe(1);
   });
 
-  it('picks the flat side when the other 60 percent is noisy', () => {
+  it('picks the flat side when the left half is noisy', () => {
     const r = rng(1);
     const noise = build(() => (r() < 0.5 ? 0 : 255));
-    const luma = build((x, y) => (x < SIZE * 0.6 ? noise[y * SIZE + x] : 128));
+    const luma = build((x, y) => (x < SIZE / 2 ? noise[y * SIZE + x] : 128));
     const result = textSpaceFromLuma(luma, SIZE);
     expect(result.side).toBe('right');
     expect(result.score).toBeGreaterThan(0.9);
+  });
+
+  it('pins the formula: a ramp has mean gradient 4 so score is 1 - 4/25', () => {
+    const result = textSpaceFromLuma(build((x) => 2 * x), SIZE);
+    expect(result.score).toBeCloseTo(0.84, 2);
   });
 
   it('scores an all-noise image near zero', () => {

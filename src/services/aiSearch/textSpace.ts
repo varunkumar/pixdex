@@ -11,41 +11,44 @@ const SAMPLE_SIZE = 48;
 const FAILED: TextSpace = { side: 'top', score: 0 };
 
 /**
- * Finds the calmest edge band of a square luma image. A pixel is calm when its
- * gradient |L(x+1,y)-L(x-1,y)| + |L(x,y+1)-L(x,y-1)| is below EDGE_BUSY; the
- * score of a side is the calm fraction of its band (width 40 percent of size).
- * Ties keep the first side in top, bottom, left, right order.
+ * Finds the calmest edge band of a square luma image. The gradient
+ * |L(x+1,y)-L(x-1,y)| + |L(x,y+1)-L(x,y-1)| is taken on interior pixels; each
+ * band (width round(size * 0.4)) is valued by its mean gradient, the lowest
+ * mean wins and score = max(0, 1 - mean / EDGE_BUSY). Ties keep the first side
+ * in top, bottom, left, right order.
  */
 export function textSpaceFromLuma(luma: ArrayLike<number>, size: number): TextSpace {
-  const band = Math.round(size * 0.4);
-  const calm = new Float64Array(size * size);
+  const k = Math.round(size * 0.4);
+  const g = new Float64Array(size * size);
   for (let y = 1; y < size - 1; y++) {
     for (let x = 1; x < size - 1; x++) {
-      const gx = Math.abs(luma[y * size + x + 1] - luma[y * size + x - 1]);
-      const gy = Math.abs(luma[(y + 1) * size + x] - luma[(y - 1) * size + x]);
-      calm[y * size + x] = gx + gy < EDGE_BUSY ? 1 : 0;
+      g[y * size + x] =
+        Math.abs(luma[y * size + x + 1] - luma[y * size + x - 1]) +
+        Math.abs(luma[(y + 1) * size + x] - luma[(y - 1) * size + x]);
     }
   }
 
-  const bandScore = (x0: number, x1: number, y0: number, y1: number): number => {
+  const bandMean = (x0: number, x1: number, y0: number, y1: number): number => {
     let sum = 0;
     let count = 0;
-    for (let y = Math.max(y0, 1); y < Math.min(y1, size - 1); y++) {
-      for (let x = Math.max(x0, 1); x < Math.min(x1, size - 1); x++) {
-        sum += calm[y * size + x];
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        sum += g[y * size + x];
         count++;
       }
     }
-    return count === 0 ? 0 : sum / count;
+    return count === 0 ? Infinity : sum / count;
   };
 
-  const candidates: TextSpace[] = [
-    { side: 'top', score: bandScore(0, size, 0, band) },
-    { side: 'bottom', score: bandScore(0, size, size - band, size) },
-    { side: 'left', score: bandScore(0, band, 0, size) },
-    { side: 'right', score: bandScore(size - band, size, 0, size) },
+  const last = size - 2;
+  const bands: { side: Side; mean: number }[] = [
+    { side: 'top', mean: bandMean(1, last, 1, k - 1) },
+    { side: 'bottom', mean: bandMean(1, last, size - k, last) },
+    { side: 'left', mean: bandMean(1, k - 1, 1, last) },
+    { side: 'right', mean: bandMean(size - k, last, 1, last) },
   ];
-  return candidates.reduce((best, c) => (c.score > best.score ? c : best));
+  const best = bands.reduce((b, c) => (c.mean < b.mean ? c : b));
+  return { side: best.side, score: Math.max(0, 1 - best.mean / EDGE_BUSY) };
 }
 
 function loadImage(url: string): Promise<HTMLImageElement> {
