@@ -7,7 +7,7 @@ Hygience:
 Performance, Worker CPU (context: the free plan allows 10 ms CPU per invocation; over the 30 days to 2026-11-09, pixdex-worker p50 was 1.7 ms, p99 27 ms, and 242 requests ended as exceededResources, so Workers Paid is currently masking this):
   - Measure first: run `wrangler tail pixdex-worker --format json` during an indexing batch, a person match and a groups load, and record cpuTime per route. Static analysis only; no route is confirmed yet. Re-check with the GraphQL workersInvocationsAdaptive quantiles (cpuTimeP99) after each fix
 
-Performance, D1 (from `wrangler d1 insights pixdex --timePeriod 30d`: about 21.5M rows read, 70K written, measured before the albums table and counters shipped; re-run it to see what is left):
+Performance, D1 (deferred to the December 2026 review: re-run `wrangler d1 insights pixdex --timePeriod 30d` first and only act on queries still in the top 5; from `wrangler d1 insights pixdex --timePeriod 30d`: about 21.5M rows read, 70K written, measured before the albums table and counters shipped; re-run it to see what is left):
   - Photos list `SELECT photos.* ... ORDER BY last_indexed DESC LIMIT ? OFFSET ?` (562 runs; idx_photos_last_indexed now serves it, so deep pages still cost offset + limit rows)
     - Switch from OFFSET (the UI uses page numbers and offsets, so keyset changes the API and the pager) to keyset pagination (cursor = last_indexed + id); update the frontend cursor handling and tests
   - People cover/ROW_NUMBER() PARTITION BY f.person_id query (195 runs, about 5.4K rows): store the chosen cover face on persons (persons.cover_face_id exists) and update it when faces are confirmed or unassigned or the cover changes
