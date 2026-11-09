@@ -2,7 +2,6 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../types';
 import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
-import { COMBINED_SCORE_SQL } from '../db/rating';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
@@ -19,15 +18,14 @@ interface AlbumRow {
   cover_photo_id: string;
   content_hash: string | null;
   latest_date: string | null;
-  avg_score: number | null;
 }
 
 // Whitelisted ORDER BY clauses; the sort query param never reaches SQL directly.
 const ALBUM_ORDER: Record<string, string> = {
-  date: 'COALESCE(newest_date, newest_indexed) DESC, album',
-  name: 'album COLLATE NOCASE, album',
-  count: 'cnt DESC, album COLLATE NOCASE',
-  rating: 'avg_score IS NULL, avg_score DESC, album COLLATE NOCASE',
+  date: 'COALESCE(latest_date, newest_indexed) DESC, name',
+  name: 'name COLLATE NOCASE, name',
+  count: 'photo_count DESC, name COLLATE NOCASE',
+  rating: 'avg_score IS NULL, avg_score DESC, name COLLATE NOCASE',
 };
 
 const tagList = z.array(z.string().trim().min(1).max(60)).max(30);
@@ -98,10 +96,8 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // keeps the original list of names so an older cached frontend does not break.
   const wantsPage = c.req.query('limit') !== undefined || c.req.query('offset') !== undefined;
   if (c.req.query('names') === '1' || !wantsPage) {
-    const result = await c.env.DB.prepare(
-      'SELECT DISTINCT album FROM photos WHERE album IS NOT NULL ORDER BY album'
-    ).all<{ album: string }>();
-    return c.json({ albums: result.results.map((r) => r.album) });
+    const result = await c.env.DB.prepare('SELECT name FROM albums ORDER BY name').all<{ name: string }>();
+    return c.json({ albums: result.results.map((r) => r.name) });
   }
 
   const limit = Math.min(Math.max(Math.floor(Number(c.req.query('limit'))) || 12, 1), 48);
@@ -109,55 +105,19 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
 
   const orderBy = ALBUM_ORDER[c.req.query('sort') ?? ''] ?? ALBUM_ORDER.date;
   const only = c.req.query('name');
-  const filter = only ? 'AND album = ?' : '';
-  const filterParams = only ? [only] : [];
 
-  // Cover: the photo picked for the album if it is still in it, else a dated photo
-  // when the album has one (newest first), else the most recently indexed.
-  // latestDate and the default order use the newest real photo date, falling back
-  // to ingest time only for albums with no dated photo at all.
-  // One pass over photos builds the per-album aggregates (agg). Each of the page's albums then finds
-  // its cover with index-ordered lookups that stop at the first entry (idx_photos_album_cover is
-  // ordered by album, date_time, last_indexed), instead of ranking every photo in those albums.
-  const rows = await c.env.DB.prepare(
-    `WITH agg AS (
-       SELECT album, COUNT(*) AS cnt, MAX(date_time) AS newest_date, MAX(last_indexed) AS newest_indexed,
-              AVG(${COMBINED_SCORE_SQL}) AS avg_score
-       FROM photos
-       WHERE album IS NOT NULL ${filter}
-       GROUP BY album
-     ),
-     page AS (SELECT album, cnt, newest_date, newest_indexed, avg_score FROM agg ORDER BY ${orderBy} LIMIT ? OFFSET ?),
-     cover AS (
-       SELECT page.*, COALESCE(
-         (SELECT c.photo_id FROM album_covers c
-           WHERE c.album = page.album AND EXISTS (SELECT 1 FROM photos p WHERE p.id = c.photo_id AND p.album = c.album)),
-         (SELECT id FROM photos WHERE album = page.album AND date_time IS NOT NULL
-           ORDER BY date_time DESC, last_indexed DESC LIMIT 1),
-         (SELECT id FROM photos WHERE album = page.album AND date_time IS NULL
-           ORDER BY last_indexed DESC LIMIT 1)
-       ) AS cover_id
-       FROM page
-     )
-     SELECT album AS name, cnt AS photo_count, cover_id AS cover_photo_id,
-            (SELECT content_hash FROM photos WHERE id = cover.cover_id) AS content_hash,
-            newest_date AS latest_date, avg_score, (SELECT COUNT(*) FROM agg) AS agg_total
-     FROM cover
-     ORDER BY ${orderBy}`
-  )
-    .bind(...filterParams, limit, offset)
-    .all<AlbumRow & { agg_total: number }>();
-
-  // The total counts every album. With no name filter the aggregate already is that; otherwise
-  // (or when the page is empty) it is counted separately.
-  const total =
-    !only && rows.results.length > 0
-      ? rows.results[0].agg_total
-      : ((
-          await c.env.DB.prepare('SELECT COUNT(DISTINCT album) AS total FROM photos WHERE album IS NOT NULL').first<{
-            total: number;
-          }>()
-        )?.total ?? 0);
+  // The `albums` table is maintained by triggers (migration 0015): cover, newest date and average score
+  // are already worked out per album, so a page reads at most one row per album and never touches photos.
+  const [rows, totalRow] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT name, photo_count, cover_photo_id, content_hash, latest_date FROM albums
+       ${only ? 'WHERE name = ?' : ''} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
+    )
+      .bind(...(only ? [only] : []), limit, offset)
+      .all<AlbumRow>(),
+    // Counts every album, not just a filtered one.
+    c.env.DB.prepare('SELECT COUNT(*) AS total FROM albums').first<{ total: number }>(),
+  ]);
 
   return c.json({
     albums: rows.results.map((r) => ({
@@ -167,6 +127,6 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
       coverThumbnailUrl: r.content_hash ? `/thumbnails/${r.content_hash}` : null,
       latestDate: r.latest_date ?? null,
     })),
-    total,
+    total: totalRow?.total ?? 0,
   });
 }

@@ -77,6 +77,16 @@ Rules learned from that:
 - The albums page aggregates once (a covering-index scan, `idx_photos_album_cover`, migration `0014`; `0013` was a
   no-op because `0001` already had `idx_photos_album`), then finds each page album's cover with index-ordered
   `LIMIT 1` lookups. Ranking every photo of the page's albums with a window function cost about 9k extra reads.
+- `albums` (one row per album: count, cover photo and its thumbnail hash, newest date, average score) and
+  `counters` (the `photos` total) are kept by triggers on `photos` and `album_covers` (migration `0015`), so the
+  albums page, the album names list and the unfiltered search total read a few small rows instead of aggregating
+  `photos`. Never write them from route code. Each photo write that changes album, date, `last_indexed` or a score
+  re-aggregates just that album through `idx_photos_album_cover` (about one index entry per photo in the album);
+  path-only updates (relocate) and face-scan updates do not fire it. The trigger SQL lives in
+  `worker/migrations/albums.ts`; `0015_albums.sql` is generated from it with `cd worker && npm run gen:albums-migration`
+  (a test fails if they drift). To add a column, add it in `albums.ts`, add an additive `ALTER TABLE` migration, and
+  regenerate the triggers in a new numbered migration (triggers are `IF NOT EXISTS`, so drop and recreate them).
+  Filtered searches still `COUNT(*)`. `idx_photos_last_indexed` serves the unfiltered newest-first list.
 - The frontend keeps list data fresh for two minutes (`staleTime`), mutations invalidate what they change.
 
 ## Keeping docs current

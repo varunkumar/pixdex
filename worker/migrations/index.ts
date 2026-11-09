@@ -1,3 +1,5 @@
+import { ALBUMS_SCHEMA_STATEMENTS, ALBUMS_TRIGGER_STATEMENTS } from './albums';
+
 // Migration SQL statements exported for both CLI and test usage
 // Single source of truth to avoid duplication
 
@@ -169,6 +171,10 @@ END;`,
   'CREATE INDEX IF NOT EXISTS idx_photos_album ON photos (album, date_time, last_indexed, user_rating, aesthetic_score, id, content_hash);',
   // Mirrors 0014_photos_album_cover_idx.sql.
   'CREATE INDEX IF NOT EXISTS idx_photos_album_cover ON photos (album, date_time, last_indexed, user_rating, aesthetic_score, id, content_hash);',
+  // Mirrors 0015_albums.sql (generated from albums.ts; the test database starts empty, so no backfill).
+  ...ALBUMS_SCHEMA_STATEMENTS,
+  "INSERT OR REPLACE INTO counters (name, n) VALUES ('photos', 0);",
+  ...ALBUMS_TRIGGER_STATEMENTS,
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

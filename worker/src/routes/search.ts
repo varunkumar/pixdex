@@ -59,13 +59,17 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
             : match
               ? `ORDER BY bm25(photos_fts, 1.0, 4.0), last_indexed DESC`
               : `ORDER BY last_indexed DESC`;
+    const unfiltered = !match && !album && !dates.sql && people.length === 0;
     const [rows, count] = await Promise.all([
       c.env.DB.prepare(`SELECT photos.* ${from} ${order} LIMIT ? OFFSET ?`)
         .bind(...params, limit, offset)
         .all<PhotoRow>(),
-      c.env.DB.prepare(`SELECT COUNT(*) AS total ${from}`)
-        .bind(...params)
-        .first<{ total: number }>(),
+      // No filter at all: the trigger-maintained counter instead of counting every photo.
+      unfiltered
+        ? c.env.DB.prepare("SELECT n AS total FROM counters WHERE name = 'photos'").first<{ total: number }>()
+        : c.env.DB.prepare(`SELECT COUNT(*) AS total ${from}`)
+            .bind(...params)
+            .first<{ total: number }>(),
     ]);
     return { results: rows.results.map(serializePhoto), total: count?.total ?? 0 };
   }
