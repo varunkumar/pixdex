@@ -1,17 +1,19 @@
 import type { Context } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { primaryTextForRow, type PhotoRow } from '../db/photos';
 
 const requestSchema = z
   .object({
-    contentHash: z.string().min(1),
-    score: z.number().min(1).max(10).optional(),
-    shortCaption: z.string().min(1).max(80).optional(),
+    contentHash: z.string().check(z.minLength(1)),
+    score: z.optional(z.number().check(z.minimum(1), z.maximum(10))),
+    shortCaption: z.optional(z.string().check(z.minLength(1), z.maxLength(80))),
   })
-  .refine((v) => v.score !== undefined || v.shortCaption !== undefined, {
-    message: 'score or shortCaption is required',
-  });
+  .check(
+    z.refine((v) => v.score !== undefined || v.shortCaption !== undefined, {
+      error: 'score or shortCaption is required',
+    }),
+  );
 
 /**
  * Sets the aesthetic rating and/or short caption on an already-indexed photo,
@@ -29,7 +31,7 @@ export async function ingestRatingRoute(c: Context<{ Bindings: Env }>) {
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
   const p = parsed.data;
   const caption = p.shortCaption ?? '';

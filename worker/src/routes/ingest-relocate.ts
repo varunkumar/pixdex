@@ -1,11 +1,11 @@
 import type { Context } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 
 const requestSchema = z.object({
-  from: z.string().min(2).startsWith('/'),
-  to: z.string().min(2).startsWith('/'),
-  dryRun: z.boolean().optional(),
+  from: z.string().check(z.minLength(2), z.startsWith('/')),
+  to: z.string().check(z.minLength(2), z.startsWith('/')),
+  dryRun: z.optional(z.boolean()),
 });
 
 /**
@@ -25,7 +25,7 @@ export async function ingestRelocateRoute(c: Context<{ Bindings: Env }>) {
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
   const from = parsed.data.from.replace(/\/+$/, '');
   const to = parsed.data.to.replace(/\/+$/, '');

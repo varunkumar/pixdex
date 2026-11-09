@@ -54,6 +54,8 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
   and ingest request bodies never set them (unknown keys are dropped). The Worker's
   own matching only ever writes `auto`; `confirmed` comes from the owner via the
   browser writes. Rejections live in `face_rejections`.
+- In `worker/`, import zod as `import * as z from 'zod/mini'` (functional API, `z.flattenError(err)`), never from
+  `'zod'`: the classic build adds about 450 KiB to the Worker bundle. `agent/` may use classic `zod`.
 - DB changes go in a new numbered file in `worker/migrations/`.
 - `albums` and `counters` are derived by triggers (`worker/migrations/albums.ts` generates
   `0015_albums.sql` via `cd worker && npm run gen:albums-migration`). Never write them from route code; change
