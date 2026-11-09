@@ -1,7 +1,12 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { embeddingToBytes } from '../src/people/embedding';
-import { loadReferences } from '../src/people/references';
+import {
+  REFERENCES_CACHE_TTL_MS,
+  clearReferencesCache,
+  loadReferences,
+  loadReferencesCached,
+} from '../src/people/references';
 import { REFERENCES_PER_PERSON } from '../src/people/matching';
 
 function vec(i: number): Float32Array {
@@ -67,5 +72,25 @@ describe('loadReferences', () => {
        ORDER BY p.id, f.created_at DESC, f.rowid DESC`
     ).all<{ detail: string }>();
     expect(results.map((r) => r.detail).filter((d) => /^SCAN f( |$)/.test(d))).toEqual([]);
+  });
+});
+
+describe('loadReferencesCached', () => {
+  beforeEach(async () => {
+    for (const t of ['faces', 'persons']) await env.DB.prepare(`DELETE FROM ${t}`).run();
+    await env.DB.prepare('INSERT INTO persons (id, name, created_at) VALUES (?, ?, ?)').bind('p1', 'Anu', 't').run();
+    clearReferencesCache();
+  });
+
+  it('reuses the result within the TTL and refetches after it or a clear', async () => {
+    await addConfirmed('p1', 0, '2026-01-01');
+    const t0 = 1_000_000;
+    expect((await loadReferencesCached(env.DB, t0))[0].vectors).toHaveLength(1);
+    await addConfirmed('p1', 1, '2026-01-02');
+    expect((await loadReferencesCached(env.DB, t0 + REFERENCES_CACHE_TTL_MS - 1))[0].vectors).toHaveLength(1);
+    expect((await loadReferencesCached(env.DB, t0 + REFERENCES_CACHE_TTL_MS))[0].vectors).toHaveLength(2);
+    await addConfirmed('p1', 2, '2026-01-03');
+    clearReferencesCache();
+    expect((await loadReferencesCached(env.DB, t0 + REFERENCES_CACHE_TTL_MS + 1))[0].vectors).toHaveLength(3);
   });
 });

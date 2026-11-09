@@ -17,3 +17,32 @@ Auth:
 
 Hygience:
   - Upgrade to latest version
+Performance, Worker CPU (context: the free plan allows 10 ms CPU per invocation; over the 30 days to 2026-11-09, pixdex-worker p50 was 1.7 ms, p99 27 ms, and 242 requests ended as exceededResources, so Workers Paid is currently masking this):
+  - Measure first: run `wrangler tail pixdex-worker --format json` during an indexing batch, a person match and a groups load, and record cpuTime per route. Static analysis only; no route is confirmed yet. Re-check with the GraphQL workersInvocationsAdaptive quantiles (cpuTimeP99) after each fix
+  - DONE (first CPU pass): references cache for auto-match (60 s TTL), FACE_PAGE_SIZE 100, GROUPS_PAGE_SIZE 50, in-place centroid normalisation in clusterFaces. Remaining: measure
+  - Suspect 1, POST ingest faces (worker/src/routes/ingest-faces.ts): autoMatchFaces calls loadReferences on every request, pulling up to 30 embedding blobs per person (about 263 rows, 0.5 MB, avg per call) plus base64 decode and normalise per face
+    - Cache loadReferences output in module scope with a short TTL (about 60 s) and invalidate on person confirm/unassign/cover changes (or accept staleness during bulk indexing)
+    - DONE: Add an ingest flag or env to skip autoMatchFaces during bulk indexing, then run one match pass per person afterwards
+    - DONE: Lower REFERENCES_PER_PERSON (people/matching.ts) from 30 to 10-15 and check match quality on the existing people before and after
+  - Suspect 2, POST people/:id/match (worker/src/routes/people.ts): 200 faces x up to 30 refs (about 3M multiply-adds) plus 200 blob decodes per page
+    - Drop FACE_PAGE_SIZE from 200 to 100 (the client already follows nextCursor); confirm the UI handles more pages
+    - DONE (decided not to do, needs a migration): Stop selecting embeddings for rows that cannot match (rowid scan has 0.05 query efficiency); consider a cheap prefilter column
+  - Suspect 3, GET people/groups (worker/src/routes/people.ts): greedy clusterFaces over 100 faces, worst case about 5M multiply-adds, and unitCopy rebuilds the centroid on every merge
+    - DONE: Keep a running norm and normalise lazily instead of copying a 512-float vector per merge
+    - Lower GROUPS_PAGE_SIZE from 100 to about 50, or move clustering into the local agent/sidecar
+  - DONE (decided not to do): move all embedding scoring (match, groups, auto-match) to the agent/sidecar, which already holds the faces, and let the Worker only store results
+
+Performance, D1 (from `wrangler d1 insights pixdex --timePeriod 30d`: about 21.5M rows read, 70K written; items 1-4 are about 60-70% of reads):
+  - Albums list and cover queries (routes/photos.ts, the ROW_NUMBER() OVER PARTITION BY album CTEs): 11K-15K rows read per call, efficiency 0.0006, about 6M rows over roughly 400 runs
+    - Add an `albums` table (name, photo_count, cover_photo_id, content_hash, latest_date) in a new numbered migration; backfill it, then maintain it at ingest and on PUT albums/cover and PATCH photos/:id (rating changes can change the cover)
+    - Short-term alternative: add Cache-Control on the albums responses in the Pages proxy
+    - Keep the migration additive (pending migrations auto-apply on merge to main)
+  - Photos list `SELECT photos.* ... ORDER BY last_indexed DESC LIMIT ? OFFSET ?`: no index on last_indexed, so about 3.9K rows read per page (562 runs)
+    - New migration: CREATE INDEX idx_photos_last_indexed ON photos(last_indexed DESC)
+    - Switch from OFFSET to keyset pagination (cursor = last_indexed + id); update the frontend cursor handling and tests
+  - Per-request counts: `SELECT COUNT(*) FROM photos WHERE 1=1` (545 runs, about 1.9K rows) and `SELECT COUNT(DISTINCT album)` (688 runs, about 2.1K rows)
+    - Serve the album total from the albums table above; cache the photo total (invalidate at ingest) or skip it when the cursor is not the first page
+  - `SELECT DISTINCT album FROM photos ... ORDER BY album` (429 runs, about 1.1K rows): read from the albums table instead
+  - People cover/ROW_NUMBER() PARTITION BY f.person_id query (195 runs, about 5.4K rows): store the chosen cover face on persons (persons.cover_face_id exists) and update it when faces are confirmed or the cover changes
+  - Re-check after the above: face matching scan `faces WHERE det_score >= 0.7 ... rowid > ?` (260 runs, about 3.6K rows, efficiency 0.05) and `faces WHERE id IN (json_each(?))` (1,509 runs, about 1K rows). Both look acceptable (paged by rowid / primary-key lookups); only act if they stay in the top 5
+  - Add a note to docs/development.md on how to re-run `wrangler d1 insights` and the CPU GraphQL query, and re-run both after each change to confirm the drop

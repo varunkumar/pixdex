@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:test';
-import { beforeAll } from 'vitest';
+import { beforeAll, beforeEach } from 'vitest';
+import { clearReferencesCache } from '../src/people/references';
 import { PHOTOS_MIGRATION_STATEMENTS } from '../migrations/index';
 
 beforeAll(async () => {
@@ -17,3 +18,5 @@ beforeAll(async () => {
     }
   }
 });
+
+beforeEach(() => clearReferencesCache());

@@ -226,12 +226,14 @@ falls back to the default.
 "Newest" references means newest by scan time (`faces.created_at`), not by when
 the owner confirmed. `loadReferences` reads them through
 `idx_faces_person_status_created` (migration `0010`), so rows read are bounded
-by people x `REFERENCES_PER_PERSON`.
+by people x `REFERENCES_PER_PERSON`. Ingest-time matching uses
+`loadReferencesCached` (per-isolate, 60 s TTL), so a person confirmed in the last
+minute may be missed by that pass; the owner-driven match route is never cached.
 
 Limits, chosen for the Workers Free plan (CPU time and about 50 D1 queries per
 invocation):
 
-- Work is paged: `FACE_PAGE_SIZE` 200 faces for matching, `GROUPS_PAGE_SIZE` 100
+- Work is paged: `FACE_PAGE_SIZE` 100 faces for matching, `GROUPS_PAGE_SIZE` 50
   for groups. `apply` and ingest-time matching write with one set-based
   `UPDATE ... json_each` statement; bulk assign/create use two.
 - Ingest-time matching spends at most `MAX_AUTO_MATCH_MACS` (1,500,000

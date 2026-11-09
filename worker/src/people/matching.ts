@@ -1,7 +1,7 @@
 export const AUTO_THRESHOLD = 0.5;
 export const SUGGEST_THRESHOLD = 0.4;
-export const FACE_PAGE_SIZE = 200;
-export const GROUPS_PAGE_SIZE = 100;
+export const FACE_PAGE_SIZE = 100;
+export const GROUPS_PAGE_SIZE = 50;
 export const REFERENCES_PER_PERSON = 30;
 /** Cap on multiply-adds (faces x total reference vectors x 512) one auto-match call may spend. */
 export const MAX_AUTO_MATCH_MACS = 1_500_000;
@@ -37,14 +37,19 @@ export function classify(score: number): 'auto' | 'suggest' | 'none' {
   return 'none';
 }
 
-/** Greedy clustering against one running L2-normalised centroid per cluster; largest clusters first. */
+/**
+ * Greedy clustering against one running centroid per cluster; largest clusters first.
+ * A cluster keeps its raw sum and the sum's squared norm, updated incrementally on merge, so a face
+ * is scored as dot(face, sum) / |sum| (the cosine against the unit centroid) with no per-merge
+ * copy or 512-float renormalise.
+ */
 export function clusterFaces(faces: { id: string; embedding: Float32Array }[]): string[][] {
-  const clusters: { ids: string[]; sum: Float32Array; centroid: Float32Array }[] = [];
+  const clusters: { ids: string[]; sum: Float32Array; norm: number; sumSq: number }[] = [];
   for (const f of faces) {
     let target = -1;
     let top = SUGGEST_THRESHOLD;
     for (let i = 0; i < clusters.length; i++) {
-      const s = dot(f.embedding, clusters[i].centroid);
+      const s = dot(f.embedding, clusters[i].sum) / clusters[i].norm;
       if (s >= top) {
         top = s;
         target = i;
@@ -52,22 +57,22 @@ export function clusterFaces(faces: { id: string; embedding: Float32Array }[]): 
     }
     if (target === -1) {
       const sum = Float32Array.from(f.embedding);
-      clusters.push({ ids: [f.id], sum, centroid: unitCopy(sum) });
+      const sumSq = dot(sum, sum);
+      clusters.push({ ids: [f.id], sum, sumSq, norm: Math.sqrt(sumSq) || 1 });
     } else {
       const c = clusters[target];
       c.ids.push(f.id);
-      for (let k = 0; k < c.sum.length; k++) c.sum[k] += f.embedding[k] ?? 0;
-      c.centroid = unitCopy(c.sum);
+      let cross = 0;
+      let faceSq = 0;
+      for (let k = 0; k < c.sum.length; k++) {
+        const x = f.embedding[k] ?? 0;
+        cross += c.sum[k] * x;
+        faceSq += x * x;
+        c.sum[k] += x;
+      }
+      c.sumSq = Math.max(0, c.sumSq + 2 * cross + faceSq);
+      c.norm = Math.sqrt(c.sumSq) || 1;
     }
   }
   return clusters.map((c) => c.ids).sort((a, b) => b.length - a.length);
-}
-
-function unitCopy(v: Float32Array): Float32Array {
-  let s = 0;
-  for (let i = 0; i < v.length; i++) s += v[i] * v[i];
-  const n = Math.sqrt(s) || 1;
-  const out = new Float32Array(v.length);
-  for (let i = 0; i < v.length; i++) out[i] = v[i] / n;
-  return out;
 }
