@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { embeddingFromBase64, embeddingToBytes } from '../people/embedding';
 import { autoMatchFaces } from '../people/autoMatch';
@@ -7,35 +7,35 @@ import { autoMatchFaces } from '../people/autoMatch';
 type Box = { x: number; y: number; w: number; h: number };
 
 const unscannedSchema = z.object({
-  model: z.string().min(1),
-  cursor: z.number().int().min(0).optional(),
-  limit: z.number().int().min(1).max(500).default(200),
-  pathPrefix: z.string().min(1).max(1024).optional(),
+  model: z.string().check(z.minLength(1)),
+  cursor: z.optional(z.int().check(z.minimum(0))),
+  limit: z._default(z.int().check(z.minimum(1), z.maximum(500)), 200),
+  pathPrefix: z.optional(z.string().check(z.minLength(1), z.maxLength(1024))),
   // Also list photos already scanned with this model that have a face without a sharp crop.
-  missingCrops: z.boolean().optional(),
+  missingCrops: z.optional(z.boolean()),
 });
 
 const pendingSchema = z.object({
-  hashes: z.array(z.string().min(1)).max(5000),
-  model: z.string().min(1),
+  hashes: z.array(z.string().check(z.minLength(1))).check(z.maxLength(5000)),
+  model: z.string().check(z.minLength(1)),
 });
 
 export const MAX_FACES_PER_REQUEST = 10;
 
-const unit = z.number().min(0).max(1);
+const unit = z.number().check(z.minimum(0), z.maximum(1));
 const faceSchema = z.object({
   bbox: z.object({ x: unit, y: unit, w: unit, h: unit }),
-  detScore: z.number().min(0).max(1),
-  embedding: z.string().min(1),
+  detScore: z.number().check(z.minimum(0), z.maximum(1)),
+  embedding: z.string().check(z.minLength(1)),
 });
 
 // z.object strips unknown keys, so person_id / assign_status in a body are dropped.
 const facesSchema = z.object({
-  contentHash: z.string().min(1),
-  model: z.string().min(1),
+  contentHash: z.string().check(z.minLength(1)),
+  model: z.string().check(z.minLength(1)),
   // D1's free tier allows ~50 queries per invocation and each stored face is one INSERT,
   // so a request carries at most MAX_FACES_PER_REQUEST faces. The agent keeps the largest.
-  faces: z.array(faceSchema).max(MAX_FACES_PER_REQUEST),
+  faces: z.array(faceSchema).check(z.maxLength(MAX_FACES_PER_REQUEST)),
 });
 
 function iou(a: Box, b: Box): number {
@@ -62,7 +62,7 @@ export async function pendingFacesRoute(c: Context<{ Bindings: Env }>) {
   const body = await readJson(c);
   if (body === undefined) return c.json({ error: 'Invalid JSON body' }, 400);
   const parsed = pendingSchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const { hashes, model } = parsed.data;
   if (hashes.length === 0) return c.json({ pending: [] });
 
@@ -87,7 +87,7 @@ export async function unscannedFacesRoute(c: Context<{ Bindings: Env }>) {
   const body = await readJson(c);
   if (body === undefined) return c.json({ error: 'Invalid JSON body' }, 400);
   const parsed = unscannedSchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const { model, cursor = 0, limit, pathPrefix, missingCrops } = parsed.data;
 
   const missingCropsClause = missingCrops
@@ -127,7 +127,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   const body = await readJson(c);
   if (body === undefined) return c.json({ error: 'Invalid JSON body' }, 400);
   const parsed = facesSchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const { contentHash, model, faces } = parsed.data;
 
   let blobs: Uint8Array[];

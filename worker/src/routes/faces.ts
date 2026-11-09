@@ -1,11 +1,11 @@
 import type { Context } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { FACE_SELECT, confirmFacesStmts, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
 
-const personBody = z.object({ personId: z.string().min(1) });
+const personBody = z.object({ personId: z.string().check(z.minLength(1)) });
 
 const loadFace = (c: Ctx, id: string) =>
   c.env.DB.prepare(`${FACE_SELECT} WHERE f.id = ?`).bind(id).first<FaceWithJoins>();
@@ -15,7 +15,7 @@ const personExists = async (c: Ctx, id: string) =>
 
 export async function assignFaceRoute(c: Ctx) {
   const parsed = personBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const id = c.req.param('id') as string;
   const { personId } = parsed.data;
   if (!(await loadFace(c, id)) || !(await personExists(c, personId))) return c.text('Not Found', 404);
@@ -26,7 +26,7 @@ export async function assignFaceRoute(c: Ctx) {
 
 export async function rejectFaceRoute(c: Ctx) {
   const parsed = personBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const id = c.req.param('id') as string;
   const { personId } = parsed.data;
   if (!(await loadFace(c, id)) || !(await personExists(c, personId))) return c.text('Not Found', 404);

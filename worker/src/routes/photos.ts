@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
 
@@ -28,27 +28,28 @@ const ALBUM_ORDER: Record<string, string> = {
   rating: 'avg_score IS NULL, avg_score DESC, name COLLATE NOCASE',
 };
 
-const tagList = z.array(z.string().trim().min(1).max(60)).max(30);
+const tagList = z.array(z.string().check(z.trim(), z.minLength(1), z.maxLength(60))).check(z.maxLength(30));
 
 // Every field is optional; an omitted one is left alone and null (or empty) clears the override.
 const reviewBody = z
-  .object({
-    userRating: z.number().int().min(1).max(5).nullable(),
-    caption: z.string().trim().max(80).nullable(),
-    subjects: tagList.nullable(),
-    tags: tagList.nullable(),
-  })
-  .partial()
-  .refine((v) => Object.keys(v).length > 0, { message: 'nothing to update' });
+  .partial(
+    z.object({
+      userRating: z.nullable(z.int().check(z.minimum(1), z.maximum(5))),
+      caption: z.nullable(z.string().check(z.trim(), z.maxLength(80))),
+      subjects: z.nullable(tagList),
+      tags: z.nullable(tagList),
+    }),
+  )
+  .check(z.refine((v) => Object.keys(v).length > 0, { error: 'nothing to update' }));
 
-const coverBody = z.object({ album: z.string().min(1), photoId: z.string().min(1) });
+const coverBody = z.object({ album: z.string().check(z.minLength(1)), photoId: z.string().check(z.minLength(1)) });
 
 const dedupe = (items: string[]) => [...new Map(items.map((i) => [i.toLowerCase(), i])).values()];
 
 /** Human review of one photo: star rating and overrides for title, subjects and tags. */
 export async function patchPhotoRoute(c: Context<{ Bindings: Env }>) {
   const parsed = reviewBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const edit = parsed.data;
 
   const id = c.req.param('id');

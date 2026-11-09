@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { embeddingFromBytes } from '../people/embedding';
 import { loadReferences } from '../people/references';
@@ -8,11 +8,11 @@ import { FACE_SELECT, confirmFacesStmts, missingFaceIds, serializeFace, type Fac
 
 type Ctx = Context<{ Bindings: Env }>;
 
-const nameField = z.string().trim().min(1).max(60);
-const createBody = z.object({ name: nameField, faceIds: z.array(z.string().min(1)).max(200).optional() });
+const nameField = z.string().check(z.trim(), z.minLength(1), z.maxLength(60));
+const createBody = z.object({ name: nameField, faceIds: z.optional(z.array(z.string().check(z.minLength(1))).check(z.maxLength(200))) });
 const renameBody = z.object({ name: nameField });
-const coverBody = z.object({ faceId: z.string().min(1) });
-const bulkBody = z.object({ faceIds: z.array(z.string().min(1)).min(1).max(200) });
+const coverBody = z.object({ faceId: z.string().check(z.minLength(1)) });
+const bulkBody = z.object({ faceIds: z.array(z.string().check(z.minLength(1))).check(z.minLength(1), z.maxLength(200)) });
 
 const isUniqueViolation = (err: unknown) => err instanceof Error && /UNIQUE|constraint/i.test(`${err.message} ${(err as any).cause?.message ?? ''}`);
 
@@ -66,7 +66,7 @@ export async function listPeopleRoute(c: Ctx) {
 export async function setPersonCoverRoute(c: Ctx) {
   const id = c.req.param('id');
   const parsed = coverBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const { faceId } = parsed.data;
 
   const person = await c.env.DB.prepare('SELECT id FROM persons WHERE id = ?').bind(id).first();
@@ -84,7 +84,7 @@ export async function setPersonCoverRoute(c: Ctx) {
 
 export async function createPersonRoute(c: Ctx) {
   const parsed = createBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const { name, faceIds } = parsed.data;
   if (await nameTaken(c, name)) return c.json({ error: 'A person with this name already exists' }, 409);
 
@@ -106,7 +106,7 @@ export async function createPersonRoute(c: Ctx) {
 
 export async function renamePersonRoute(c: Ctx) {
   const parsed = renameBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const id = c.req.param('id') as string;
   const existing = await c.env.DB.prepare('SELECT id FROM persons WHERE id = ?').bind(id).first();
   if (!existing) return c.text('Not Found', 404);
@@ -138,7 +138,7 @@ export async function deletePersonRoute(c: Ctx) {
 
 export async function assignFacesRoute(c: Ctx) {
   const parsed = bulkBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const id = c.req.param('id') as string;
   const existing = await c.env.DB.prepare('SELECT id FROM persons WHERE id = ?').bind(id).first();
   if (!existing) return c.text('Not Found', 404);
@@ -149,8 +149,8 @@ export async function assignFacesRoute(c: Ctx) {
   return c.json({ personId: id, assigned: faceIds.length });
 }
 
-const matchBody = z.object({ apply: z.boolean().optional(), cursor: z.string().regex(/^\d+$/).optional() });
-const cursorParam = z.string().regex(/^\d+$/);
+const matchBody = z.object({ apply: z.optional(z.boolean()), cursor: z.optional(z.string().check(z.regex(/^\d+$/))) });
+const cursorParam = z.string().check(z.regex(/^\d+$/));
 
 interface CandidateRow {
   rid: number;
@@ -194,7 +194,7 @@ export async function groupsRoute(c: Ctx) {
 
 export async function matchPersonRoute(c: Ctx) {
   const parsed = matchBody.safeParse((await c.req.json().catch(() => ({}))) ?? {});
-  if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const id = c.req.param('id') as string;
   const existing = await c.env.DB.prepare('SELECT id FROM persons WHERE id = ?').bind(id).first();
   if (!existing) return c.text('Not Found', 404);

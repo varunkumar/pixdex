@@ -1,9 +1,9 @@
 import type { Context } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { exifFieldsSchema } from '../db/photos';
 
-const requestSchema = exifFieldsSchema.extend({ contentHash: z.string().min(1) });
+const requestSchema = z.extend(exifFieldsSchema, { contentHash: z.string().check(z.minLength(1)) });
 
 /**
  * Backfills camera/EXIF columns onto an already-indexed photo, keyed by
@@ -20,7 +20,7 @@ export async function ingestExifRoute(c: Context<{ Bindings: Env }>) {
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
   const p = parsed.data;
   const searchTerms = [p.cameraModel, p.lensModel].filter(Boolean).join(' ');

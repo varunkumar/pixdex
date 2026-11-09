@@ -1,52 +1,52 @@
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import { combinedScore } from './rating';
 
 // Standard camera/EXIF details, stored as first-class columns.
 export const exifFieldsSchema = z.object({
-  cameraMake: z.string().optional(),
-  cameraModel: z.string().optional(),
-  lensModel: z.string().optional(),
-  focalLength: z.number().optional(),
-  fNumber: z.number().optional(),
-  exposureTime: z.number().optional(),
-  iso: z.number().int().optional(),
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
+  cameraMake: z.optional(z.string()),
+  cameraModel: z.optional(z.string()),
+  lensModel: z.optional(z.string()),
+  focalLength: z.optional(z.number()),
+  fNumber: z.optional(z.number()),
+  exposureTime: z.optional(z.number()),
+  iso: z.optional(z.int()),
+  latitude: z.optional(z.number().check(z.minimum(-90), z.maximum(90))),
+  longitude: z.optional(z.number().check(z.minimum(-180), z.maximum(180))),
 });
 
 export type ExifFields = z.infer<typeof exifFieldsSchema>;
 
-export const ingestPhotoSchema = z.object({
-  id: z.string().uuid(),
-  contentHash: z.string().min(1),
+export const ingestPhotoSchema = z.extend(z.object({
+  id: z.uuid(),
+  contentHash: z.string().check(z.minLength(1)),
   source: z.enum(['local', 'google_drive']),
-  path: z.string().optional(),
-  driveFileId: z.string().optional(),
-  filename: z.string().min(1),
-  dateTime: z.string().optional(),
-  width: z.number().int().optional(),
-  height: z.number().int().optional(),
-  format: z.string().optional(),
-  fileSize: z.number().int().optional(),
-  subjects: z.array(z.string()).default([]),
-  colors: z.array(z.string()).default([]),
-  patterns: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
-  season: z.string().optional(),
-  environment: z.string().optional(),
-  album: z.string().optional(),
-  description: z.string().default(''),
-  suggestedCaption: z.string().default(''),
-  suggestedHashtags: z.array(z.string()).default([]),
-  modelProvider: z.string().min(1),
-  modelName: z.string().min(1),
+  path: z.optional(z.string()),
+  driveFileId: z.optional(z.string()),
+  filename: z.string().check(z.minLength(1)),
+  dateTime: z.optional(z.string()),
+  width: z.optional(z.int()),
+  height: z.optional(z.int()),
+  format: z.optional(z.string()),
+  fileSize: z.optional(z.int()),
+  subjects: z._default(z.array(z.string()), []),
+  colors: z._default(z.array(z.string()), []),
+  patterns: z._default(z.array(z.string()), []),
+  tags: z._default(z.array(z.string()), []),
+  season: z.optional(z.string()),
+  environment: z.optional(z.string()),
+  album: z.optional(z.string()),
+  description: z._default(z.string(), ''),
+  suggestedCaption: z._default(z.string(), ''),
+  suggestedHashtags: z._default(z.array(z.string()), []),
+  modelProvider: z.string().check(z.minLength(1)),
+  modelName: z.string().check(z.minLength(1)),
   // Absent means unknown; the agent sends true/false once it has looked.
-  hasWatermark: z.boolean().optional(),
+  hasWatermark: z.optional(z.boolean()),
   // 1-10; absent means not rated.
-  aestheticScore: z.number().min(1).max(10).optional(),
+  aestheticScore: z.optional(z.number().check(z.minimum(1), z.maximum(10))),
   // 3-4 word title.
-  shortCaption: z.string().max(80).optional(),
-}).merge(exifFieldsSchema);
+  shortCaption: z.optional(z.string().check(z.maxLength(80))),
+}), exifFieldsSchema.shape);
 
 export type IngestPhotoInput = z.infer<typeof ingestPhotoSchema>;
 

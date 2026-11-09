@@ -1,9 +1,9 @@
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { Context } from 'hono';
 import type { Env } from '../types';
 
 const requestSchema = z.object({
-  hashes: z.array(z.string()).max(500),
+  hashes: z.array(z.string()).check(z.maxLength(500)),
 });
 
 // D1's documented limit is 100 bound parameters per query, so the (up to
@@ -20,7 +20,7 @@ export async function checkHashesRoute(c: Context<{ Bindings: Env }>) {
 
   const body = requestSchema.safeParse(payload);
   if (!body.success) {
-    return c.json({ error: body.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(body.error) }, 400);
   }
 
   const { hashes } = body.data;

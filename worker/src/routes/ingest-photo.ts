@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { buildPrimaryText, buildSearchText, effectiveText, ingestPhotoSchema, type PhotoRow } from '../db/photos';
 
@@ -12,7 +13,7 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
 
   const parsed = ingestPhotoSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: parsed.error.flatten() }, 400);
+    return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
   const p = parsed.data;
   // A re-index must not undo the owner's edits, so index their versions when set.
