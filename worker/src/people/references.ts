@@ -43,3 +43,25 @@ export async function loadReferences(db: D1Database, opts: { personId?: string }
   }
   return [...byPerson].map(([personId, vectors]) => ({ personId, vectors }));
 }
+
+/** How long auto-match may reuse loaded references; bulk indexing tolerates this much staleness. */
+export const REFERENCES_CACHE_TTL_MS = 60_000;
+
+let cache: { at: number; refs: PersonReferences[] } | undefined;
+
+/**
+ * loadReferences() for all people, memoised per Worker isolate for REFERENCES_CACHE_TTL_MS.
+ * Only for auto-match during ingest: a person confirmed or changed in the last minute may be
+ * missed (or a just-unassigned face still used) by that one pass. Owner-driven routes use
+ * loadReferences directly and are always fresh.
+ */
+export async function loadReferencesCached(db: D1Database, now = Date.now()): Promise<PersonReferences[]> {
+  if (cache && now - cache.at < REFERENCES_CACHE_TTL_MS) return cache.refs;
+  const refs = await loadReferences(db);
+  cache = { at: now, refs };
+  return refs;
+}
+
+export function clearReferencesCache(): void {
+  cache = undefined;
+}

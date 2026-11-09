@@ -159,3 +159,33 @@ describe('matching', () => {
     expect(res[1]).toEqual(['far']);
   });
 });
+
+describe('clusterFaces equivalence', () => {
+  it('matches a naive allocate-per-merge implementation', async () => {
+    const { clusterFaces, dot } = await import('../src/people/matching');
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32) - 0.5;
+    const centers = Array.from({ length: 4 }, () => Float32Array.from({ length: 512 }, rnd));
+    const faces = Array.from({ length: 60 }, (_, i) => {
+      const c = centers[i % 4];
+      const v = Float32Array.from(c, (x) => x + rnd() * 0.3);
+      const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+      return { id: `f${i}`, embedding: v.map((x) => x / n) };
+    });
+    const naive = (() => {
+      const cl: { ids: string[]; sum: Float32Array; cen: Float32Array }[] = [];
+      const unit = (v: Float32Array) => {
+        const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
+        return v.map((x) => x / n);
+      };
+      for (const f of faces) {
+        let t = -1, top = 0.4;
+        cl.forEach((c, i) => { const s = dot(f.embedding, c.cen); if (s >= top) { top = s; t = i; } });
+        if (t === -1) cl.push({ ids: [f.id], sum: Float32Array.from(f.embedding), cen: unit(f.embedding) });
+        else { cl[t].ids.push(f.id); cl[t].sum.forEach((_, k) => (cl[t].sum[k] += f.embedding[k])); cl[t].cen = unit(cl[t].sum); }
+      }
+      return cl.map((c) => c.ids).sort((a, b) => b.length - a.length);
+    })();
+    expect(clusterFaces(faces)).toEqual(naive);
+  });
+});

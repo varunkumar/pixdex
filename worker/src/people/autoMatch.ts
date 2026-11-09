@@ -1,6 +1,6 @@
 import { embeddingFromBytes, EMBEDDING_DIM } from './embedding';
 import { MAX_AUTO_MATCH_MACS, bestScore, classify, isMatchable } from './matching';
-import { loadReferences } from './references';
+import { loadReferencesCached } from './references';
 
 /**
  * Attaches each given `unassigned` face to the best-scoring named person when
@@ -29,7 +29,7 @@ export async function autoMatchFaces(
   const all = faces.filter((f) => isMatchable({ detScore: f.det_score, w: f.bbox_w, h: f.bbox_h }));
   if (all.length === 0) return { matched: 0, skipped: 0 };
 
-  const refs = await loadReferences(db);
+  const refs = await loadReferencesCached(db);
   if (refs.length === 0) return { matched: 0, skipped: 0 };
 
   const totalRefs = refs.reduce((n, r) => n + r.vectors.length, 0);
