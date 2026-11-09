@@ -151,6 +151,11 @@ candidate). It returns 404 if no photo qualifies.
   SQL (no model calls).
 - `db/photos.ts` - D1 queries. Schema changes are numbered SQL files in
   `migrations/` and registered in `migrations/index.ts`.
+- Derived tables (migration `0015_albums.sql`, additive): `albums` (one row per album: `photo_count`, cover photo and
+  thumbnail hash, `latest_date`, `newest_indexed`, `avg_score`) and `counters` (`photos` total) are maintained by
+  triggers on `photos` and `album_covers`, never by route code. `GET /albums` and the album names list read `albums`;
+  the unfiltered `GET /search` total reads `counters`. The trigger SQL is in `migrations/albums.ts` and the `.sql`
+  file is generated from it (`npm run gen:albums-migration`). `idx_photos_last_indexed` serves the unfiltered list.
 - Tests run in the Workers runtime via `@cloudflare/vitest-pool-workers`.
 
 ### `agent/` - local indexing agent (Node/TS, tsx)

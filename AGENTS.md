@@ -55,6 +55,9 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
   own matching only ever writes `auto`; `confirmed` comes from the owner via the
   browser writes. Rejections live in `face_rejections`.
 - DB changes go in a new numbered file in `worker/migrations/`.
+- `albums` and `counters` are derived by triggers (`worker/migrations/albums.ts` generates
+  `0015_albums.sql` via `cd worker && npm run gen:albums-migration`). Never write them from route code; change
+  the generator and add a new numbered migration.
 - After every feature or change, update `README.md` and this file (and `docs/`
   if architecture, config or workflow changed) in the same commit.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.
