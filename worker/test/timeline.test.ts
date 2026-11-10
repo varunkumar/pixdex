@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 type Seed = { dt: string | null; score?: number | null; rating?: number | null; album?: string };
 let n = 0;
@@ -17,7 +18,7 @@ async function seed(s: Seed): Promise<string> {
 
 async function get(path: string): Promise<{ status: number; body: any }> {
   const r = await SELF.fetch(`https://example.com${path}`, {
-    headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    headers: readHeaders(),
   });
   return { status: r.status, body: await r.json() };
 }

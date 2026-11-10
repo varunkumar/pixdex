@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 describe('GET /photos/:id', () => {
   beforeEach(async () => {
@@ -12,7 +13,7 @@ describe('GET /photos/:id', () => {
 
   it('GET /photos/:id returns the photo', async () => {
     const response = await SELF.fetch('https://example.com/photos/photo-1', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(response.status).toBe(200);
     expect(((await response.json()) as any).filename).toBe('a.jpg');
@@ -20,7 +21,7 @@ describe('GET /photos/:id', () => {
 
   it('GET /photos/:id returns 404 for an unknown id', async () => {
     const response = await SELF.fetch('https://example.com/photos/does-not-exist', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(response.status).toBe(404);
   });
@@ -45,7 +46,7 @@ describe('GET /albums', () => {
 
   async function get(query = '?limit=12') {
     const response = await SELF.fetch(`https://example.com/albums${query}`, {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     return (await response.json()) as any;
   }
@@ -84,7 +85,7 @@ describe('GET /albums', () => {
     const put = (body: unknown) =>
       SELF.fetch('https://example.com/albums/cover', {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' },
+        headers: { ...readHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
 

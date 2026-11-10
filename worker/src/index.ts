@@ -22,6 +22,7 @@ import {
 import { searchRoute } from './routes/search';
 import { bucketsRoute, timelineRoute } from './routes/timeline';
 import { dailyPickRoute } from './routes/daily-pick';
+import { meRoute } from './routes/shares';
 import type { Env } from './types';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -83,6 +84,9 @@ app.get('/albums', getAlbumsRoute);
 
 app.use('/albums/cover', requireReadToken);
 app.put('/albums/cover', putAlbumCoverRoute);
+
+app.use('/me', requireReadToken);
+app.get('/me', meRoute);
 
 app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);

@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 const post = (body: unknown) =>
   SELF.fetch('https://example.com/ingest/rating', {
@@ -40,7 +41,7 @@ describe('POST /ingest/rating', () => {
     expect(row?.search_text.split('Sleepy marmot').length).toBe(2);
 
     const res = await SELF.fetch('https://example.com/search?q=marmot', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(JSON.stringify(await res.json())).toContain('p1');
   });
@@ -64,7 +65,7 @@ describe('POST /ingest/rating', () => {
   });
 
   it('requires the ingest token (the read token is not enough)', async () => {
-    for (const headers of [{} as Record<string, string>, { Authorization: `Bearer ${env.READ_TOKEN}` }]) {
+    for (const headers of [{} as Record<string, string>, readHeaders()]) {
       const res = await SELF.fetch('https://example.com/ingest/rating', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers },

@@ -19,7 +19,10 @@ export async function requireIngestToken(
   await next();
 }
 
-/** Bearer header only: tokens in URLs end up in logs and browser history. */
+/**
+ * Bearer header only: tokens in URLs end up in logs and browser history.
+ * Also requires the proxy-forwarded X-Viewer-Email identity.
+ */
 export async function requireReadToken(
   c: Context<{ Bindings: Env }>,
   next: Next
@@ -27,6 +30,11 @@ export async function requireReadToken(
   const token = bearerToken(c);
 
   if (!token || token !== c.env.READ_TOKEN) {
+    return c.text('Unauthorized', 401);
+  }
+
+  // Fail closed: without an owner address or a forwarded identity nobody is resolvable.
+  if (!c.env.OWNER_EMAIL || !(c.req.header('X-Viewer-Email') ?? '').trim()) {
     return c.text('Unauthorized', 401);
   }
 

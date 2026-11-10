@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 async function seed(
   id: string,
@@ -26,7 +27,7 @@ describe('GET /daily-pick', () => {
     await seed('sparse', ['leopard'], 'A leopard.', null);
     await seed('rich', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets over the forest.', null);
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('rich');
     expect(body.suggestedCaption).toBe('caption');
@@ -36,7 +37,7 @@ describe('GET /daily-pick', () => {
     await seed('busy', ['a', 'b', 'c', 'd', 'e'], 'A very long description of a cluttered scene with many things in it.', null, 4);
     await seed('pretty', ['leopard'], 'A leopard.', null, 9);
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('pretty');
     expect(body.photo.aestheticScore).toBe(9);
@@ -46,7 +47,7 @@ describe('GET /daily-pick', () => {
     await seed('unrated', ['a', 'b', 'c', 'd', 'e'], 'Many words '.repeat(20), null, null);
     await seed('good', ['leopard'], 'A leopard.', null, 7.5);
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('good');
   });
@@ -58,7 +59,7 @@ describe('GET /daily-pick', () => {
     await seed('recent', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets.', recentlySuggested);
     await seed('eligible', ['leopard'], 'A leopard.', null);
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('eligible');
   });
@@ -69,7 +70,7 @@ describe('GET /daily-pick', () => {
     await seed('same-album', ['tiger', 'tree', 'grass'], 'A tiger walking through tall grass in the morning light.', null, 9, 'Bandipur');
     await seed('other-album', ['egret'], 'An egret.', null, 8, 'Kabini');
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('other-album');
   });
@@ -79,7 +80,7 @@ describe('GET /daily-pick', () => {
     await seed('prev', ['tiger'], 'A tiger.', yesterday, 9, 'Bandipur');
     await seed('same-album', ['tiger'], 'A tiger.', null, 9, 'Bandipur');
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('same-album');
   });
@@ -88,9 +89,9 @@ describe('GET /daily-pick', () => {
     await seed('sparse', ['leopard'], 'A leopard.', null);
     await seed('rich', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets over the forest.', null);
 
-    const first = (await (await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } })).json()) as any;
-    const second = (await (await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } })).json()) as any;
-    const third = (await (await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } })).json()) as any;
+    const first = (await (await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() })).json()) as any;
+    const second = (await (await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() })).json()) as any;
+    const third = (await (await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() })).json()) as any;
 
     expect(first.photo.id).toBe('rich');
     expect(second.photo.id).toBe('rich');
@@ -107,7 +108,7 @@ describe('GET /daily-pick', () => {
   it('returns the clean camelCase photo shape including thumbnailUrl', async () => {
     await seed('rich', ['leopard', 'tree', 'sunset'], 'A leopard resting on a tree branch as the sun sets over the forest.', null);
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.thumbnailUrl).toBe('/thumbnails/hash-rich');
     expect(body.photo.subjects).toEqual(['leopard', 'tree', 'sunset']);
@@ -119,7 +120,7 @@ describe('GET /daily-pick', () => {
     await seed('people-desc', ['jeep'], 'Tourists watching a tiger from a jeep.', null, 9);
     await seed('tiger', ['tiger', 'big cat'], 'A tiger walking through tall grass.', null, 7.2);
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     const body = (await response.json()) as any;
     expect(body.photo.id).toBe('tiger');
   });
@@ -127,7 +128,7 @@ describe('GET /daily-pick', () => {
   it('returns 404 when every photo shows a person', async () => {
     await seed('portrait', ['woman'], 'A woman standing by a lake.', null, 9);
 
-    const response = await SELF.fetch('https://example.com/daily-pick', { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+    const response = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders() });
     expect(response.status).toBe(404);
   });
 });

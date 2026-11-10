@@ -1,5 +1,6 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 const VALID_HASH = '0123456789abcdef0123456789abcdef';
 
@@ -15,7 +16,7 @@ describe('thumbnail upload + retrieval', () => {
     expect(put.status).toBe(201);
 
     const get = await SELF.fetch(`https://example.com/thumbnails/${VALID_HASH}`, {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(get.status).toBe(200);
     expect(get.headers.get('Content-Type')).toBe('image/jpeg');
@@ -25,7 +26,7 @@ describe('thumbnail upload + retrieval', () => {
 
   it('returns 404 for a missing thumbnail', async () => {
     const get = await SELF.fetch('https://example.com/thumbnails/does-not-exist', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(get.status).toBe(404);
   });

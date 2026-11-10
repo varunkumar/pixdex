@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 describe('ingest auth', () => {
   it('rejects requests with no token', async () => {
@@ -55,7 +56,7 @@ describe('read auth', () => {
 
   it('accepts /thumbnails/:contentHash with a valid Authorization header', async () => {
     const response = await SELF.fetch('https://example.com/thumbnails/does-not-exist', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     // 404 (not 401) proves the token was accepted and the request reached the route handler.
     expect(response.status).toBe(404);
@@ -63,7 +64,7 @@ describe('read auth', () => {
 
   it('accepts /search with a valid Authorization header', async () => {
     const response = await SELF.fetch('https://example.com/search', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(response.status).toBe(200);
   });

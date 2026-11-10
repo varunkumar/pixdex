@@ -1,8 +1,9 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { embeddingToBytes } from '../src/people/embedding';
+import { readHeaders } from './helpers';
 
-const readHeaders = () => ({ Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' });
+const jsonHeaders = () => ({ ...readHeaders(), 'Content-Type': 'application/json' });
 const ingestHeaders = () => ({ Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' });
 const HASH = 'hash-match';
 const PHOTO = '123e4567-e89b-12d3-a456-426614174000';

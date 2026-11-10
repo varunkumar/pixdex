@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 const payload = {
   id: '123e4567-e89b-12d3-a456-426614174000',
@@ -120,7 +121,7 @@ describe('POST /ingest/photo', () => {
 
     for (const term of ['vermilion', 'rosettes', 'monsoon']) {
       const search = await SELF.fetch(`https://example.com/search?q=${term}`, {
-        headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+        headers: readHeaders(),
       });
       expect(((await search.json()) as any).results.map((r: { id: string }) => r.id)).toEqual([payload.id]);
     }
