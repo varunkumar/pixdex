@@ -1,7 +1,10 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { User } from '../src/access';
-import { scopeFor, scopeForRequest, visibleAlbumsSql } from '../src/db/visibility';
+import { PHOTOS_MIGRATION_STATEMENTS } from '../migrations/index';
+// @ts-expect-error Vite raw import, resolved by the test runner
+import migration0016 from '../migrations/0016_album_shares.sql?raw';
+import { canEditPhoto, photoAccess, photoAccessForRequest, scopeFor, scopeForRequest, visibleAlbumsSql } from '../src/db/visibility';
 
 const OWNER: User = { email: 'owner@example.com', isDefaultOwner: true };
 const ALICE: User = { email: 'alice@example.com', isDefaultOwner: false };
@@ -73,5 +76,48 @@ describe('visibility SQL', () => {
     await run("UPDATE albums SET owner_email = 'alice@example.com' WHERE name = 'AliceAlbum'");
     expect((await scopeForRequest(env.DB, OWNER, 'album')).sql).not.toBe('');
     expect((await scopeForRequest(env.DB, ALICE, 'album')).sql).not.toBe('');
+  });
+
+  it('photoAccess (single-photo point lookup) agrees with scopeFor for every photo and user', async () => {
+    await run(`UPDATE albums SET shared_with = '["owner@example.com"]' WHERE name = 'BobAlbum'`);
+    for (const user of [OWNER, ALICE, BOB]) {
+      const a = photoAccess(user, 'p');
+      const seen: string[] = [];
+      for (const id of ['alice-own', 'bobs', 'none', 'own', 'shared']) {
+        const row = await env.DB.prepare(`SELECT p.id FROM photos p${a.join} WHERE p.id = ?${a.where}`).bind(id, ...a.params).first();
+        if (row) seen.push(id);
+      }
+      expect(seen).toEqual(await visibleIds(user));
+    }
+  });
+
+  it('photoAccessForRequest is null for the default owner only while no album has an owner', async () => {
+    await run('UPDATE albums SET owner_email = NULL');
+    expect(await photoAccessForRequest(env.DB, OWNER, 'p')).toBeNull();
+    expect(await photoAccessForRequest(env.DB, ALICE, 'p')).not.toBeNull();
+    await run("UPDATE albums SET owner_email = 'alice@example.com' WHERE name = 'AliceAlbum'");
+    expect(await photoAccessForRequest(env.DB, OWNER, 'p')).not.toBeNull();
+  });
+
+  it('canEditPhoto: owner of the album, or the default owner for unowned and unalbumed photos', () => {
+    expect(canEditPhoto(OWNER, null, null)).toBe(true);
+    expect(canEditPhoto(ALICE, null, null)).toBe(false);
+    expect(canEditPhoto(OWNER, 'Mine', null)).toBe(true);
+    expect(canEditPhoto(ALICE, 'Mine', null)).toBe(false);
+    expect(canEditPhoto(ALICE, 'AliceAlbum', 'alice@example.com')).toBe(true);
+    expect(canEditPhoto(OWNER, 'AliceAlbum', 'alice@example.com')).toBe(false);
+  });
+});
+
+describe('albums owner index (0016)', () => {
+  it('exists as a partial index on owner_email', async () => {
+    const row = await env.DB.prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_albums_owner_email'").first<{ sql: string }>();
+    expect(row?.sql).toMatch(/ON albums \(owner_email\) WHERE owner_email IS NOT NULL/);
+  });
+
+  it('is identical in 0016_album_shares.sql and the test statements', () => {
+    const stmt = PHOTOS_MIGRATION_STATEMENTS.find((x) => x.includes('idx_albums_owner_email'));
+    expect(stmt).toBeDefined();
+    expect(migration0016 as string).toContain(stmt);
   });
 });

@@ -57,7 +57,9 @@ function score(row: PhotoRow): number {
 function buildResponse(row: PhotoRow, canEdit: boolean) {
   const subjects = effectiveText(row).subjects;
   const rating = combinedScore(row);
-  const looks = rating != null ? ` It rated ${rating.toFixed(1)}/10${row.user_rating != null ? ` (you gave it ${row.user_rating} stars)` : ' for visual quality'}.` : '';
+  // user_rating is the album owner's, so only someone who can edit the photo is told "you gave it".
+  const yours = canEdit && row.user_rating != null;
+  const looks = rating != null ? ` It rated ${rating.toFixed(1)}/10${yours ? ` (you gave it ${row.user_rating} stars)` : ' for visual quality'}.` : '';
   const reason = `This photo was selected because it features ${
     subjects.length > 0 ? subjects.join(', ') : 'interesting subjects'
   } in a ${row.environment ?? 'natural'} setting${row.season ? ` during ${row.season}` : ''}.${looks}`;
@@ -97,7 +99,7 @@ export async function dailyPickRoute(c: Context<{ Bindings: Env }>) {
   const all = user.isDefaultOwner
     ? await c.env.DB.prepare(`SELECT ${SELECT_COLUMNS} FROM photos${scope.sql ? ` WHERE 1=1${scope.sql}` : ''}`).bind(...scope.params).all<PhotoRow>()
     : await c.env.DB.prepare(
-        `SELECT ${SELECT_COLUMNS} FROM photos WHERE 1=1${scope.sql} ORDER BY ${COMBINED_SCORE_SQL} IS NULL, ${COMBINED_SCORE_SQL} DESC LIMIT ${SHARED_CANDIDATES}`
+        `SELECT ${SELECT_COLUMNS} FROM photos WHERE 1=1${scope.sql} ORDER BY ${COMBINED_SCORE_SQL} IS NULL, ${COMBINED_SCORE_SQL} DESC, id LIMIT ${SHARED_CANDIDATES}`
       )
         .bind(...scope.params)
         .all<PhotoRow>();

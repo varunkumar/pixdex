@@ -74,7 +74,9 @@ default-owner only. While no album has another owner, the default owner takes a 
 
 Originals: the default owner is proxied straight to the agent tunnel. Any other user first triggers a Function call
 to Worker `GET /access/photo/:id` (READ_TOKEN plus their email); only a 204 is proxied, anything else is 404.
-Thumbnails: the default owner is served with no D1 query; others get one `content_hash` lookup with the scope.
+Thumbnails: the default owner is served with no D1 query; others get one `content_hash` lookup joined to the album by
+primary key. Single-photo reads use that join (`photoAccess`), list reads use the album subquery (`scopeFor`).
+Viewers get `path` and `driveFileId` as null in photo responses (the owner's local path and Drive id are owner-only).
 
 ### `functions/api/[[path]].ts` - Pages Function proxy
 
@@ -297,6 +299,6 @@ Licence: InsightFace pretrained weights are non-commercial, personal use only.
 | --- | --- |
 | Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (all three required); local dev only: `DEV_VIEWER_EMAIL` |
 | `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (required by `serve-originals`, used by `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
-| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN`; `OWNER_EMAIL` (secret or var; if unset every Worker call is 401) |
+| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN`, `OWNER_EMAIL` (`wrangler secret put OWNER_EMAIL`; a secret, not a dashboard var, which a deploy would delete; if unset every Worker call is 401; must equal the Pages and agent `OWNER_EMAIL`) |
 
 Never prefix server-side secrets with `VITE_`.

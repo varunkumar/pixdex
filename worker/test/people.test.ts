@@ -2,10 +2,14 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readHeaders } from './helpers';
 
-const jsonHeaders = () => ({ ...readHeaders(), 'Content-Type': 'application/json' });
 const PHOTO = '123e4567-e89b-12d3-a456-426614174000';
 
-const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = readHeaders()) =>
+const call = (
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Record<string, string> = { ...readHeaders(), 'Content-Type': 'application/json' }
+) =>
   SELF.fetch(`https://example.com${path}`, {
     method,
     headers,

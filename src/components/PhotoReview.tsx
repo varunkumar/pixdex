@@ -27,8 +27,7 @@ const PhotoReview = ({ photo }: { photo: SerializedPhoto }) => {
   if (!photo.canEdit) return null;
 
   const overrides = photo.overrides;
-  const edited =
-    !!overrides && (overrides.shortCaption != null || overrides.subjects != null || overrides.tags != null);
+  const edited = !!overrides && (overrides.shortCaption != null || overrides.subjects != null || overrides.tags != null);
 
   const startEditing = () => {
     setCaption(photo.shortCaption ?? '');
@@ -41,14 +40,7 @@ const PhotoReview = ({ photo }: { photo: SerializedPhoto }) => {
     <Card withBorder>
       <Stack gap="sm">
         <Group justify="space-between">
-          <Title order={5}>
-            Your review{' '}
-            {edited && (
-              <Badge ml="xs" variant="light">
-                edited
-              </Badge>
-            )}
-          </Title>
+          <Title order={5}>Your review {edited && <Badge ml="xs" variant="light">edited</Badge>}</Title>
           {!editing && (
             <Button size="xs" variant="light" onClick={startEditing}>
               Edit details
@@ -78,24 +70,13 @@ const PhotoReview = ({ photo }: { photo: SerializedPhoto }) => {
 
         {editing && (
           <Stack gap="sm">
-            <TextInput
-              label="Title"
-              value={caption}
-              maxLength={80}
-              onChange={(e) => setCaption(e.currentTarget.value)}
-            />
+            <TextInput label="Title" value={caption} maxLength={80} onChange={(e) => setCaption(e.currentTarget.value)} />
             <TagsInput label="Subjects (species)" value={subjects} onChange={setSubjects} />
             <TagsInput label="Tags" value={tags} onChange={setTags} />
             <Group gap="sm">
               <Button
                 loading={save.isPending}
-                onClick={() =>
-                  save.mutate({
-                    caption: caption.trim() || null,
-                    subjects,
-                    tags,
-                  })
-                }
+                onClick={() => save.mutate({ caption: caption.trim() || null, subjects, tags })}
               >
                 Save
               </Button>

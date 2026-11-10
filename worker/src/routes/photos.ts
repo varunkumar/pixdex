@@ -2,21 +2,26 @@ import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { albumRole, userOf } from '../access';
-import { canEditFor, scopeForRequest, visibleAlbumsSql } from '../db/visibility';
+import { canEditPhoto, photoAccessForRequest, scopeForRequest, visibleAlbumsSql } from '../db/visibility';
 import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
   const user = userOf(c);
-  const access = await scopeForRequest(c.env.DB, user, 'album');
-  const row = await c.env.DB.prepare(`SELECT * FROM photos WHERE id = ?${access.sql}`)
+  // Default owner with no album owners: one photos read. Otherwise the album comes from a primary-key
+  // join (photoAccess) that also yields canEdit, so no albums scan and no second query.
+  const access = await photoAccessForRequest(c.env.DB, user, 'p');
+  if (!access) {
+    const row = await c.env.DB.prepare('SELECT * FROM photos WHERE id = ?').bind(id).first<PhotoRow>();
+    return row ? c.json(serializePhoto(row, true)) : c.text('Not Found', 404);
+  }
+  const row = await c.env.DB.prepare(`SELECT p.*, va.owner_email AS va_owner_email FROM photos p${access.join} WHERE p.id = ?${access.where}`)
     .bind(id, ...access.params)
-    .first<PhotoRow>();
+    .first<PhotoRow & { va_owner_email: string | null }>();
   if (!row) {
     return c.text('Not Found', 404);
   }
-  const canEdit = await canEditFor(c.env.DB, user, access);
-  return c.json(serializePhoto(row, canEdit(row.album)));
+  return c.json(serializePhoto(row, canEditPhoto(user, row.album, row.va_owner_email)));
 }
 
 interface AlbumRow {

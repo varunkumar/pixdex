@@ -92,6 +92,25 @@ describe('album sharing: people, faces and daily pick', () => {
     expect(rows.results.filter((r) => r.instagram_suggested).map((r) => r.id)).toEqual(['ranth']);
   });
 
+  it('daily pick for a viewer does not say "you gave it" for the owner\'s star rating', async () => {
+    await run("UPDATE photos SET user_rating = 5 WHERE album = 'Kanha'");
+    const viewer = await json('/daily-pick', VIEWER);
+    expect(viewer.reason).not.toContain('you gave it');
+    expect(viewer.reason).toContain('for visual quality');
+    const owner = await json('/daily-pick', OWNER);
+    expect(owner.reason).toContain('you gave it 5 stars');
+  });
+
+  it('daily pick for a viewer breaks score ties by id', async () => {
+    await run('DELETE FROM faces');
+    await run('DELETE FROM photos');
+    // Inserted out of id order with identical scores: the pick must not depend on scan order.
+    await insertPhoto('zz', 'Kanha');
+    await insertPhoto('aa', 'Kanha');
+    await run(`UPDATE albums SET shared_with = '["viewer@example.com"]' WHERE name = 'Kanha'`);
+    expect((await json('/daily-pick', VIEWER)).photo.id).toBe('aa');
+  });
+
   it('daily pick for a stranger is 404', async () => {
     const res = await SELF.fetch('https://example.com/daily-pick', { headers: readHeaders(STRANGER) });
     expect(res.status).toBe(404);

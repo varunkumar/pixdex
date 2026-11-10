@@ -225,8 +225,9 @@ export function serializePhoto(row: PhotoRow, canEdit: boolean): SerializedPhoto
     id: row.id,
     contentHash: row.content_hash,
     source: row.source,
-    path: row.path ?? null,
-    driveFileId: row.drive_file_id ?? null,
+    // The owner's local path and Drive file id never reach viewers (they cannot use either).
+    path: canEdit ? (row.path ?? null) : null,
+    driveFileId: canEdit ? (row.drive_file_id ?? null) : null,
     filename: row.filename,
     dateTime: row.date_time ?? null,
     width: row.width ?? null,

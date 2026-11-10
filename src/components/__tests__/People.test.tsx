@@ -88,11 +88,11 @@ describe('People', () => {
     show();
     const btn = await screen.findByRole('button', { name: 'Name this group' });
     const card = btn.closest('[data-testid="face-group"]') as HTMLElement;
-    expect(
-      within(card)
-        .getAllByTestId('face-tile')
-        .map((t) => t.getAttribute('aria-label'))
-    ).toEqual(['huge', 'mid', 'tiny']);
+    expect(within(card).getAllByTestId('face-tile').map((t) => t.getAttribute('aria-label'))).toEqual([
+      'huge',
+      'mid',
+      'tiny',
+    ]);
   });
 
   it('shows at most 8 face tiles per group', async () => {

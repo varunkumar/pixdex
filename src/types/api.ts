@@ -47,11 +47,7 @@ export interface SerializedPhoto {
   /** 1-10 blend of the owner's rating and the model's score. */
   combinedScore?: number | null;
   /** Owner edits. subjects/tags/shortCaption above are already the effective values. */
-  overrides?: {
-    shortCaption: string | null;
-    subjects: string[] | null;
-    tags: string[] | null;
-  };
+  overrides?: { shortCaption: string | null; subjects: string[] | null; tags: string[] | null };
 }
 
 /** Partial update: omit a field to keep it, send null to clear it (back to the AI value). */

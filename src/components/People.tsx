@@ -45,9 +45,7 @@ const GroupCard = ({
       if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
     } catch {
       // The group is already named; a failed follow-up search must not read as a naming failure.
-      notifications.show({
-        message: 'Named, but could not look for more matches',
-      });
+      notifications.show({ message: 'Named, but could not look for more matches' });
     } finally {
       setProgress(null);
       void queryClient.invalidateQueries({ queryKey: ['photo-faces'] });

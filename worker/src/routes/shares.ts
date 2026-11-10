@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import { albumRole, userOf } from '../access';
-import { scopeForRequest } from '../db/visibility';
+import { photoAccessForRequest } from '../db/visibility';
 import type { Env } from '../types';
 
 /** GET /me: the resolved viewer. No D1 access, constant CPU. */
@@ -40,9 +40,9 @@ export async function putAlbumSharesRoute(c: Context<{ Bindings: Env }>) {
 
 /** GET /access/photo/:id: 204 when the caller may see the photo, else 404. Same cost as getPhotoRoute's lookup. */
 export async function accessPhotoRoute(c: Context<{ Bindings: Env }>) {
-  const access = await scopeForRequest(c.env.DB, userOf(c), 'album');
-  const row = await c.env.DB.prepare(`SELECT 1 AS ok FROM photos WHERE id = ?${access.sql}`)
-    .bind(c.req.param('id'), ...access.params)
+  const access = await photoAccessForRequest(c.env.DB, userOf(c), 'p');
+  const row = await c.env.DB.prepare(`SELECT 1 AS ok FROM photos p${access?.join ?? ''} WHERE p.id = ?${access?.where ?? ''}`)
+    .bind(c.req.param('id'), ...(access?.params ?? []))
     .first();
   return row ? c.body(null, 204) : c.text('Not Found', 404);
 }

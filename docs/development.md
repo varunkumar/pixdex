@@ -69,15 +69,23 @@ The Worker now returns 401 without `X-Viewer-Email` and the Function returns 500
 design (fail closed). So:
 
 1. Before merging, set Pages variables `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (the Access application's
-   audience tag), and the Worker `OWNER_EMAIL` (secret or var).
+   audience tag), and the Worker `OWNER_EMAIL` as a secret only: `cd worker && npx wrangler secret put OWNER_EMAIL`.
+   Not a dashboard plain-text variable: `worker/wrangler.toml` has no `[vars]` and no `keep_vars`, so the next
+   `wrangler deploy` deletes dashboard variables and the Worker then answers 401 to everything (fail closed).
+   The Pages `OWNER_EMAIL`, the Worker `OWNER_EMAIL` and the one in `agent/.env` must be the same address: the
+   Function's originals shortcut for the default owner compares against the Pages value, the Worker against its own.
 2. Merge and let the Worker (migration `0016`, then code) and Pages Function deploy. Confirm the site still works for
-   the owner.
-3. Only then change the Cloudflare Access policy to allow any Google account. Doing it earlier lets strangers reach
+   the owner. The two deploy independently: if the Worker lands first, the old Function sends no `X-Viewer-Email`
+   and the site answers 401 until the Pages deploy finishes (a short window).
+3. At merge time, update the agent: a running `serve-originals` breaks (its photo lookups get 401) until the agent
+   is updated, `OWNER_EMAIL` is set in `agent/.env` and it is restarted (it exits without `OWNER_EMAIL`).
+   `index-status` needs it too.
+4. Only then change the Cloudflare Access policy to allow any Google account. Doing it earlier lets strangers reach
    a Function that cannot yet verify them.
-4. Set `OWNER_EMAIL` in `agent/.env` before running `serve-originals` (it exits without it) or `index-status`.
 
 Local dev: the Vite `/api` proxy sends `X-Viewer-Email` from `DEV_VIEWER_EMAIL`, falling back to `OWNER_EMAIL`; set
-`DEV_VIEWER_EMAIL` to preview as a user an album is shared with. Set `OWNER_EMAIL` in the Worker's local vars too.
+`DEV_VIEWER_EMAIL` to preview as a user an album is shared with. Set `OWNER_EMAIL` in `worker/.dev.vars` too (local
+`wrangler dev` reads secrets from there).
 
 ## D1 read budget
 
@@ -165,8 +173,9 @@ CPU and D1 usage cannot be measured locally (no D1 row meters, no Workers CPU cl
 `cd worker && npx wrangler tail pixdex-worker --format json` (cpuTime per route) and
 `npx wrangler d1 insights pixdex --timePeriod 30d` (rows read per query), before and after the rollout.
 
-- Default owner while no album has another owner: one small `SELECT EXISTS` over `albums` per scoped request (at
-  most A rows, A is the number of albums, hundreds at most; no index on `owner_email`) and nothing else. The main
+- Default owner while no album has another owner: one `SELECT EXISTS` per scoped request, a probe of the partial
+  index `idx_albums_owner_email` (`SEARCH albums USING COVERING INDEX idx_albums_owner_email (owner_email>?)`, at
+  most one row read; it was a scan of all A albums before the index) and nothing else. The main
   query is unchanged and the `counters` total still applies. Thumbnails cost zero D1 queries for the default owner.
 - Once another owner exists, scoped reads gain `album IS NULL OR album IN (subquery)` plus one scan of the small
   `albums` table (A rows, `json_each` over short `shared_with` arrays). Plans (seeded DB):
@@ -178,8 +187,13 @@ CPU and D1 usage cannot be measured locally (no D1 row meters, no Workers CPU cl
     owner once another owner exists. Accepted: a viewer's visible set is bounded to the albums shared with them
     (ruling R4). FTS search is still driven by `photos_fts`, with the scope checked per candidate.
 - The `counters` total shortcut is skipped whenever the scope is non-empty (those requests `COUNT(*)`).
-- Non-default users pay one `UNIQUE(content_hash)` point lookup per thumbnail.
-- Non-owner originals add one Worker subrequest (`GET /access/photo/:id`, one primary-key lookup plus scope).
+- Single-photo lookups (thumbnail for non-default users, `GET /photos/:id`, `/photos/:id/faces`, `/faces/:id/crop`,
+  `GET /access/photo/:id`) check visibility with a primary-key join on `albums` (`photoAccess` in
+  `worker/src/db/visibility.ts`), not the album subquery: one photo search (`UNIQUE(content_hash)` or the id
+  primary key) plus one `SEARCH va USING PRIMARY KEY (name=?)` and `json_each` over that album's `shared_with`.
+  About 2 rows read per thumbnail with 300 albums (it was 1 photo row plus a scan of all 300 album rows).
+  `GET /photos/:id` also takes `canEdit` from the joined `owner_email`, so it no longer runs the `canEditFor` query.
+- Non-owner originals add one Worker subrequest (`GET /access/photo/:id`, the same two primary-key searches).
 - Viewer daily pick reads at most 200 candidate rows (`SHARED_CANDIDATES`) and sorts them in memory.
 - `GET /me` is one request per session (`staleTime: Infinity`) with no D1 read.
 - PATCH photo, album cover and share writes, and ingest with an album, each add one `albums` primary-key read
@@ -187,8 +201,9 @@ CPU and D1 usage cannot be measured locally (no D1 row meters, no Workers CPU cl
 - JWT verification in the Function: about 43 microseconds warm per request with a cached JWKS (Node, 2000
   iterations); a cold isolate or the hourly expiry adds one certs fetch and key imports.
 
-If rows read on search or timeline rise noticeably after other users exist, an additive index on
-`albums(owner_email)` or a different search ordering for scoped requests are the next steps.
+If rows read on search or timeline rise noticeably after other users exist, a different search ordering for scoped
+requests or an `album_shares(email, album)` lookup table are the next steps (`idx_albums_owner_email` already
+exists, and `canEditFor`'s `owner_email = ?` for non-default users uses it).
 
 ### Security notes (hardening deferred from review)
 

@@ -153,6 +153,16 @@ describe('album sharing: scoped photo reads', () => {
       expect((await get('/photos/kanha', STRANGER)).status).toBe(404);
     });
 
+    it('/photos/:id hides the owner\'s path and Drive file id from viewers', async () => {
+      await run("UPDATE photos SET path = '/Users/owner/Pictures/k.jpg', drive_file_id = 'drive-k' WHERE id = 'kanha'");
+      const viewer = await json('/photos/kanha', VIEWER);
+      expect(viewer.path).toBeNull();
+      expect(viewer.driveFileId).toBeNull();
+      const owner = await json('/photos/kanha', OWNER);
+      expect(owner.path).toBe('/Users/owner/Pictures/k.jpg');
+      expect(owner.driveFileId).toBe('drive-k');
+    });
+
     it('/photos/:id/faces is 404 for hidden photos', async () => {
       expect((await get('/photos/kanha/faces', VIEWER)).status).toBe(200);
       expect((await get('/photos/ranth/faces', VIEWER)).status).toBe(404);

@@ -144,12 +144,7 @@ export class WorkerApiClient {
   }
 
   async getAlbumsPage(
-    params: {
-      limit?: number;
-      offset?: number;
-      sort?: AlbumSort;
-      name?: string;
-    } = {}
+    params: { limit?: number; offset?: number; sort?: AlbumSort; name?: string } = {}
   ): Promise<AlbumsPageResponse> {
     // A limit is always sent: the worker returns the rich shape only when asked for a page.
     const query = new URLSearchParams({ limit: String(params.limit ?? 12) });
@@ -165,10 +160,7 @@ export class WorkerApiClient {
 
   /** Replaces the album's share list; returns the normalized emails the Worker stored. */
   async setAlbumShares(album: string, emails: string[]): Promise<string[]> {
-    const response = await this.sendJson('PUT', '/albums/shares', {
-      album,
-      emails,
-    });
+    const response = await this.sendJson('PUT', '/albums/shares', { album, emails });
     return ((await response.json()) as { album: string; emails: string[] }).emails;
   }
 
@@ -210,11 +202,7 @@ export class WorkerApiClient {
     return (await this.getJson<{ people: PersonSummary[] }>('/people')).people;
   }
 
-  async getFaceGroups(cursor?: string): Promise<{
-    groups: FaceGroup[];
-    scanned: number;
-    nextCursor: string | null;
-  }> {
+  async getFaceGroups(cursor?: string): Promise<{ groups: FaceGroup[]; scanned: number; nextCursor: string | null }> {
     const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
     return this.getJson(`/people/groups${suffix}`);
   }

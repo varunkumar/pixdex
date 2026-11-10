@@ -174,9 +174,11 @@ const PhotoFaces = ({ photoId }: { photoId: string }) => {
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
   });
+  // The people list only feeds the naming controls, which only the default owner sees.
   const { data: people = [] } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
+    enabled: isDefaultOwner,
   });
 
   const refresh = () => {
@@ -193,9 +195,7 @@ const PhotoFaces = ({ photoId }: { photoId: string }) => {
       if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
     } catch {
       // The face is already named; a failed follow-up search must not read as a naming failure.
-      notifications.show({
-        message: 'Named, but could not look for more matches',
-      });
+      notifications.show({ message: 'Named, but could not look for more matches' });
     } finally {
       refresh();
     }

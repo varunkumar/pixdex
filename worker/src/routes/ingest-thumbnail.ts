@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
 import { userOf } from '../access';
-import { scopeFor } from '../db/visibility';
+import { photoAccess } from '../db/visibility';
 
 const CONTENT_HASH_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
 const MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024; // 2MB
@@ -38,11 +38,11 @@ export async function getThumbnailRoute(c: Context<{ Bindings: Env }>) {
     return c.text('Bad Request', 400);
   }
   // The default owner is served straight from R2 with no D1 query (the hot path). Everyone else needs a
-  // visible photo: content_hash is UNIQUE, so this is a point lookup that also enforces album visibility.
+  // visible photo: one UNIQUE(content_hash) search plus one albums primary-key search (photoAccess).
   const user = userOf(c);
   if (!user.isDefaultOwner) {
-    const access = scopeFor(user, 'album');
-    const visible = await c.env.DB.prepare(`SELECT 1 AS x FROM photos WHERE content_hash = ?${access.sql}`)
+    const access = photoAccess(user, 'p');
+    const visible = await c.env.DB.prepare(`SELECT 1 AS x FROM photos p${access.join} WHERE p.content_hash = ?${access.where}`)
       .bind(contentHash, ...access.params)
       .first();
     if (!visible) {

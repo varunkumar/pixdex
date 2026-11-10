@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { userOf } from '../access';
-import { scopeForRequest } from '../db/visibility';
+import { photoAccessForRequest } from '../db/visibility';
 import { FACE_SELECT, confirmFacesStmts, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -53,9 +53,9 @@ export async function unassignFaceRoute(c: Ctx) {
 
 export async function photoFacesRoute(c: Ctx) {
   const id = c.req.param('id') as string;
-  const access = await scopeForRequest(c.env.DB, userOf(c), 'album');
-  const photo = await c.env.DB.prepare(`SELECT id FROM photos WHERE id = ?${access.sql}`)
-    .bind(id, ...access.params)
+  const access = await photoAccessForRequest(c.env.DB, userOf(c), 'p');
+  const photo = await c.env.DB.prepare(`SELECT p.id FROM photos p${access?.join ?? ''} WHERE p.id = ?${access?.where ?? ''}`)
+    .bind(id, ...(access?.params ?? []))
     .first();
   if (!photo) return c.text('Not Found', 404);
   const rows = await c.env.DB.prepare(`${FACE_SELECT} WHERE f.photo_id = ? ORDER BY f.bbox_x, f.id`)
@@ -66,11 +66,11 @@ export async function photoFacesRoute(c: Ctx) {
 
 /** The sharp crop the agent uploaded for a face. Keyed by face id, so the proxy caches it for a day only. */
 export async function faceCropRoute(c: Ctx) {
-  const access = await scopeForRequest(c.env.DB, userOf(c), 'ph.album');
+  const access = await photoAccessForRequest(c.env.DB, userOf(c), 'ph');
   const row = await c.env.DB.prepare(
-    `SELECT f.crop_key FROM faces f JOIN photos ph ON ph.id = f.photo_id WHERE f.id = ?${access.sql}`
+    `SELECT f.crop_key FROM faces f JOIN photos ph ON ph.id = f.photo_id${access?.join ?? ''} WHERE f.id = ?${access?.where ?? ''}`
   )
-    .bind(c.req.param('id'), ...access.params)
+    .bind(c.req.param('id'), ...(access?.params ?? []))
     .first<{ crop_key: string | null }>();
   if (!row?.crop_key) return c.text('Not Found', 404);
   const object = await c.env.THUMBNAILS.get(row.crop_key);

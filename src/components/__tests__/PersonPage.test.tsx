@@ -109,12 +109,7 @@ describe('PersonPage', () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
       face('small', { personId: 'pe1', personName: 'Asha', status: 'confirmed', bbox: { x: 0, y: 0, w: 0.1, h: 0.1 } }),
       face('big', { personId: 'pe1', personName: 'Asha', status: 'confirmed', bbox: { x: 0.4, y: 0, w: 0.4, h: 0.4 } }),
-      face('other', {
-        personId: 'pe2',
-        personName: 'Ravi',
-        status: 'confirmed',
-        bbox: { x: 0.7, y: 0, w: 0.9, h: 0.9 },
-      }),
+      face('other', { personId: 'pe2', personName: 'Ravi', status: 'confirmed', bbox: { x: 0.7, y: 0, w: 0.9, h: 0.9 } }),
     ]);
     vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
     show();
@@ -204,7 +199,7 @@ describe('PersonPage', () => {
     await waitFor(() => expect(workerApiClient.deletePerson).toHaveBeenCalledWith('pe1'));
   });
 
-  it("pages the person's photos instead of loading more", async () => {
+  it('pages the person\'s photos instead of loading more', async () => {
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto({ id: 'p1' })], total: 30 });
     show();
     expect(await screen.findByText('Showing 1-24 of 30')).toBeInTheDocument();

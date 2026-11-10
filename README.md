@@ -236,8 +236,10 @@ only the default owner manages people. Those controls are hidden in the UI and r
 
 Setup (the Pages Function does the identity check, so Cloudflare Access must sit in front of the Pages site):
 
-1. Set `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` as Pages variables, `OWNER_EMAIL` on the Worker, and
-   `OWNER_EMAIL` in `agent/.env` (needed by `serve-originals` and `index-status`). See `.env.example`.
+1. Set `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` as Pages variables, `OWNER_EMAIL` on the Worker as a
+   secret (`cd worker && npx wrangler secret put OWNER_EMAIL`; a dashboard variable is deleted by the next deploy),
+   and `OWNER_EMAIL` in `agent/.env` (needed by `serve-originals` and `index-status`). All three must be the same
+   address. See `.env.example` and the rollout order in `docs/development.md`.
 2. Deploy the Function and Worker first, then change the Access policy from "only me" to allow any Google account.
    Visitors without a share see nothing; the owner's own view is unchanged.
 3. Share an album from its card or page by entering the person's Google sign-in email. Removing the email revokes

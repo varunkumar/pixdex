@@ -60,7 +60,7 @@ describe('/api proxy', () => {
     }
   );
 
-  it.each(['/api/ingest/photo', '/api/health', '/api/photos', '/api/photos/a/b', '/api/', '/api/ingest/faces', '/api/people/p1', '/api/faces/f1/assign'])(
+  it.each(['/api/ingest/photo', '/api/health', '/api/photos', '/api/photos/a/b', '/api/', '/api/ingest/faces', '/api/people/p1', '/api/faces/f1/assign', '/api/access/photo/p1'])(
     'rejects %s without calling the worker',
     async (path) => {
       expect((await call(path)).status).toBe(404);

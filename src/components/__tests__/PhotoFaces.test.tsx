@@ -239,5 +239,7 @@ describe('PhotoFaces', () => {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
     expect(screen.queryByRole('textbox', { name: 'Existing person' })).not.toBeInTheDocument();
+    // The name comes from the faces response; the people list (management only) is never requested.
+    expect(workerApiClient.getPeople).not.toHaveBeenCalled();
   });
 });

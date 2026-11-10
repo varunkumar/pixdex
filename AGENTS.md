@@ -20,7 +20,7 @@ never leave local disk or Google Drive.
   People and face management is default-owner only (library-wide). Worker routes: `GET /me` (viewer email and
   `isDefaultOwner`, no D1), `PUT /albums/shares` (owner only, max 50 emails), `GET /access/photo/:id` (204 or 404,
   called by the Function with READ_TOKEN to authorize non-owner originals). Every Worker read and write needs
-  `X-Viewer-Email` as well as READ_TOKEN (else 401). Config: `OWNER_EMAIL` (Worker secret or var, Pages env, `agent/.env`),
+  `X-Viewer-Email` as well as READ_TOKEN (else 401). Config: `OWNER_EMAIL` (Worker secret only, never a dashboard var; Pages env; `agent/.env`; all three the same address),
   `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (Pages env); if any Pages one is unset every `/api` call returns 500. Rollout order
   is in `docs/development.md`.
 - Write authorization (worker): people and face writes use `requireDefaultOwner`; `PATCH /photos/:id`, `PUT /albums/cover`

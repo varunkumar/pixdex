@@ -178,6 +178,7 @@ END;`,
   // Mirrors 0016_album_shares.sql. Owner-edited, so the albums.ts upsert never names them.
   'ALTER TABLE albums ADD COLUMN owner_email TEXT;',
   'ALTER TABLE albums ADD COLUMN shared_with TEXT;',
+  'CREATE INDEX IF NOT EXISTS idx_albums_owner_email ON albums (owner_email) WHERE owner_email IS NOT NULL;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

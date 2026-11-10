@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { embeddingToBytes } from '../src/people/embedding';
 import { readHeaders } from './helpers';
 
-const jsonHeaders = () => ({ ...readHeaders(), 'Content-Type': 'application/json' });
 const ingestHeaders = () => ({ Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' });
 const HASH = 'hash-match';
 const PHOTO = '123e4567-e89b-12d3-a456-426614174000';
@@ -11,7 +10,7 @@ const PHOTO = '123e4567-e89b-12d3-a456-426614174000';
 const call = (method: string, path: string, body?: unknown) =>
   SELF.fetch(`https://example.com${path}`, {
     method,
-    headers: readHeaders(),
+    headers: { ...readHeaders(), 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

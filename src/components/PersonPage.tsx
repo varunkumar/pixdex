@@ -151,9 +151,7 @@ const PersonPage = () => {
         const { matched, truncated } = await workerApiClient.matchPersonAll(id, (scanned, found) =>
           setProgress(`Looking for matches... scanned ${scanned}, matched ${found}`)
         );
-        notifications.show({
-          message: matched > 0 ? matchedMessage(matched) : 'No new matches',
-        });
+        notifications.show({ message: matched > 0 ? matchedMessage(matched) : 'No new matches' });
         if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
       } finally {
         setProgress(null);
