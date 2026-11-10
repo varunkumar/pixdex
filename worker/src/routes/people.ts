@@ -4,6 +4,8 @@ import type { Env } from '../types';
 import { embeddingFromBytes } from '../people/embedding';
 import { loadReferences } from '../people/references';
 import { FACE_PAGE_SIZE, GROUPS_PAGE_SIZE, MATCHABLE_SQL, bestScore, classify, clusterFaces } from '../people/matching';
+import { userOf } from '../access';
+import { scopeForRequest } from '../db/visibility';
 import { FACE_SELECT, confirmFacesStmts, missingFaceIds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -25,14 +27,22 @@ async function nameTaken(c: Ctx, name: string, exceptId?: string): Promise<boole
 }
 
 export async function listPeopleRoute(c: Ctx) {
+  const user = userOf(c);
+  const scope = await scopeForRequest(c.env.DB, user, 'ph.album');
+  const scoped = scope.sql !== '';
+  // Scoped: only faces in visible photos count, and non-default users only see people with at least one.
+  const visibleFace = scoped ? ` AND EXISTS (SELECT 1 FROM photos ph WHERE ph.id = f.photo_id${scope.sql})` : '';
+  const having = scoped && !user.isDefaultOwner ? ' HAVING COUNT(f.id) > 0' : '';
   const [people, covers] = await Promise.all([
     c.env.DB.prepare(
       `SELECT p.id, p.name, COUNT(f.id) AS face_count, COUNT(DISTINCT f.photo_id) AS photo_count
        FROM persons p
-       LEFT JOIN faces f ON f.person_id = p.id AND f.assign_status IN ('confirmed', 'auto')
-       GROUP BY p.id
+       LEFT JOIN faces f ON f.person_id = p.id AND f.assign_status IN ('confirmed', 'auto')${visibleFace}
+       GROUP BY p.id${having}
        ORDER BY p.name COLLATE NOCASE, p.id`
-    ).all<{ id: string; name: string; face_count: number; photo_count: number }>(),
+    )
+      .bind(...scope.params)
+      .all<{ id: string; name: string; face_count: number; photo_count: number }>(),
     // Cover: the owner's pick while that face is still assigned to the person, otherwise the
     // biggest confirmed face (a larger box means more pixels in the 400 px thumbnail), then the
     // most certain detection.
@@ -46,9 +56,11 @@ export async function listPeopleRoute(c: Ctx) {
                        f.bbox_w * f.bbox_h DESC, f.det_score DESC, f.id
             ) AS rn, f.id,`
          )}
-         WHERE f.assign_status IN ('confirmed', 'auto') AND f.person_id IS NOT NULL
+         WHERE f.assign_status IN ('confirmed', 'auto') AND f.person_id IS NOT NULL${scope.sql}
        ) WHERE rn = 1`
-        ).all<FaceWithJoins>(),
+    )
+      .bind(...scope.params)
+      .all<FaceWithJoins>(),
   ]);
   const coverByPerson = new Map(covers.results.map((r) => [r.person_id as string, serializeFace(r)]));
   return c.json({
@@ -171,6 +183,8 @@ async function loadFaces(db: D1Database, ids: string[]): Promise<Map<string, Fac
 }
 
 export async function groupsRoute(c: Ctx) {
+  // Face clustering scans every unassigned face, so it is owner-only.
+  if (!userOf(c).isDefaultOwner) return c.json({ groups: [], scanned: 0, nextCursor: null });
   const raw = c.req.query('cursor');
   const parsedCursor = raw === undefined ? { success: true as const, data: '0' } : cursorParam.safeParse(raw);
   if (!parsedCursor.success) return c.json({ error: 'Invalid cursor' }, 400);
