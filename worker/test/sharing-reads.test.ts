@@ -168,11 +168,52 @@ describe('album sharing: scoped photo reads', () => {
       expect((await get('/thumbnails/hash-ranth-0123456789', OWNER)).status).toBe(200);
     });
 
+    it('serves the default owner a thumbnail with no photo row, and gates other users on a visible photo', async () => {
+      await env.THUMBNAILS.put('orphan-hash-0123456789.jpg', new Uint8Array([7]));
+      expect((await get('/thumbnails/orphan-hash-0123456789', OWNER)).status).toBe(200);
+      expect((await get('/thumbnails/orphan-hash-0123456789', VIEWER)).status).toBe(404);
+      await run(`UPDATE albums SET shared_with = '[]' WHERE name = 'Kanha'`);
+      expect((await get('/thumbnails/hash-kanha-0123456789', VIEWER)).status).toBe(404);
+      await run(`UPDATE albums SET shared_with = '["viewer@example.com"]' WHERE name = 'Kanha'`);
+      expect((await get('/thumbnails/hash-kanha-0123456789', VIEWER)).status).toBe(200);
+    });
+
     it('/faces/:id/crop is 404 for hidden photos', async () => {
       expect((await get('/faces/face-kanha/crop', VIEWER)).status).toBe(200);
       expect((await get('/faces/face-ranth/crop', VIEWER)).status).toBe(404);
       expect((await get('/faces/face-kanha/crop', STRANGER)).status).toBe(404);
       expect((await get('/faces/face-ranth/crop', OWNER)).status).toBe(200);
+    });
+  });
+
+  describe('a non-default owner', () => {
+    const OTHER = 'other@example.com';
+
+    it('sees and may edit their own album, and sees sharedWith only for it', async () => {
+      await run(`UPDATE albums SET shared_with = '["viewer@example.com"]' WHERE name = 'Sundarbans'`);
+      const search = await json('/search', OTHER);
+      expect(search.results.map((p: any) => [p.id, p.canEdit])).toEqual([['sundar', true]]);
+      expect((await json('/photos/sundar', OTHER)).canEdit).toBe(true);
+      expect((await get('/photos/kanha', OTHER)).status).toBe(404);
+      const albums = await json('/albums?limit=12', OTHER);
+      expect(albums.total).toBe(1);
+      expect(albums.albums[0]).toMatchObject({ name: 'Sundarbans', role: 'owner', sharedWith: ['viewer@example.com'] });
+      const viewer = await json('/albums?limit=12', VIEWER);
+      const sundar = viewer.albums.find((a: any) => a.name === 'Sundarbans');
+      expect(sundar.role).toBe('viewer');
+      expect('sharedWith' in sundar).toBe(false);
+    });
+  });
+
+  describe('single-user state (no album has an owner_email)', () => {
+    it('the default owner still sees every album and the counters total', async () => {
+      await run('UPDATE albums SET owner_email = NULL');
+      expect((await json('/albums', OWNER)).albums).toEqual(['Kanha', 'Ranthambore', 'Sundarbans']);
+      const page = await json('/albums?limit=12&sort=name', OWNER);
+      expect(page.total).toBe(3);
+      expect(page.albums.map((a: any) => a.name)).toEqual(['Kanha', 'Ranthambore', 'Sundarbans']);
+      expect((await json('/search', OWNER)).total).toBe(4);
+      expect((await json('/albums?limit=12&name=Kanha', OWNER)).albums).toHaveLength(1);
     });
   });
 });

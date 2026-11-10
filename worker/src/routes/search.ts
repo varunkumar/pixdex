@@ -31,6 +31,7 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
   const user = userOf(c);
   // Computed once per request and reused by every query (including the COUNT).
   const access = await scopeForRequest(c.env.DB, user, 'photos.album');
+  const canEdit = await canEditFor(c.env.DB, user, access);
 
   async function run(match: string | null) {
     const params: unknown[] = [];
@@ -79,7 +80,6 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
             .bind(...params)
             .first<{ total: number }>(),
     ]);
-    const canEdit = await canEditFor(c.env.DB, user, access);
     return { results: rows.results.map((r) => serializePhoto(r, canEdit(r.album))), total: count?.total ?? 0 };
   }
 

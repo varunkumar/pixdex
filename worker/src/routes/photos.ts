@@ -115,11 +115,14 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // The rich, paginated shape is opt-in (limit or offset present). A bare request
   // keeps the original list of names so an older cached frontend does not break.
   const user = userOf(c);
+  // Empty scope (default owner, no album has an owner): no predicate, the original queries.
+  const open = (await scopeForRequest(c.env.DB, user, 'album')).sql === '';
+  const v = visibleAlbumsSql(user);
+  const filter = open ? { where: '', and: '', params: [] as unknown[] } : { where: ` WHERE name IN ${v.sql}`, and: ` AND name IN ${v.sql}`, params: v.params };
   const wantsPage = c.req.query('limit') !== undefined || c.req.query('offset') !== undefined;
   if (c.req.query('names') === '1' || !wantsPage) {
-    const v = visibleAlbumsSql(user);
-    const result = await c.env.DB.prepare(`SELECT name FROM albums WHERE name IN ${v.sql} ORDER BY name`)
-      .bind(...v.params)
+    const result = await c.env.DB.prepare(`SELECT name FROM albums${filter.where} ORDER BY name`)
+      .bind(...filter.params)
       .all<{ name: string }>();
     return c.json({ albums: result.results.map((r) => r.name) });
   }
@@ -130,19 +133,18 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   const orderBy = ALBUM_ORDER[c.req.query('sort') ?? ''] ?? ALBUM_ORDER.date;
   const only = c.req.query('name');
 
-  const v = visibleAlbumsSql(user);
   // The `albums` table is maintained by triggers (migration 0015): cover, newest date and average score
   // are already worked out per album, so a page reads at most one row per album and never touches photos.
   const [rows, totalRow] = await Promise.all([
     c.env.DB.prepare(
       `SELECT name, photo_count, cover_photo_id, content_hash, latest_date, owner_email, shared_with FROM albums
-       WHERE name IN ${v.sql}${only ? ' AND name = ?' : ''} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
+       ${only ? 'WHERE name = ?' : ''}${only ? filter.and : filter.where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
     )
-      .bind(...v.params, ...(only ? [only] : []), limit, offset)
+      .bind(...(only ? [only] : []), ...filter.params, limit, offset)
       .all<AlbumRow>(),
     // Counts every visible album, not just a filtered one.
-    c.env.DB.prepare(`SELECT COUNT(*) AS total FROM albums WHERE name IN ${v.sql}`)
-      .bind(...v.params)
+    c.env.DB.prepare(`SELECT COUNT(*) AS total FROM albums${filter.where}`)
+      .bind(...filter.params)
       .first<{ total: number }>(),
   ]);
 
