@@ -54,16 +54,38 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 - Date pickers use `@mantine/dates` and its `dayjs` peer dependency.
 - Tests sit next to code in `__tests__/`; helpers in `src/test/`.
 
+### Identity and album access
+
+Cloudflare Access sits in front of the Pages site and, after login, adds a signed JWT (`Cf-Access-Jwt-Assertion`).
+The Pages Function (`functions/_lib/access.ts`) verifies it (RS256 signature against the team JWKS at
+`https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`, cached per isolate for an hour; `aud` must be `ACCESS_AUD`;
+`exp`/`nbf` checked) and sends the verified, lowercased email to the Worker as `X-Viewer-Email`. It never trusts a
+plain email header and drops any client-sent `X-Viewer-Email`. No valid JWT gives 401; a missing `OWNER_EMAIL`,
+`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` gives 500 (fail closed). The Worker requires READ_TOKEN and `X-Viewer-Email`
+on every read and write.
+
+Access model (`worker/src/access.ts`, `worker/src/db/visibility.ts`): the viewer whose email equals `OWNER_EMAIL`
+is the default owner. `albums.owner_email` NULL means the default owner; `albums.shared_with` is a JSON array of
+lowercase emails or NULL (migration `0016`). A user sees an album when they own it or are in `shared_with`; the
+default owner also sees NULL-owner albums. Photo reads (search, timeline, buckets, albums, photo, faces, daily pick)
+are filtered by that scope; an invisible resource is 404, and a viewer's write is 403. `PUT /albums/shares` (owner
+only) replaces `shared_with`; `GET /me` returns `{ email, isDefaultOwner }`. People and faces management is
+default-owner only. While no album has another owner, the default owner takes a fast path with no scope predicate.
+
+Originals: the default owner is proxied straight to the agent tunnel. Any other user first triggers a Function call
+to Worker `GET /access/photo/:id` (READ_TOKEN plus their email); only a 204 is proxied, anything else is 404.
+Thumbnails: the default owner is served with no D1 query; others get one `content_hash` lookup with the scope.
+
 ### `functions/api/[[path]].ts` - Pages Function proxy
 
-Same-origin read proxy. Adds `READ_TOKEN` server-side so it never ships in the
+Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`) plus `originals/:id`, which goes
+`people/groups`, `me`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
 `no-cache`. The only writes the browser can make are `PUT albums/cover`,
-`PATCH photos/:id`, `PATCH`/`DELETE people/:id`, and `POST` to `people`,
+`PUT albums/shares`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, and `POST` to `people`,
 `people/:id/faces`, `people/:id/match`, `people/:id/cover` and `faces/:id/assign|reject|unassign`
 (bodies JSON only, DELETE has none), all forwarded with the read token through
 one shared helper with per-method allowlists.
@@ -273,8 +295,8 @@ Licence: InsightFace pretrained weights are non-commercial, personal use only.
 
 | Where | Variables |
 | --- | --- |
-| Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET` |
-| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
-| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN` |
+| Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (all three required); local dev only: `DEV_VIEWER_EMAIL` |
+| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (required by `serve-originals`, used by `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
+| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN`; `OWNER_EMAIL` (secret or var; if unset every Worker call is 401) |
 
 Never prefix server-side secrets with `VITE_`.

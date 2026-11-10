@@ -14,15 +14,27 @@ never leave local disk or Google Drive.
   album's `role === 'owner'` (the album page reads it from its `album-summary` query); people management uses
   `isDefaultOwner` from `useMe()` (`src/hooks/useMe.ts`, `GET /me`, `staleTime: Infinity`, false while loading).
   The share dialog is `src/components/ShareAlbumModal.tsx`.
+- Access model: `albums.owner_email` NULL means the default owner (`OWNER_EMAIL`); `albums.shared_with` is a JSON array
+  of lowercase emails or NULL. A user sees their own albums, albums shared with them, and (default owner only) albums with
+  no owner. Per-album authorization: owner or viewer of an album can read it; invisible is 404, a viewer's write is 403.
+  People and face management is default-owner only (library-wide). Worker routes: `GET /me` (viewer email and
+  `isDefaultOwner`, no D1), `PUT /albums/shares` (owner only, max 50 emails), `GET /access/photo/:id` (204 or 404,
+  called by the Function with READ_TOKEN to authorize non-owner originals). Every Worker read and write needs
+  `X-Viewer-Email` as well as READ_TOKEN (else 401). Config: `OWNER_EMAIL` (Worker secret or var, Pages env, `agent/.env`),
+  `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (Pages env); if any Pages one is unset every `/api` call returns 500. Rollout order
+  is in `docs/development.md`.
 - Write authorization (worker): people and face writes use `requireDefaultOwner`; `PATCH /photos/:id`, `PUT /albums/cover`
   and `PUT /albums/shares` use `albumRole` (404 no access, 403 viewer). Register every new non-ingest write with
   `ownerWrite` or `albumWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails otherwise.
   `POST /ingest/photo` returns 409 for an album owned by another user. `shared_with` is only ever written as valid JSON or NULL.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
-  include `GET timeline` and `GET timeline/buckets`; also
-  forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,
+  include `GET timeline`, `GET timeline/buckets` and `GET me`; also
+  forwards the browser writes: `PUT albums/cover`, `PUT albums/shares`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
-  `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`)
+  `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`). It first verifies the Cloudflare Access
+  JWT (`functions/_lib/access.ts`) and forwards the verified email as `X-Viewer-Email`; for `GET originals/:id` by a
+  non-default owner it calls the Worker `GET /access/photo/:id` (READ_TOKEN, not in the browser allowlist) first
+- `functions/_lib/` - shared Function code: Access JWT verification (`access.ts`, JWKS cached in module memory)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI, originals server, and the `move-album` script
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
@@ -67,7 +79,9 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - DB changes go in a new numbered file in `worker/migrations/`.
 - `albums` and `counters` are derived by triggers (`worker/migrations/albums.ts` generates
   `0015_albums.sql` via `cd worker && npm run gen:albums-migration`). Never write them from route code; change
-  the generator and add a new numbered migration.
+  the generator and add a new numbered migration. Exception: the owner-edited `albums.owner_email` and
+  `albums.shared_with` (migration `0016`) are not derived; only `PUT /albums/shares` (and, in future, multi-owner
+  ingest) writes them.
 - After every feature or change, update `README.md` and this file (and `docs/`
   if architecture, config or workflow changed) in the same commit.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.

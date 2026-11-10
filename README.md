@@ -234,6 +234,17 @@ sign-in emails allowed to view the album (each address must match the person's G
 share with see the album with a "Shared with you" badge and cannot rate, edit, set covers, share or manage people;
 only the default owner manages people. Those controls are hidden in the UI and refused by the Worker.
 
+Setup (the Pages Function does the identity check, so Cloudflare Access must sit in front of the Pages site):
+
+1. Set `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` as Pages variables, `OWNER_EMAIL` on the Worker, and
+   `OWNER_EMAIL` in `agent/.env` (needed by `serve-originals` and `index-status`). See `.env.example`.
+2. Deploy the Function and Worker first, then change the Access policy from "only me" to allow any Google account.
+   Visitors without a share see nothing; the owner's own view is unchanged.
+3. Share an album from its card or page by entering the person's Google sign-in email. Removing the email revokes
+   access, though images already cached in their browser may stay visible for a while.
+
+For local development, set `DEV_VIEWER_EMAIL` in `.env` to preview the app as a person an album is shared with.
+
 ## People
 
 The People page (`/people`) lists named people and groups of similar unnamed
@@ -309,7 +320,8 @@ a merged migration runs on production before the new code goes live. See
 - `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
   and helpers, API types
 - `functions/api` - Pages Function: same-origin proxy that adds the read token
-  (read routes plus the album cover, photo review and people/face writes)
+  (read routes plus the album cover, album shares, photo review and people/face writes); `functions/_lib`
+  verifies the Cloudflare Access JWT
 - `worker/` - Cloudflare Worker (Hono, D1, R2) and its migrations
 - `agent/` - local indexing CLI and originals server; `agent/sidecar/` is the
   InsightFace service

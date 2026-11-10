@@ -60,7 +60,24 @@ Notes:
   - You can still apply one by hand beforehand with
     `cd worker && npx wrangler d1 migrations apply DB --remote`.
 - Migrations `0009_people.sql` (faces and people) and `0010_faces_person_status_created_idx.sql` (an index) are additive and auto-apply on merge.
+- Migration `0016_album_shares.sql` (`albums.owner_email`, `albums.shared_with`) is additive and auto-applies on merge.
 - The agent is not deployed; it runs on your Mac.
+
+### Rollout order for album sharing
+
+The Worker now returns 401 without `X-Viewer-Email` and the Function returns 500 without its identity variables, by
+design (fail closed). So:
+
+1. Before merging, set Pages variables `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (the Access application's
+   audience tag), and the Worker `OWNER_EMAIL` (secret or var).
+2. Merge and let the Worker (migration `0016`, then code) and Pages Function deploy. Confirm the site still works for
+   the owner.
+3. Only then change the Cloudflare Access policy to allow any Google account. Doing it earlier lets strangers reach
+   a Function that cannot yet verify them.
+4. Set `OWNER_EMAIL` in `agent/.env` before running `serve-originals` (it exits without it) or `index-status`.
+
+Local dev: the Vite `/api` proxy sends `X-Viewer-Email` from `DEV_VIEWER_EMAIL`, falling back to `OWNER_EMAIL`; set
+`DEV_VIEWER_EMAIL` to preview as a user an album is shared with. Set `OWNER_EMAIL` in the Worker's local vars too.
 
 ## D1 read budget
 
@@ -140,3 +157,47 @@ licence note in `agent/sidecar/README.md`.
 
 Requires Ollama running locally. See `README.md` for the batch indexer details,
 EXIF backfill, and originals tunnel setup.
+
+## Album sharing performance notes
+
+CPU and D1 usage cannot be measured locally (no D1 row meters, no Workers CPU clock); the figures below are from
+`EXPLAIN QUERY PLAN` and reasoning, plus one Node timing for JWT verification. Measure in production with
+`cd worker && npx wrangler tail pixdex-worker --format json` (cpuTime per route) and
+`npx wrangler d1 insights pixdex --timePeriod 30d` (rows read per query), before and after the rollout.
+
+- Default owner while no album has another owner: one small `SELECT EXISTS` over `albums` per scoped request (at
+  most A rows, A is the number of albums, hundreds at most; no index on `owner_email`) and nothing else. The main
+  query is unchanged and the `counters` total still applies. Thumbnails cost zero D1 queries for the default owner.
+- Once another owner exists, scoped reads gain `album IS NULL OR album IN (subquery)` plus one scan of the small
+  `albums` table (A rows, `json_each` over short `shared_with` arrays). Plans (seeded DB):
+  - ids and timeline buckets stay index-only: `SEARCH photos USING COVERING INDEX idx_photos_album_cover (album=?)`
+    (buckets no longer scan `idx_photos_date_time`, but still add a temp b-tree for GROUP BY).
+  - search ordered by `date_time` loses the early exit: unscoped is `SCAN photos USING INDEX idx_photos_date_time`
+    (stops at LIMIT); scoped is `SEARCH photos USING INDEX idx_photos_album (album=?)` plus
+    `USE TEMP B-TREE FOR ORDER BY`, so it reads every visible row and sorts. This affects viewers and the default
+    owner once another owner exists. Accepted: a viewer's visible set is bounded to the albums shared with them
+    (ruling R4). FTS search is still driven by `photos_fts`, with the scope checked per candidate.
+- The `counters` total shortcut is skipped whenever the scope is non-empty (those requests `COUNT(*)`).
+- Non-default users pay one `UNIQUE(content_hash)` point lookup per thumbnail.
+- Non-owner originals add one Worker subrequest (`GET /access/photo/:id`, one primary-key lookup plus scope).
+- Viewer daily pick reads at most 200 candidate rows (`SHARED_CANDIDATES`) and sorts them in memory.
+- `GET /me` is one request per session (`staleTime: Infinity`) with no D1 read.
+- PATCH photo, album cover and share writes, and ingest with an album, each add one `albums` primary-key read
+  (`albumRole`); `PUT /albums/shares` also writes one `albums` row.
+- JWT verification in the Function: about 43 microseconds warm per request with a cached JWKS (Node, 2000
+  iterations); a cold isolate or the hourly expiry adds one certs fetch and key imports.
+
+If rows read on search or timeline rise noticeably after other users exist, an additive index on
+`albums(owner_email)` or a different search ordering for scoped requests are the next steps.
+
+### Security notes (hardening deferred from review)
+
+- JWKS refetch has no negative cache: while the certs endpoint is failing, a forged-`kid` token can trigger a fetch
+  (rate limited to one per minute for unknown kids on the rotation path, not on a cold isolate).
+- The JWT `iss` claim is not checked (signature against the team JWKS plus `aud` already bind it to this app).
+- No stale-JWKS grace: if the certs endpoint is down after the cache expires, every request is 401.
+- The originals access subrequest to the Worker has no explicit timeout.
+- A removed share can still show bytes already cached in the viewer's browser (originals `max-age=3600`, thumbnails
+  immutable). Server-side access is revoked immediately.
+- The Vite dev proxy forwards a client `X-Viewer-Email` when neither `DEV_VIEWER_EMAIL` nor `OWNER_EMAIL` is set
+  (dev only).
