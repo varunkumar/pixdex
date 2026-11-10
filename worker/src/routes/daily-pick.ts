@@ -61,7 +61,7 @@ function buildResponse(row: PhotoRow) {
   } in a ${row.environment ?? 'natural'} setting${row.season ? ` during ${row.season}` : ''}.${looks}`;
 
   return {
-    photo: serializePhoto(row),
+    photo: serializePhoto(row, true),
     reason,
     suggestedCaption: row.suggested_caption,
     suggestedHashtags: row.suggested_hashtags ? JSON.parse(row.suggested_hashtags) : [],

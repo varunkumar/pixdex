@@ -32,3 +32,16 @@ export async function scopeForRequest(db: D1Database, user: User, column: string
   }
   return scopeFor(user, column);
 }
+
+/**
+ * Returns a per-row "may this user edit the photo" check using at most one set-based query per request.
+ * Editable means the user owns the photo's album, or the photo has no album and the user is the default owner.
+ * With an empty scope (default owner, no album has an owner) everything is editable and no query runs.
+ */
+export async function canEditFor(db: D1Database, user: User, scope: Scope): Promise<(album: string | null | undefined) => boolean> {
+  if (user.isDefaultOwner && scope.sql === '') return () => true;
+  const owner = user.isDefaultOwner ? '(owner_email IS NULL OR owner_email = ?)' : 'owner_email = ?';
+  const rows = await db.prepare(`SELECT name FROM albums WHERE ${owner}`).bind(user.email).all<{ name: string }>();
+  const owned = new Set(rows.results.map((r) => r.name));
+  return (album) => (album ? owned.has(album) : user.isDefaultOwner);
+}

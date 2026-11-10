@@ -3,6 +3,8 @@ import type { Env } from '../types';
 import { expandQueryTiers } from '../search/synonyms';
 import { COMBINED_SCORE_SQL } from '../db/rating';
 import { dateFilterSql, parseDateFilter } from '../db/dateFilter';
+import { userOf } from '../access';
+import { canEditFor, scopeForRequest } from '../db/visibility';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 export async function searchRoute(c: Context<{ Bindings: Env }>) {
@@ -26,6 +28,10 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
   if (!parsedDates.ok) return c.json({ error: parsedDates.error }, 400);
   const dates = dateFilterSql(parsedDates.filter);
 
+  const user = userOf(c);
+  // Computed once per request and reused by every query (including the COUNT).
+  const access = await scopeForRequest(c.env.DB, user, 'photos.album');
+
   async function run(match: string | null) {
     const params: unknown[] = [];
     let from: string;
@@ -39,6 +45,8 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
       from += ` AND album = ?`;
       params.push(album);
     }
+    from += access.sql;
+    params.push(...access.params);
     from += dates.sql;
     params.push(...dates.params);
     if (people.length > 0) {
@@ -59,7 +67,7 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
             : match
               ? `ORDER BY bm25(photos_fts, 1.0, 4.0), last_indexed DESC`
               : `ORDER BY last_indexed DESC`;
-    const unfiltered = !match && !album && !dates.sql && people.length === 0;
+    const unfiltered = !match && !album && !dates.sql && people.length === 0 && access.sql === '';
     const [rows, count] = await Promise.all([
       c.env.DB.prepare(`SELECT photos.* ${from} ${order} LIMIT ? OFFSET ?`)
         .bind(...params, limit, offset)
@@ -71,7 +79,8 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
             .bind(...params)
             .first<{ total: number }>(),
     ]);
-    return { results: rows.results.map(serializePhoto), total: count?.total ?? 0 };
+    const canEdit = await canEditFor(c.env.DB, user, access);
+    return { results: rows.results.map((r) => serializePhoto(r, canEdit(r.album))), total: count?.total ?? 0 };
   }
 
   if (!q) return c.json(await run(null));

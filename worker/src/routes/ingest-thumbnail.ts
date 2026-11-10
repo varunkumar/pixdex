@@ -1,5 +1,7 @@
 import type { Context } from 'hono';
 import type { Env } from '../types';
+import { userOf } from '../access';
+import { scopeForRequest } from '../db/visibility';
 
 const CONTENT_HASH_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
 const MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024; // 2MB
@@ -35,6 +37,14 @@ export async function getThumbnailRoute(c: Context<{ Bindings: Env }>) {
   if (!contentHash) {
     return c.text('Bad Request', 400);
   }
+  // content_hash is UNIQUE: a point lookup that also enforces album visibility.
+  const access = await scopeForRequest(c.env.DB, userOf(c), 'album');
+  const visible = await c.env.DB.prepare(`SELECT 1 AS x FROM photos WHERE content_hash = ?${access.sql}`)
+    .bind(contentHash, ...access.params)
+    .first();
+  if (!visible) {
+    return c.text('Not Found', 404);
+  }
   const object = await c.env.THUMBNAILS.get(keyFor(contentHash));
   if (!object) {
     return c.text('Not Found', 404);
@@ -42,7 +52,7 @@ export async function getThumbnailRoute(c: Context<{ Bindings: Env }>) {
   return new Response(object.body, {
     headers: {
       'Content-Type': object.httpMetadata?.contentType ?? 'image/jpeg',
-      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Cache-Control': 'private, max-age=31536000, immutable',
     },
   });
 }

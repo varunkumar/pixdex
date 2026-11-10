@@ -143,6 +143,8 @@ export interface SerializedPhoto {
   userRating: number | null;
   /** 1-10 blend of the owner's rating and the model's score; null when neither exists. */
   combinedScore: number | null;
+  /** Whether the signed-in user may edit this photo (owns its album). */
+  canEdit: boolean;
   /** What the owner changed. A null field is not overridden; subjects/tags/shortCaption above hold the effective values. */
   overrides: { shortCaption: string | null; subjects: unknown[] | null; tags: unknown[] | null };
 }
@@ -217,7 +219,7 @@ export function searchTextForRow(row: PhotoRow): string {
  * Tolerates partial rows (e.g. a SELECT that only projects a subset of
  * columns for cost reasons) by defaulting missing array columns to [].
  */
-export function serializePhoto(row: PhotoRow): SerializedPhoto {
+export function serializePhoto(row: PhotoRow, canEdit: boolean): SerializedPhoto {
   const eff = effectiveText(row);
   return {
     id: row.id,
@@ -260,6 +262,7 @@ export function serializePhoto(row: PhotoRow): SerializedPhoto {
     shortCaption: eff.shortCaption,
     userRating: row.user_rating ?? null,
     combinedScore: combinedScore(row),
+    canEdit,
     overrides: {
       shortCaption: row.user_caption ?? null,
       subjects: parseOverrideArray(row.user_subjects),

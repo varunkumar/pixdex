@@ -113,6 +113,8 @@ describe('GET /albums', () => {
         coverPhotoId: 'k-new',
         coverThumbnailUrl: '/thumbnails/h-k-new',
         latestDate: '2026-03-01T00:00:00.000Z',
+        role: 'owner',
+        sharedWith: [],
       },
       {
         name: 'Kaziranga',
@@ -120,6 +122,8 @@ describe('GET /albums', () => {
         coverPhotoId: 'z-1',
         coverThumbnailUrl: '/thumbnails/h-z-1',
         latestDate: '2026-02-01T00:00:00.000Z',
+        role: 'owner',
+        sharedWith: [],
       },
     ]);
   });

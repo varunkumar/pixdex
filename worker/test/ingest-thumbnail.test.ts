@@ -14,13 +14,20 @@ describe('thumbnail upload + retrieval', () => {
       body: bytes,
     });
     expect(put.status).toBe(201);
+    // Reads are scoped to photos the viewer can see, so the hash needs a photo row.
+    await env.DB.prepare(
+      `INSERT INTO photos (id, content_hash, source, filename, model_provider, model_name, last_indexed)
+       VALUES ('thumb-photo', ?, 'local', 'a.jpg', 'ollama', 'm', '2026-01-01T00:00:00.000Z')`
+    )
+      .bind(VALID_HASH)
+      .run();
 
     const get = await SELF.fetch(`https://example.com/thumbnails/${VALID_HASH}`, {
       headers: readHeaders(),
     });
     expect(get.status).toBe(200);
     expect(get.headers.get('Content-Type')).toBe('image/jpeg');
-    expect(get.headers.get('Cache-Control')).toBe('public, max-age=31536000, immutable');
+    expect(get.headers.get('Cache-Control')).toBe('private, max-age=31536000, immutable');
     expect(new Uint8Array(await get.arrayBuffer())).toEqual(bytes);
   });
 
