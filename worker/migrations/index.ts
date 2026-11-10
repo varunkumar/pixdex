@@ -175,6 +175,9 @@ END;`,
   ...ALBUMS_SCHEMA_STATEMENTS,
   "INSERT OR REPLACE INTO counters (name, n) VALUES ('photos', 0);",
   ...ALBUMS_TRIGGER_STATEMENTS,
+  // Mirrors 0016_album_shares.sql. Owner-edited, so the albums.ts upsert never names them.
+  'ALTER TABLE albums ADD COLUMN owner_email TEXT;',
+  'ALTER TABLE albums ADD COLUMN shared_with TEXT;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

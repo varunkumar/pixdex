@@ -1,0 +1,77 @@
+import { env } from 'cloudflare:test';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { User } from '../src/access';
+import { scopeFor, scopeForRequest, visibleAlbumsSql } from '../src/db/visibility';
+
+const OWNER: User = { email: 'owner@example.com', isDefaultOwner: true };
+const ALICE: User = { email: 'alice@example.com', isDefaultOwner: false };
+const BOB: User = { email: 'bob@example.com', isDefaultOwner: false };
+
+const run = (sql: string, ...params: unknown[]) => env.DB.prepare(sql).bind(...params).run();
+const insert = (id: string, album: string | null) =>
+  run(
+    `INSERT INTO photos (id, content_hash, source, filename, album, model_provider, model_name, last_indexed)
+     VALUES (?, ?, 'local', 'a.jpg', ?, 'ollama', 'm', '2026-01-01T00:00:00.000Z')`,
+    id,
+    `h-${id}`,
+    album
+  );
+
+async function visibleIds(user: User): Promise<string[]> {
+  const s = scopeFor(user, 'album');
+  const r = await env.DB.prepare(`SELECT id FROM photos WHERE 1 = 1${s.sql} ORDER BY id`).bind(...s.params).all<{ id: string }>();
+  return r.results.map((x) => x.id);
+}
+
+describe('visibility SQL', () => {
+  beforeEach(async () => {
+    await run('DELETE FROM photos');
+    await insert('own', 'Mine');
+    await insert('none', null);
+    await insert('alice-own', 'AliceAlbum');
+    await insert('shared', 'Shared');
+    await insert('bobs', 'BobAlbum');
+    await run("UPDATE albums SET owner_email = 'alice@example.com' WHERE name = 'AliceAlbum'");
+    await run("UPDATE albums SET owner_email = 'bob@example.com' WHERE name = 'BobAlbum'");
+    await run(`UPDATE albums SET shared_with = '["alice@example.com"]' WHERE name = 'Shared'`);
+  });
+
+  it('default owner sees own, unalbumed and shared albums but not other owners', async () => {
+    await run(`UPDATE albums SET shared_with = '["owner@example.com"]' WHERE name = 'BobAlbum'`);
+    expect(await visibleIds(OWNER)).toEqual(['bobs', 'none', 'own', 'shared']);
+  });
+
+  it('a non-default user sees owned and shared albums only, never unalbumed photos', async () => {
+    expect(await visibleIds(ALICE)).toEqual(['alice-own', 'shared']);
+    expect(await visibleIds(BOB)).toEqual(['bobs']);
+  });
+
+  it('visibleAlbumsSql lists album names', async () => {
+    const v = visibleAlbumsSql(ALICE);
+    const r = await env.DB.prepare(`SELECT name FROM albums WHERE name IN ${v.sql} ORDER BY name`).bind(...v.params).all<{ name: string }>();
+    expect(r.results.map((x) => x.name)).toEqual(['AliceAlbum', 'Shared']);
+  });
+
+  it('a refresh preserves owner_email and shared_with', async () => {
+    await insert('shared2', 'Shared');
+    await insert('alice2', 'AliceAlbum');
+    const rows = (await env.DB.prepare('SELECT name, owner_email, shared_with, photo_count FROM albums').all<any>()).results;
+    const by = Object.fromEntries(rows.map((r) => [r.name, r]));
+    expect(by.Shared).toMatchObject({ shared_with: '["alice@example.com"]', photo_count: 2 });
+    expect(by.AliceAlbum).toMatchObject({ owner_email: 'alice@example.com', photo_count: 2 });
+  });
+
+  it('deleting the last photo removes the album row', async () => {
+    await run("DELETE FROM photos WHERE id = 'shared'");
+    expect(await env.DB.prepare("SELECT 1 FROM albums WHERE name = 'Shared'").first()).toBeNull();
+  });
+
+  it('scopeForRequest is empty for the default owner only while no album has an owner', async () => {
+    await run('UPDATE albums SET owner_email = NULL');
+    expect(await scopeForRequest(env.DB, OWNER, 'album')).toEqual({ sql: '', params: [] });
+    expect((await scopeForRequest(env.DB, ALICE, 'album')).sql).not.toBe('');
+    await run("UPDATE albums SET owner_email = 'alice@example.com' WHERE name = 'AliceAlbum'");
+    expect((await scopeForRequest(env.DB, OWNER, 'album')).sql).not.toBe('');
+    expect((await scopeForRequest(env.DB, ALICE, 'album')).sql).not.toBe('');
+  });
+});

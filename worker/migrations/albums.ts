@@ -8,6 +8,8 @@ const COLUMNS = 'name, photo_count, latest_date, newest_indexed, avg_score, cove
  * Rebuilds the `albums` rows of the albums matched by `where` (a condition on photos.album) from the
  * photos table, using the covering index idx_photos_album_cover. Cover: the pick in album_covers while
  * that photo is still in the album, else the newest dated photo, else the newest indexed.
+ * owner_email and shared_with (added by 0016) are owner-edited: they are deliberately absent from COLUMNS and
+ * from the DO UPDATE SET list below, so a refresh never touches them.
  */
 function upsertAlbums(where: string): string {
   return `INSERT INTO albums (${COLUMNS})
