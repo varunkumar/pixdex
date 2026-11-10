@@ -15,6 +15,18 @@ describe('fetchIndexedPhoto', () => {
     });
   });
 
+  it('sends X-Viewer-Email when a viewer email is given (the Worker requires an identity)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ source: 'local', path: '/photos/a.jpg' }), { status: 200 }));
+
+    await fetchIndexedPhoto('https://example.workers.dev', 'photo-1', 'the-read-token', fetchMock, 'owner@example.com');
+
+    expect(fetchMock).toHaveBeenCalledWith('https://example.workers.dev/photos/photo-1', {
+      headers: { Authorization: 'Bearer the-read-token', 'X-Viewer-Email': 'owner@example.com' },
+    });
+  });
+
   it('returns null for an unknown photo id', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
     expect(await fetchIndexedPhoto('https://example.workers.dev', 'missing', 'the-read-token', fetchMock)).toBeNull();

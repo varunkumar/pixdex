@@ -36,7 +36,13 @@ export function createOriginalsServer(
     const photoId = match[1];
 
     try {
-      const photo = await lookup(config.CLOUDFLARE_API_BASE_URL, photoId, config.READ_TOKEN ?? '');
+      const photo = await lookup(
+        config.CLOUDFLARE_API_BASE_URL,
+        photoId,
+        config.READ_TOKEN ?? '',
+        undefined,
+        config.OWNER_EMAIL
+      );
       if (!photo || photo.source !== 'local' || !photo.path) {
         res.writeHead(404).end('Not Found');
         return;

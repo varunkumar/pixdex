@@ -4,6 +4,9 @@ const configSchema = z.object({
   CLOUDFLARE_API_BASE_URL: z.string().url(),
   INGEST_TOKEN: z.string().min(1),
   READ_TOKEN: z.string().min(1).optional(),
+  // The default owner's email (the Worker's OWNER_EMAIL). serve-originals sends it
+  // as X-Viewer-Email, since every Worker read now requires a viewer identity.
+  OWNER_EMAIL: z.string().trim().min(1).optional(),
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
   OLLAMA_MODEL: z.string().min(1).default('qwen3.5:27b-mlx'),
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),

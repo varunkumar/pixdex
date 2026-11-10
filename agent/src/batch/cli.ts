@@ -87,7 +87,10 @@ export async function runIndexBatch(config: AgentConfig, args: string[]): Promis
   }
 }
 
-/** Library counts from the Worker; undefined when it cannot be reached or no READ_TOKEN is set. */
+/**
+ * Library counts from the Worker, as the default owner; undefined when it cannot be reached
+ * or READ_TOKEN or OWNER_EMAIL is unset (the Worker requires X-Viewer-Email on every read).
+ */
 export async function fetchLiveCounts(
   env: Record<string, string | undefined>,
   albumNames: string[],
@@ -95,11 +98,12 @@ export async function fetchLiveCounts(
 ): Promise<LiveCounts | undefined> {
   const base = env.CLOUDFLARE_API_BASE_URL;
   const token = env.READ_TOKEN;
-  if (!base || !token) return undefined;
+  const viewer = env.OWNER_EMAIL?.trim();
+  if (!base || !token || !viewer) return undefined;
 
   const total = async (query: string): Promise<number> => {
     const response = await fetchFn(`${base.replace(/\/$/, '')}/search?limit=1${query}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, 'X-Viewer-Email': viewer },
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new Error(`search failed: ${response.status}`);

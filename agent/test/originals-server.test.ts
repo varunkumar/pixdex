@@ -14,6 +14,7 @@ const config: AgentConfig = {
   ORIGINALS_PORT: 8787,
   ORIGINALS_TOKEN: 'originals-secret',
   READ_TOKEN: 'the-read-token',
+  OWNER_EMAIL: 'owner@example.com',
 };
 
 const AUTH = { Authorization: 'Bearer originals-secret' };
@@ -49,6 +50,21 @@ describe('originals server', () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('fake jpeg bytes');
+  });
+
+  it('looks the photo up as the default owner (read token plus OWNER_EMAIL)', async () => {
+    const lookup = vi.fn().mockResolvedValue({ source: 'local', path: filePath });
+    await start({ fetchIndexedPhoto: lookup });
+
+    await fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH });
+
+    expect(lookup).toHaveBeenCalledWith(
+      'https://example.workers.dev',
+      'photo-1',
+      'the-read-token',
+      undefined,
+      'owner@example.com'
+    );
   });
 
   it('rejects a missing or wrong token', async () => {
