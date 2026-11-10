@@ -8,6 +8,7 @@ import PersonPage from '../PersonPage';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
+    getMe: vi.fn(),
     getPeople: vi.fn(),
     searchPage: vi.fn(),
     getPhotoFaces: vi.fn(),
@@ -43,6 +44,7 @@ const show = () => renderWithProviders(<PersonPage />, { route: '/people/pe1', p
 describe('PersonPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com', isDefaultOwner: true });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: null },
@@ -107,7 +109,12 @@ describe('PersonPage', () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
       face('small', { personId: 'pe1', personName: 'Asha', status: 'confirmed', bbox: { x: 0, y: 0, w: 0.1, h: 0.1 } }),
       face('big', { personId: 'pe1', personName: 'Asha', status: 'confirmed', bbox: { x: 0.4, y: 0, w: 0.4, h: 0.4 } }),
-      face('other', { personId: 'pe2', personName: 'Ravi', status: 'confirmed', bbox: { x: 0.7, y: 0, w: 0.9, h: 0.9 } }),
+      face('other', {
+        personId: 'pe2',
+        personName: 'Ravi',
+        status: 'confirmed',
+        bbox: { x: 0.7, y: 0, w: 0.9, h: 0.9 },
+      }),
     ]);
     vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
     show();
@@ -197,7 +204,7 @@ describe('PersonPage', () => {
     await waitFor(() => expect(workerApiClient.deletePerson).toHaveBeenCalledWith('pe1'));
   });
 
-  it('pages the person\'s photos instead of loading more', async () => {
+  it("pages the person's photos instead of loading more", async () => {
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto({ id: 'p1' })], total: 30 });
     show();
     expect(await screen.findByText('Showing 1-24 of 30')).toBeInTheDocument();
@@ -208,5 +215,15 @@ describe('PersonPage', () => {
         expect.objectContaining({ people: ['pe1'], limit: 24, offset: 24 })
       )
     );
+  });
+
+  it('hides rename, delete, matching and per-photo face controls for a non-default owner', async () => {
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'viewer@example.com', isDefaultOwner: false });
+    show();
+    expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument();
+    await screen.findByText('A leopard in a tree.');
+    for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
   });
 });

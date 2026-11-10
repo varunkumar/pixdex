@@ -227,6 +227,13 @@ ratings and the daily pick. The search page has a "Sort by" control (best match
 by default) and a "People" filter (up to 5 named people; photos containing all
 selected people). The description and suggested caption are not editable.
 
+### Sharing albums
+
+An album's owner sees a Share button on the album card and album page. It opens a dialog to list the Google
+sign-in emails allowed to view the album (each address must match the person's Google sign-in email). People you
+share with see the album with a "Shared with you" badge and cannot rate, edit, set covers, share or manage people;
+only the default owner manages people. Those controls are hidden in the UI and refused by the Worker.
+
 ## People
 
 The People page (`/people`) lists named people and groups of similar unnamed

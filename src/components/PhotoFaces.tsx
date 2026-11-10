@@ -3,6 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { useMe } from '../hooks/useMe';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
@@ -17,12 +18,14 @@ const FaceRow = ({
   face,
   index,
   people,
+  canManage,
   onNamed,
   onChanged,
 }: {
   face: SerializedFace;
   index: number;
   people: PersonSummary[];
+  canManage: boolean;
   onNamed: (personId: string) => Promise<void>;
   onChanged: () => void;
 }) => {
@@ -78,7 +81,11 @@ const FaceRow = ({
           {STATUS_LABEL[face.status]}
         </Text>
 
-        {named ? (
+        {!canManage ? (
+          named ? (
+            <Text size="sm">{face.personName}</Text>
+          ) : null
+        ) : named ? (
           <Group gap="xs">
             <Button
               size="xs"
@@ -162,6 +169,7 @@ const FaceRow = ({
 /** People found in a photo, with controls to name them and correct automatic matches. */
 const PhotoFaces = ({ photoId }: { photoId: string }) => {
   const queryClient = useQueryClient();
+  const { isDefaultOwner } = useMe();
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
@@ -185,7 +193,9 @@ const PhotoFaces = ({ photoId }: { photoId: string }) => {
       if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
     } catch {
       // The face is already named; a failed follow-up search must not read as a naming failure.
-      notifications.show({ message: 'Named, but could not look for more matches' });
+      notifications.show({
+        message: 'Named, but could not look for more matches',
+      });
     } finally {
       refresh();
     }
@@ -199,7 +209,15 @@ const PhotoFaces = ({ photoId }: { photoId: string }) => {
         <Title order={5}>People</Title>
         <Stack gap="md">
           {faces.map((f, i) => (
-            <FaceRow key={f.id} face={f} index={i} people={people} onNamed={onNamed} onChanged={refresh} />
+            <FaceRow
+              key={f.id}
+              face={f}
+              index={i}
+              people={people}
+              canManage={isDefaultOwner}
+              onNamed={onNamed}
+              onChanged={refresh}
+            />
           ))}
         </Stack>
       </Stack>

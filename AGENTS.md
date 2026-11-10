@@ -10,6 +10,10 @@ never leave local disk or Google Drive.
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`);
   the `/ai-search` page (Chrome Prompt API only, client side): page in `src/components/AiSearch.tsx`, logic in
   `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`
+- Frontend gating (hidden, never disabled): photo review controls use `photo.canEdit`; album cover and Share use the
+  album's `role === 'owner'` (the album page reads it from its `album-summary` query); people management uses
+  `isDefaultOwner` from `useMe()` (`src/hooks/useMe.ts`, `GET /me`, `staleTime: Infinity`, false while loading).
+  The share dialog is `src/components/ShareAlbumModal.tsx`.
 - Write authorization (worker): people and face writes use `requireDefaultOwner`; `PATCH /photos/:id`, `PUT /albums/cover`
   and `PUT /albums/shares` use `albumRole` (404 no access, 403 viewer). Register every new non-ingest write with
   `ownerWrite` or `albumWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails otherwise.

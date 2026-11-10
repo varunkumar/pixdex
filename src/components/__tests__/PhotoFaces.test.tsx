@@ -8,6 +8,7 @@ import PhotoFaces from '../PhotoFaces';
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
     getPhotoFaces: vi.fn(),
+    getMe: vi.fn(),
     getPeople: vi.fn(),
     createPerson: vi.fn(),
     assignFace: vi.fn(),
@@ -44,6 +45,7 @@ const show = () => renderWithProviders(<PhotoFaces photoId="p1" />);
 describe('PhotoFaces', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com', isDefaultOwner: true });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
     vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
@@ -223,5 +225,19 @@ describe('PhotoFaces', () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Remove name' }));
     expect(await screen.findByText('Something went wrong, try again')).toBeInTheDocument();
+  });
+
+  it('hides assign, reject, unassign and new person controls for a non-default owner', async () => {
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'viewer@example.com', isDefaultOwner: false });
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face(),
+      face({ id: 'f2', personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
+    ]);
+    show();
+    expect((await screen.findAllByText('Asha')).length).toBeGreaterThan(0);
+    for (const name of [/^Not /, 'Remove name', 'New person', 'Set as cover']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('textbox', { name: 'Existing person' })).not.toBeInTheDocument();
   });
 });

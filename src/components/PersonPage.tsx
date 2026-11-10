@@ -3,6 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMe } from '../hooks/useMe';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
@@ -88,6 +89,7 @@ const PersonFaceFooter = ({
 const PersonPage = () => {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const { isDefaultOwner } = useMe();
   const queryClient = useQueryClient();
   const { params, page, size, offset, update } = useListParams(24, PHOTO_PAGE_SIZES);
   const requestedSort = params.get('sort');
@@ -149,7 +151,9 @@ const PersonPage = () => {
         const { matched, truncated } = await workerApiClient.matchPersonAll(id, (scanned, found) =>
           setProgress(`Looking for matches... scanned ${scanned}, matched ${found}`)
         );
-        notifications.show({ message: matched > 0 ? matchedMessage(matched) : 'No new matches' });
+        notifications.show({
+          message: matched > 0 ? matchedMessage(matched) : 'No new matches',
+        });
         if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
       } finally {
         setProgress(null);
@@ -199,21 +203,23 @@ const PersonPage = () => {
                 </Text>
               </Stack>
             </Group>
-            <Group gap="xs">
-              <Button
-                variant="light"
-                size="xs"
-                onClick={() => {
-                  setNewName(person.name);
-                  setRenaming(true);
-                }}
-              >
-                Rename
-              </Button>
-              <Button variant="light" color="red" size="xs" onClick={() => setConfirmingDelete(true)}>
-                Delete
-              </Button>
-            </Group>
+            {isDefaultOwner && (
+              <Group gap="xs">
+                <Button
+                  variant="light"
+                  size="xs"
+                  onClick={() => {
+                    setNewName(person.name);
+                    setRenaming(true);
+                  }}
+                >
+                  Rename
+                </Button>
+                <Button variant="light" color="red" size="xs" onClick={() => setConfirmingDelete(true)}>
+                  Delete
+                </Button>
+              </Group>
+            )}
           </Group>
 
           {renaming && (
@@ -250,14 +256,16 @@ const PersonPage = () => {
             </Group>
           )}
 
-          <Group gap="xs">
-            <Button size="xs" loading={review.isPending && !cursor} onClick={() => review.mutate(null)}>
-              Review suggestions
-            </Button>
-            <Button size="xs" variant="light" loading={rematch.isPending} onClick={() => rematch.mutate()}>
-              Re-run matching
-            </Button>
-          </Group>
+          {isDefaultOwner && (
+            <Group gap="xs">
+              <Button size="xs" loading={review.isPending && !cursor} onClick={() => review.mutate(null)}>
+                Review suggestions
+              </Button>
+              <Button size="xs" variant="light" loading={rematch.isPending} onClick={() => rematch.mutate()}>
+                Re-run matching
+              </Button>
+            </Group>
+          )}
           {progress && (
             <Text size="sm" c="dimmed" role="status">
               {progress}
@@ -321,9 +329,11 @@ const PersonPage = () => {
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
-          footer={(photo) => (
-            <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
-          )}
+          footer={(photo) =>
+            isDefaultOwner ? (
+              <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
+            ) : null
+          }
         />
       )}
       {photoPage && (

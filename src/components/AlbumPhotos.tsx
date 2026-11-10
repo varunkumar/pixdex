@@ -1,11 +1,12 @@
-import { Anchor, Button, Group, Select, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Group, Select, Stack, Text, Title } from '@mantine/core';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
+import ShareAlbumModal from './ShareAlbumModal';
 
 const ALBUM_PHOTO_SIZES = [12, 24, 48] as const;
 
@@ -37,6 +38,9 @@ const AlbumPhotos = () => {
     enabled: name !== '',
   });
   const coverId = summary?.coverPhotoId;
+  // The role comes from the same summary query (GET /albums?name=&limit=1); until it loads, no owner controls show.
+  const isOwner = summary?.role === 'owner';
+  const [sharing, setSharing] = useState(false);
 
   const setCover = useMutation({
     mutationFn: (photoId: string) => workerApiClient.setAlbumCover(name, photoId),
@@ -58,7 +62,20 @@ const AlbumPhotos = () => {
         ← All albums
       </Anchor>
       <Group justify="space-between" align="baseline">
-        <Title order={2}>{name}</Title>
+        <Group gap="sm" align="center">
+          <Title order={2}>{name}</Title>
+          {isOwner && (summary?.sharedWith?.length ?? 0) > 0 && <Badge variant="light">Shared</Badge>}
+          {summary?.role === 'viewer' && (
+            <Badge variant="light" color="grape">
+              Shared with you
+            </Badge>
+          )}
+          {isOwner && (
+            <Button size="xs" variant="light" onClick={() => setSharing(true)}>
+              Share
+            </Button>
+          )}
+        </Group>
         <Group gap="md" align="center">
           {data && (
             <Text c="dimmed">
@@ -84,19 +101,25 @@ const AlbumPhotos = () => {
       {data && data.results.length > 0 && (
         <PhotoGrid
           photos={data.results}
-          footer={(photo) => (
-            <Button
-              variant="light"
-              size="xs"
-              w="fit-content"
-              disabled={photo.id === coverId}
-              loading={setCover.isPending && setCover.variables === photo.id}
-              onClick={() => setCover.mutate(photo.id)}
-            >
-              {photo.id === coverId ? 'Album cover' : 'Set as cover'}
-            </Button>
-          )}
+          footer={(photo) =>
+            isOwner ? (
+              <Button
+                variant="light"
+                size="xs"
+                w="fit-content"
+                disabled={photo.id === coverId}
+                loading={setCover.isPending && setCover.variables === photo.id}
+                onClick={() => setCover.mutate(photo.id)}
+              >
+                {photo.id === coverId ? 'Album cover' : 'Set as cover'}
+              </Button>
+            ) : null
+          }
         />
+      )}
+
+      {sharing && summary && (
+        <ShareAlbumModal album={name} sharedWith={summary.sharedWith ?? []} opened onClose={() => setSharing(false)} />
       )}
 
       {data && (

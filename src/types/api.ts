@@ -1,5 +1,7 @@
 export interface SerializedPhoto {
   id: string;
+  /** True when the current user may edit this photo (owns its album, or is the default owner for album-less photos). */
+  canEdit: boolean;
   contentHash?: string;
   source?: string;
   path: string | null;
@@ -45,7 +47,11 @@ export interface SerializedPhoto {
   /** 1-10 blend of the owner's rating and the model's score. */
   combinedScore?: number | null;
   /** Owner edits. subjects/tags/shortCaption above are already the effective values. */
-  overrides?: { shortCaption: string | null; subjects: string[] | null; tags: string[] | null };
+  overrides?: {
+    shortCaption: string | null;
+    subjects: string[] | null;
+    tags: string[] | null;
+  };
 }
 
 /** Partial update: omit a field to keep it, send null to clear it (back to the AI value). */
@@ -89,12 +95,20 @@ export interface AlbumSummary {
   coverThumbnailUrl: string | null;
   /** Capture date of the cover (newest) photo; null when the photo has no date. */
   latestDate: string | null;
+  role: 'owner' | 'viewer';
+  /** Lowercase emails the album is shared with; present only when role is 'owner'. */
+  sharedWith?: string[];
 }
 
 export interface AlbumsPageResponse {
   albums: AlbumSummary[];
   /** Total number of albums, ignoring limit/offset. */
   total: number;
+}
+
+export interface MeResponse {
+  email: string;
+  isDefaultOwner: boolean;
 }
 
 export interface AlbumsResponse {

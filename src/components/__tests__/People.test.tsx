@@ -7,6 +7,7 @@ import People from '../People';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
+    getMe: vi.fn(),
     getPeople: vi.fn(),
     getFaceGroups: vi.fn(),
     createPerson: vi.fn(),
@@ -42,6 +43,7 @@ const show = () => renderWithProviders(<People />, { route: '/people', path: '/p
 describe('People', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com', isDefaultOwner: true });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
     vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
@@ -72,7 +74,7 @@ describe('People', () => {
     expect(link).toHaveAttribute('href', '/people/pe1');
     expect(screen.getByRole('link', { name: /Ravi/ })).toHaveAttribute('href', '/people/pe2');
     expect(screen.getByText(/3 faces/)).toBeInTheDocument();
-    expect(screen.getByText('Unnamed groups')).toBeInTheDocument();
+    expect(await screen.findByText('Unnamed groups')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: 'Name this group' })).toBeInTheDocument();
   });
 
@@ -86,11 +88,11 @@ describe('People', () => {
     show();
     const btn = await screen.findByRole('button', { name: 'Name this group' });
     const card = btn.closest('[data-testid="face-group"]') as HTMLElement;
-    expect(within(card).getAllByTestId('face-tile').map((t) => t.getAttribute('aria-label'))).toEqual([
-      'huge',
-      'mid',
-      'tiny',
-    ]);
+    expect(
+      within(card)
+        .getAllByTestId('face-tile')
+        .map((t) => t.getAttribute('aria-label'))
+    ).toEqual(['huge', 'mid', 'tiny']);
   });
 
   it('shows at most 8 face tiles per group', async () => {
@@ -203,5 +205,14 @@ describe('People', () => {
     vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({ groups: [], scanned: 0, nextCursor: null });
     show();
     expect(await screen.findByText(/No faces yet/)).toBeInTheDocument();
+  });
+
+  it('hides naming controls and unnamed groups for a non-default owner', async () => {
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'viewer@example.com', isDefaultOwner: false });
+    show();
+    await screen.findByRole('link', { name: /Asha/ });
+    expect(screen.queryByText('Unnamed groups')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Name this group' })).not.toBeInTheDocument();
+    expect(workerApiClient.getFaceGroups).not.toHaveBeenCalled();
   });
 });
