@@ -10,6 +10,10 @@ never leave local disk or Google Drive.
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`);
   the `/ai-search` page (Chrome Prompt API only, client side): page in `src/components/AiSearch.tsx`, logic in
   `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`
+- Write authorization (worker): people and face writes use `requireDefaultOwner`; `PATCH /photos/:id`, `PUT /albums/cover`
+  and `PUT /albums/shares` use `albumRole` (404 no access, 403 viewer). Register every new non-ingest write with
+  `ownerWrite` or `albumWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails otherwise.
+  `POST /ingest/photo` returns 409 for an album owned by another user. `shared_with` is only ever written as valid JSON or NULL.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
   include `GET timeline` and `GET timeline/buckets`; also
   forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,

@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import type { Env } from '../types';
-import { userOf } from '../access';
+import { albumRole, userOf } from '../access';
 import { canEditFor, scopeForRequest, visibleAlbumsSql } from '../db/visibility';
 import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
 
@@ -74,6 +74,9 @@ export async function patchPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
   const row = await c.env.DB.prepare('SELECT * FROM photos WHERE id = ?').bind(id).first<PhotoRow>();
   if (!row) return c.text('Not Found', 404);
+  const role = await albumRole(c.env.DB, userOf(c), row.album ?? null);
+  if (role === null) return c.text('Not Found', 404);
+  if (role !== 'owner') return c.text('Forbidden', 403);
 
   if ('userRating' in edit) row.user_rating = edit.userRating ?? null;
   if ('caption' in edit) row.user_caption = edit.caption || null;
@@ -96,6 +99,10 @@ export async function putAlbumCoverRoute(c: Context<{ Bindings: Env }>) {
   const parsed = coverBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'album and photoId are required' }, 400);
   const { album, photoId } = parsed.data;
+
+  const role = await albumRole(c.env.DB, userOf(c), album);
+  if (role === null) return c.text('Not Found', 404);
+  if (role !== 'owner') return c.text('Forbidden', 403);
 
   const photo = await c.env.DB.prepare('SELECT album FROM photos WHERE id = ?')
     .bind(photoId)

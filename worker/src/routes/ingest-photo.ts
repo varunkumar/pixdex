@@ -16,6 +16,14 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
     return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
   const p = parsed.data;
+  // An album owned by another user is not the agent's to write into (one point lookup, ingest only).
+  if (p.album) {
+    const a = await c.env.DB.prepare('SELECT owner_email FROM albums WHERE name = ?').bind(p.album).first<{ owner_email: string | null }>();
+    const owner = (c.env.OWNER_EMAIL ?? '').trim().toLowerCase();
+    if (a?.owner_email && a.owner_email.trim().toLowerCase() !== owner) {
+      return c.json({ error: 'album is owned by another user' }, 409);
+    }
+  }
   // A re-index must not undo the owner's edits, so index their versions when set.
   const edits = await c.env.DB.prepare(
     'SELECT user_caption, user_subjects, user_tags, short_caption, subjects, tags FROM photos WHERE id = ?'
