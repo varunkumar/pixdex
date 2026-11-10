@@ -1,4 +1,13 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Routing, header and caching behaviour. JWT verification itself is covered by
+// functions/_lib/access.test.ts and functions/api/proxy.test.ts; here every
+// request is the verified default owner.
+vi.mock('../../functions/_lib/access', () => ({
+  verifyAccessJwt: vi.fn(async () => ({ email: 'owner@example.com' })),
+}));
+
 import { onRequestDelete, onRequestGet, onRequestPatch, onRequestPost, onRequestPut } from '../../functions/api/[[path]]';
 
 const env = {
@@ -6,7 +15,11 @@ const env = {
   READ_TOKEN: 'secret-token',
   ORIGINALS_BASE_URL: 'https://originals.example.dev',
   ORIGINALS_TOKEN: 'originals-token',
+  OWNER_EMAIL: 'owner@example.com',
+  ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com',
+  ACCESS_AUD: 'aud',
 };
+const identityEnv = { OWNER_EMAIL: env.OWNER_EMAIL, ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN, ACCESS_AUD: env.ACCESS_AUD };
 
 function call(path: string, headers: Record<string, string> = {}, e: Record<string, string> = env) {
   return onRequestGet({
@@ -70,7 +83,7 @@ describe('/api proxy', () => {
   });
 
   it('returns 500 when not configured', async () => {
-    expect((await call('/api/albums', {}, { WORKER_URL: '', READ_TOKEN: '' })).status).toBe(500);
+    expect((await call('/api/albums', {}, { ...identityEnv, WORKER_URL: '', READ_TOKEN: '' })).status).toBe(500);
   });
 
   describe('originals', () => {
@@ -108,7 +121,7 @@ describe('/api proxy', () => {
     });
 
     it('returns 500 when the tunnel is not configured', async () => {
-      const res = await call('/api/originals/p1', {}, { WORKER_URL: env.WORKER_URL, READ_TOKEN: env.READ_TOKEN });
+      const res = await call('/api/originals/p1', {}, { ...identityEnv, WORKER_URL: env.WORKER_URL, READ_TOKEN: env.READ_TOKEN });
       expect(res.status).toBe(500);
     });
 
