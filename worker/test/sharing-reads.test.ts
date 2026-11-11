@@ -136,6 +136,7 @@ describe('album sharing: scoped photo reads', () => {
       expect(viewer.albums).toHaveLength(1);
       expect(viewer.albums[0]).toMatchObject({ name: 'Kanha', role: 'viewer' });
       expect('sharedWith' in viewer.albums[0]).toBe(false);
+      expect(viewer.albums[0].ownerEmail).toBe(OWNER);
       expect(await json('/albums?limit=12', STRANGER)).toEqual({ albums: [], total: 0 });
     });
   });

@@ -111,7 +111,7 @@ describe('AlbumPhotos', () => {
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
   });
 
-  it('shows Share and the Shared badge to the owner of a shared album', async () => {
+  it('shows Share and the sharee avatars to the owner of a shared album', async () => {
     vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
       albums: [
         {
@@ -128,6 +128,6 @@ describe('AlbumPhotos', () => {
     });
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
     expect(await screen.findByRole('button', { name: 'Share' })).toBeInTheDocument();
-    expect(screen.getByText('Shared')).toBeInTheDocument();
+    expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
   });
 });

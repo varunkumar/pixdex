@@ -7,6 +7,7 @@ import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
 import ShareAlbumModal from './ShareAlbumModal';
+import { AvatarStack, UserAvatar } from './UserAvatar';
 
 const ALBUM_PHOTO_SIZES = [12, 24, 48] as const;
 
@@ -64,10 +65,14 @@ const AlbumPhotos = () => {
       <Group justify="space-between" align="baseline">
         <Group gap="sm" align="center">
           <Title order={2}>{name}</Title>
-          {isOwner && (summary?.sharedWith?.length ?? 0) > 0 && <Badge variant="light">Shared</Badge>}
+          {isOwner && (summary?.sharedWith?.length ?? 0) > 0 && <AvatarStack emails={summary?.sharedWith ?? []} size="md" />}
           {summary?.role === 'viewer' && (
-            <Badge variant="light" color="grape">
-              Shared with you
+            <Badge
+              variant="light"
+              color="grape"
+              leftSection={summary.ownerEmail ? <UserAvatar email={summary.ownerEmail} size={18} tooltip={false} /> : undefined}
+            >
+              {summary.ownerEmail ? `Shared by ${summary.ownerEmail}` : 'Shared with you'}
             </Badge>
           )}
           {isOwner && (

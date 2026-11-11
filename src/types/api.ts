@@ -94,6 +94,8 @@ export interface AlbumSummary {
   role: 'owner' | 'viewer';
   /** Lowercase emails the album is shared with; present only when role is 'owner'. */
   sharedWith?: string[];
+  /** The owner's email; present only when role is 'viewer' (never the other sharees). */
+  ownerEmail?: string | null;
 }
 
 export interface AlbumsPageResponse {

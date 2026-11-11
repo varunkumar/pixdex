@@ -6,6 +6,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
 import type { AlbumSummary } from '../types/api';
 import ShareAlbumModal from './ShareAlbumModal';
+import { AvatarStack, UserAvatar } from './UserAvatar';
 
 const AlbumCard = ({ album }: { album: AlbumSummary }) => {
   const location = useLocation();
@@ -39,11 +40,6 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
             <Text fw={600} lineClamp={1}>
               {album.name}
             </Text>
-            {shared && (
-              <Badge size="sm" variant="light">
-                Shared
-              </Badge>
-            )}
             {album.role === 'viewer' && (
               <Badge size="sm" variant="light" color="grape">
                 Shared with you
@@ -54,6 +50,22 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
             {album.photoCount} {album.photoCount === 1 ? 'photo' : 'photos'}
             {date && ` · ${date}`}
           </Text>
+          {shared && (
+            <Group gap="xs" mt={4} wrap="nowrap">
+              <AvatarStack emails={album.sharedWith ?? []} />
+              <Text size="xs" c="dimmed">
+                Shared with {album.sharedWith!.length}
+              </Text>
+            </Group>
+          )}
+          {album.role === 'viewer' && album.ownerEmail && (
+            <Group gap="xs" mt={4} wrap="nowrap">
+              <UserAvatar email={album.ownerEmail} size="sm" />
+              <Text size="xs" c="dimmed" lineClamp={1}>
+                Shared by {album.ownerEmail}
+              </Text>
+            </Group>
+          )}
         </Stack>
       </Link>
       {isOwner && (

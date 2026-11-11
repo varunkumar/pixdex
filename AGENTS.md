@@ -14,7 +14,9 @@ never leave local disk or Google Drive.
   `photo.canEdit` (the user owns the album); album cover and Share use the album's `role === 'owner'` (the album page reads it from
   its `album-summary` query); rename, delete, matching and covers on a person use that person's `canEdit` (the user created it).
   `useMe()` (`src/hooks/useMe.ts`, `GET /me`, `staleTime: Infinity`) returns only `{ email, loading }`. The share dialog is
-  `src/components/ShareAlbumModal.tsx`.
+  `src/components/ShareAlbumModal.tsx` (a people list: owner, then sharees with remove buttons). Avatars are drawn locally from the
+  email (`UserAvatar.tsx`, helpers in `avatarUtils.ts`); never call an external avatar service. `GET /albums` gives a viewer the
+  album's `ownerEmail` (never the other sharees); the owner gets `sharedWith`.
 - Access model: there is no default owner and no special user. `albums.owner_email` is the album owner; `albums.shared_with` is a
   JSON array of lowercase emails or NULL. An album with a NULL owner belongs to nobody and is invisible to everyone until the
   one-time backfill (`cd worker && npm run backfill-owner`) stamps it; photos with no album are likewise visible to nobody.
