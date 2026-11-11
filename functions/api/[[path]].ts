@@ -156,8 +156,8 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
 // Browser writes. Each method has its own narrow allowlist. Bodies are JSON only,
 // so a cross-origin form post cannot trigger them (it would need a CORS preflight).
 const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
-  // Choosing an album's cover; sharing an album (owner-only, enforced by the Worker).
-  PUT: [/^albums\/cover$/, /^albums\/shares$/],
+  // Choosing an album's cover; sharing an album (owner-only, enforced by the Worker); a viewer's own name for a person.
+  PUT: [/^albums\/cover$/, /^albums\/shares$/, /^people\/[^/]+\/label$/],
   // Creating people, assigning faces to people, and face review.
   POST: [
     /^people$/,
@@ -168,7 +168,8 @@ const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
   ],
   // Human review of one photo (rating, title, subjects, tags); renaming a person.
   PATCH: [/^photos\/[^/]+$/, /^people\/[^/]+$/],
-  DELETE: [/^people\/[^/]+$/],
+  // Deleting a person (owner-only); clearing a viewer's own name for a person.
+  DELETE: [/^people\/[^/]+$/, /^people\/[^/]+\/label$/],
 };
 
 // Forward one allowed browser write to the Worker with the server-side token.

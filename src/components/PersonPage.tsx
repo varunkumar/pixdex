@@ -5,10 +5,11 @@ import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
-import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
+import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
 import ListPagination from './ListPagination';
+import PersonLabelEditor from './PersonLabelEditor';
 import PhotoGrid from './PhotoGrid';
 
 const PHOTO_PAGE_SIZES = [12, 24, 48] as const;
@@ -192,11 +193,14 @@ const PersonPage = () => {
             <Group gap="md" wrap="nowrap">
               {person.cover && <FaceTile face={{ ...person.cover, personName: null }} size={72} />}
               <Stack gap={0}>
-                <Title order={2}>{person.name}</Title>
+                <Title order={2} c={person.name === null ? 'dimmed' : undefined}>
+                  {person.name ?? UNNAMED_PERSON}
+                </Title>
                 <Text size="sm" c="dimmed">
                   {person.photoCount} {person.photoCount === 1 ? 'photo' : 'photos'}, {person.faceCount}{' '}
                   {person.faceCount === 1 ? 'face' : 'faces'}
                 </Text>
+                {!person.canEdit && <PersonLabelEditor personId={person.id} name={person.name} />}
               </Stack>
             </Group>
             {person?.canEdit && (
@@ -205,7 +209,7 @@ const PersonPage = () => {
                   variant="light"
                   size="xs"
                   onClick={() => {
-                    setNewName(person.name);
+                    setNewName(person.name ?? '');
                     setRenaming(true);
                   }}
                 >
@@ -242,7 +246,7 @@ const PersonPage = () => {
 
           {confirmingDelete && (
             <Group gap="xs">
-              <Text size="sm">Delete {person.name}? Their faces become unnamed again.</Text>
+              <Text size="sm">Delete {person.name ?? UNNAMED_PERSON}? Their faces become unnamed again.</Text>
               <Button size="xs" color="red" loading={remove.isPending} onClick={() => remove.mutate()}>
                 Confirm delete
               </Button>

@@ -4,16 +4,17 @@ import type { Env } from '../types';
 import { embeddingFromBytes } from '../people/embedding';
 import { loadReferences } from '../people/references';
 import { FACE_PAGE_SIZE, GROUPS_PAGE_SIZE, MATCHABLE_SQL, bestScore, classify, clusterFaces } from '../people/matching';
-import { userOf } from '../access';
+import { userOf, type User } from '../access';
 import { scopeFor } from '../db/visibility';
 import { denial, faceRoles, personRole } from '../db/people';
-import { FACE_SELECT, confirmFacesStmts, serializeFace, type FaceWithJoins } from '../db/faces';
+import { FACE_SELECT, PERSON_NAME_SQL, confirmFacesStmts, nameBinds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
 
 const nameField = z.string().check(z.trim(), z.minLength(1), z.maxLength(60));
 const createBody = z.object({ name: nameField, faceIds: z.optional(z.array(z.string().check(z.minLength(1))).check(z.maxLength(200))) });
 const renameBody = z.object({ name: nameField });
+const labelBody = z.object({ name: z.string().check(z.trim(), z.minLength(1), z.maxLength(80)) });
 const coverBody = z.object({ faceId: z.string().check(z.minLength(1)) });
 const bulkBody = z.object({ faceIds: z.array(z.string().check(z.minLength(1))).check(z.minLength(1), z.maxLength(200)) });
 
@@ -55,16 +56,16 @@ export async function listPeopleRoute(c: Ctx) {
   const scope = scopeFor(user, 'ph.album');
   const [people, covers] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT p.id, p.name, p.owner_email, COUNT(f.id) AS face_count, COUNT(DISTINCT f.photo_id) AS photo_count
+      `SELECT p.id, ${PERSON_NAME_SQL} AS resolved_name, p.owner_email, COUNT(f.id) AS face_count, COUNT(DISTINCT f.photo_id) AS photo_count
        FROM persons p
        LEFT JOIN faces f ON f.person_id = p.id AND f.assign_status IN ('confirmed', 'auto')
          AND EXISTS (SELECT 1 FROM photos ph WHERE ph.id = f.photo_id${scope.sql})
        GROUP BY p.id
        HAVING p.owner_email = ? OR COUNT(f.id) > 0
-       ORDER BY p.name COLLATE NOCASE, p.id`
+       ORDER BY resolved_name IS NULL, resolved_name COLLATE NOCASE, p.id`
     )
-      .bind(...scope.params, user.email)
-      .all<{ id: string; name: string; owner_email: string | null; face_count: number; photo_count: number }>(),
+      .bind(...nameBinds(user), ...scope.params, user.email)
+      .all<{ id: string; resolved_name: string | null; owner_email: string | null; face_count: number; photo_count: number }>(),
     // Cover: the owner's pick while that face is still assigned to the person, otherwise the
     // biggest confirmed face (a larger box means more pixels in the 400 px thumbnail), then the
     // most certain detection.
@@ -81,14 +82,14 @@ export async function listPeopleRoute(c: Ctx) {
          WHERE f.assign_status IN ('confirmed', 'auto') AND f.person_id IS NOT NULL${scope.sql}
        ) WHERE rn = 1`
     )
-      .bind(...scope.params)
+      .bind(...nameBinds(user), ...scope.params)
       .all<FaceWithJoins>(),
   ]);
   const coverByPerson = new Map(covers.results.map((r) => [r.person_id as string, serializeFace(r)]));
   return c.json({
     people: people.results.map((p) => ({
       id: p.id,
-      name: p.name,
+      name: p.resolved_name,
       faceCount: p.face_count,
       photoCount: p.photo_count,
       canEdit: p.owner_email !== null && p.owner_email === user.email,
@@ -157,6 +158,58 @@ export async function renamePersonRoute(c: Ctx) {
   return c.json({ id, name });
 }
 
+/**
+ * Gate for the viewer label routes: 404 when the caller cannot see the person, 400 for the owner (who renames
+ * with PATCH /people/:id), else null. D1: personRole (1 persons PK read plus one bounded probe).
+ */
+async function requireLabelViewer(c: Ctx, id: string): Promise<Response | null> {
+  const role = await personRole(c.env.DB, userOf(c), id);
+  if (role === null) return c.text('Not Found', 404);
+  if (role === 'owner') return c.json({ error: 'Owners rename their own people with PATCH /people/:id' }, 400);
+  return null;
+}
+
+/**
+ * Sets (upserts) the caller's private name for a person they can see but do not own. Labels are unique per
+ * viewer, case-insensitively, among labels only: a label may equal the name of a person the viewer owns.
+ * D1: personRole reads, 1 clash probe on idx_person_labels_viewer_name_lower, 1 upsert write (1 row).
+ */
+export async function putPersonLabelRoute(c: Ctx) {
+  const parsed = labelBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
+  const id = c.req.param('id') as string;
+  const denied = await requireLabelViewer(c, id);
+  if (denied) return denied;
+  const viewer = userOf(c).email;
+  const { name } = parsed.data;
+  const clash = { error: 'You already gave this name to another person' };
+  const taken = await c.env.DB.prepare('SELECT 1 AS x FROM person_labels WHERE viewer_email = ? AND lower(name) = lower(?) AND person_id != ?')
+    .bind(viewer, name, id)
+    .first();
+  if (taken) return c.json(clash, 409);
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO person_labels (viewer_email, person_id, name, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (viewer_email, person_id) DO UPDATE SET name = excluded.name`
+    )
+      .bind(viewer, id, name, new Date().toISOString())
+      .run();
+  } catch (err) {
+    if (isUniqueViolation(err)) return c.json(clash, 409);
+    throw err;
+  }
+  return c.json({ id, name });
+}
+
+/** Clears the caller's private name for a person. Idempotent. D1: personRole reads, 1 PK delete. */
+export async function deletePersonLabelRoute(c: Ctx) {
+  const id = c.req.param('id') as string;
+  const denied = await requireLabelViewer(c, id);
+  if (denied) return denied;
+  await c.env.DB.prepare('DELETE FROM person_labels WHERE viewer_email = ? AND person_id = ?').bind(userOf(c).email, id).run();
+  return c.body(null, 204);
+}
+
 export async function deletePersonRoute(c: Ctx) {
   const id = c.req.param('id') as string;
   const denied = await requirePersonOwner(c, id);
@@ -195,12 +248,12 @@ interface CandidateRow {
 }
 
 /** Serialized faces for the given ids (no embeddings), keyed by face id. */
-async function loadFaces(db: D1Database, ids: string[]): Promise<Map<string, FaceWithJoins>> {
+async function loadFaces(db: D1Database, user: User, ids: string[]): Promise<Map<string, FaceWithJoins>> {
   const out = new Map<string, FaceWithJoins>();
   if (ids.length === 0) return out;
   const { results } = await db
     .prepare(`${FACE_SELECT} WHERE f.id IN (SELECT value FROM json_each(?))`)
-    .bind(JSON.stringify(ids))
+    .bind(...nameBinds(user), JSON.stringify(ids))
     .all<FaceWithJoins>();
   for (const r of results) out.set(r.id, r);
   return out;
@@ -228,7 +281,7 @@ export async function groupsRoute(c: Ctx) {
     .all<CandidateRow>();
 
   const clusters = clusterFaces(results.map((r) => ({ id: r.id, embedding: embeddingFromBytes(r.embedding) })));
-  const faces = await loadFaces(c.env.DB, results.map((r) => r.id));
+  const faces = await loadFaces(c.env.DB, user, results.map((r) => r.id));
   return c.json({
     groups: clusters.map((ids) => ({ faces: ids.map((id) => serializeFace(faces.get(id)!)) })),
     scanned: results.length,
@@ -287,7 +340,7 @@ export async function matchPersonRoute(c: Ctx) {
     }
   }
 
-  const faces = await loadFaces(c.env.DB, [...auto, ...suggestions].map((m) => m.id));
+  const faces = await loadFaces(c.env.DB, userOf(c), [...auto, ...suggestions].map((m) => m.id));
   const present = (list: { id: string; score: number }[]) =>
     [...list]
       .sort((a, b) => b.score - a.score)

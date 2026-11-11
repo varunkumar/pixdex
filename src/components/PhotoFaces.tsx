@@ -3,9 +3,10 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
+import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
+import PersonLabelEditor from './PersonLabelEditor';
 
 const STATUS_LABEL: Record<SerializedFace['status'], string> = {
   auto: 'Auto-matched',
@@ -82,7 +83,13 @@ const FaceRow = ({
 
         {!canManage ? (
           named ? (
-            <Text size="sm">{face.personName}</Text>
+            <>
+              <Text size="sm" c={face.personName === null ? 'dimmed' : undefined}>
+                {face.personName ?? UNNAMED_PERSON}
+              </Text>
+              {/* A person on a photo the caller does not own is never the caller's: they may only label it. */}
+              <PersonLabelEditor personId={face.personId as string} name={face.personName} />
+            </>
           ) : null
         ) : named ? (
           <Group gap="xs">
@@ -144,7 +151,7 @@ const FaceRow = ({
               placeholder="Choose a person"
               size="xs"
               searchable
-              data={people.map((p) => ({ value: p.id, label: p.name }))}
+              data={people.map((p) => ({ value: p.id, label: p.name ?? UNNAMED_PERSON }))}
               value={null}
               disabled={busy}
               onChange={(value) => value && assign.mutate(value)}

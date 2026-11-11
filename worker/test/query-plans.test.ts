@@ -73,3 +73,21 @@ describe('query plans (no unbounded scans on the new owner paths)', () => {
     expect(refs).toMatch(/SEARCH p USING INDEX idx_persons_owner_name_lower \(owner_email=\?\)/);
   });
 });
+
+describe('person label resolution', () => {
+  it('the label lookup is a primary key search on person_labels', async () => {
+    const p = await plan(
+      `SELECT CASE WHEN p.owner_email = ? THEN p.name ELSE (SELECT pl.name FROM person_labels pl WHERE pl.viewer_email = ? AND pl.person_id = p.id) END FROM persons p`,
+      U.email,
+      U.email
+    );
+    expect(p).toMatch(/SEARCH pl USING (COVERING )?INDEX sqlite_autoindex_person_labels_1 \(viewer_email=\? AND person_id=\?\)/);
+  });
+  it('deleting labels by person uses idx_person_labels_person', async () => {
+    expect(await plan('DELETE FROM person_labels WHERE person_id = ?', 'x')).toMatch(/idx_person_labels_person/);
+  });
+  it('the clash check uses the per-viewer name index', async () => {
+    const p = await plan('SELECT 1 AS x FROM person_labels WHERE viewer_email = ? AND lower(name) = lower(?) AND person_id != ?', U.email, 'x', '');
+    expect(p).toMatch(/idx_person_labels_viewer_name_lower/);
+  });
+});

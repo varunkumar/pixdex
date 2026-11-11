@@ -33,6 +33,14 @@ never leave local disk or Google Drive.
   `GET /people` lists the caller's people plus other owners' people with a confirmed or auto face in a photo the caller can see
   (`canEdit` marks the caller's own); `GET /people/groups` returns unassigned faces in albums the caller owns. Auto-match at ingest and
   `POST /people/:id/match` only compare people and faces of the same owner (`loadReferences({ owner })`, cached per owner).
+- Person names are private to their owner: for a person the caller does not own, every response (`GET /people`, `personName` on
+  `GET /photos/:id/faces` and on covers, including the list sort) carries the caller's own label or `null`, never `persons.name`.
+  Resolve names only through `PERSON_NAME_SQL` in `worker/src/db/faces.ts` (a scalar subquery on the `person_labels` primary key,
+  run only for rows the caller does not own); never select `p.name` raw. A viewer sets their label with `PUT`/`DELETE
+  /people/:id/label` (migration `0017_person_labels.sql`: table `person_labels (viewer_email, person_id, name, created_at)`,
+  unique per viewer on `lower(name)` among labels only, `idx_person_labels_person` for the delete trigger, lowercase-email triggers, `persons_labels_ad` trigger deletes labels when a
+  person is deleted). 404 if the person is not visible, 400 for the owner (they use `PATCH /people/:id`), 409 on a clash.
+  A label never changes matching or grants any other access. Search and timeline filter by person id, never by name.
 - Write authorization (worker): every non-ingest write authorizes itself in its handler (`albumRole`, `faceRoles`, `personRole`)
   and is registered with `guardedWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails
   otherwise. `POST /ingest/photo` requires `ownerEmail` (trimmed, lowercased email): it returns 409 for an album owned by another
@@ -41,7 +49,7 @@ never leave local disk or Google Drive.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
   include `GET timeline`, `GET timeline/buckets` and `GET me`; also
   forwards the browser writes: `PUT albums/cover`, `PUT albums/shares`, `PATCH photos/:id`,
-  `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
+  `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`, `people/:id/faces`,
   `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`). It first verifies the Cloudflare Access
   JWT (`functions/_lib/access.ts`) and forwards the verified email as `X-Viewer-Email`; for `GET originals/:id` it first calls the
   Worker `GET /access/photo/:id` (READ_TOKEN, not in the browser allowlist) for every user

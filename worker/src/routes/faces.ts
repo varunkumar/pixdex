@@ -4,14 +4,14 @@ import type { Env } from '../types';
 import { userOf } from '../access';
 import { photoAccess } from '../db/visibility';
 import { denial, faceRoles, personRole } from '../db/people';
-import { FACE_SELECT, confirmFacesStmts, serializeFace, type FaceWithJoins } from '../db/faces';
+import { FACE_SELECT, confirmFacesStmts, nameBinds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
 
 const personBody = z.object({ personId: z.string().check(z.minLength(1)) });
 
 const loadFace = (c: Ctx, id: string) =>
-  c.env.DB.prepare(`${FACE_SELECT} WHERE f.id = ?`).bind(id).first<FaceWithJoins>();
+  c.env.DB.prepare(`${FACE_SELECT} WHERE f.id = ?`).bind(...nameBinds(userOf(c)), id).first<FaceWithJoins>();
 
 /**
  * Owner-only face edit gate: the caller must own the face's photo's album and, when a person is named,
@@ -76,7 +76,7 @@ export async function photoFacesRoute(c: Ctx) {
     .first();
   if (!photo) return c.text('Not Found', 404);
   const rows = await c.env.DB.prepare(`${FACE_SELECT} WHERE f.photo_id = ? ORDER BY f.bbox_x, f.id`)
-    .bind(id)
+    .bind(...nameBinds(userOf(c)), id)
     .all<FaceWithJoins>();
   return c.json({ faces: rows.results.map(serializeFace) });
 }

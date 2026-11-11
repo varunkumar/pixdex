@@ -235,7 +235,9 @@ album card and album page. It opens a dialog to list the Google sign-in emails a
 must match the person's Google sign-in email). People you share with see the album with a "Shared with you" badge and cannot
 rate, edit, set covers, share or name faces in it. People are per owner: you manage the people you created, and others'
 people appear read-only where their faces are in photos you can see. Those controls are hidden in the UI and refused by the
-Worker. Photos indexed with no album (files at the root of a drive) are visible to nobody, so keep every photo in a folder.
+Worker. A person's name belongs to its owner and is never sent to anyone else: you see "Unnamed person" until you give them your
+own private name ("Add my name" on the People page, the person's page or a photo's People card; clearing the text removes it).
+Only you see your name, and it changes nothing for the owner. Photos indexed with no album (files at the root of a drive) are visible to nobody, so keep every photo in a folder.
 
 Setup (the Pages Function does the identity check, so Cloudflare Access must sit in front of the Pages site):
 
@@ -268,7 +270,7 @@ best rated or alphabetical.
   "Set as cover"; if that face is later removed, the cover falls back to the default.
 - Grouping and matching ignore faces under a detection score of 0.7 or a side
   under 5% of the photo.
-- The browser writes involved are `PATCH`/`DELETE people/:id` and `POST` to
+- The browser writes involved are `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label` (a viewer's own private name) and `POST` to
   `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover` and
   `faces/:id/assign|reject|unassign`, all through the Pages proxy.
 

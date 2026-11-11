@@ -13,10 +13,12 @@ import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unass
 import {
   assignFacesRoute,
   createPersonRoute,
+  deletePersonLabelRoute,
   deletePersonRoute,
   groupsRoute,
   listPeopleRoute,
   matchPersonRoute,
+  putPersonLabelRoute,
   setPersonCoverRoute,
   renamePersonRoute,
 } from './routes/people';
@@ -81,6 +83,8 @@ guardedWrite('DELETE', '/people/:id', deletePersonRoute);
 guardedWrite('POST', '/people/:id/faces', assignFacesRoute);
 guardedWrite('POST', '/people/:id/match', matchPersonRoute);
 guardedWrite('POST', '/people/:id/cover', setPersonCoverRoute);
+guardedWrite('PUT', '/people/:id/label', putPersonLabelRoute);
+guardedWrite('DELETE', '/people/:id/label', deletePersonLabelRoute);
 
 app.use('/faces/*', requireReadToken);
 app.get('/faces/:id/crop', faceCropRoute);

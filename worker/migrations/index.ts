@@ -194,6 +194,24 @@ BEGIN SELECT RAISE(ABORT, 'emails on persons must be lowercase'); END;`,
   `CREATE TRIGGER IF NOT EXISTS persons_owner_lower_bu BEFORE UPDATE OF owner_email ON persons
 WHEN new.owner_email IS NOT NULL AND new.owner_email <> lower(new.owner_email)
 BEGIN SELECT RAISE(ABORT, 'emails on persons must be lowercase'); END;`,
+  // Mirrors 0017_person_labels.sql.
+  `CREATE TABLE IF NOT EXISTS person_labels (
+  viewer_email TEXT NOT NULL,
+  person_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (viewer_email, person_id)
+);`,
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_person_labels_viewer_name_lower ON person_labels (viewer_email, lower(name));',
+  'CREATE INDEX IF NOT EXISTS idx_person_labels_person ON person_labels(person_id);',
+  `CREATE TRIGGER IF NOT EXISTS person_labels_email_lower_bi BEFORE INSERT ON person_labels
+WHEN new.viewer_email <> lower(new.viewer_email)
+BEGIN SELECT RAISE(ABORT, 'emails on person_labels must be lowercase'); END;`,
+  `CREATE TRIGGER IF NOT EXISTS person_labels_email_lower_bu BEFORE UPDATE OF viewer_email ON person_labels
+WHEN new.viewer_email <> lower(new.viewer_email)
+BEGIN SELECT RAISE(ABORT, 'emails on person_labels must be lowercase'); END;`,
+  `CREATE TRIGGER IF NOT EXISTS persons_labels_ad AFTER DELETE ON persons
+BEGIN DELETE FROM person_labels WHERE person_id = old.id; END;`,
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];
