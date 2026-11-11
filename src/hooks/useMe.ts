@@ -2,12 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 
 /**
- * The signed-in user. `isDefaultOwner` stays false until /me answers (and if it fails), so
- * people-management controls never flash for a viewer.
+ * The signed-in user. `email` stays null until /me answers (and if it fails). There is no special
+ * user: what someone may edit is decided per album (photo.canEdit) and per person (person.canEdit).
  */
 export function useMe(): {
   email: string | null;
-  isDefaultOwner: boolean;
   loading: boolean;
 } {
   const { data, isPending } = useQuery({
@@ -17,7 +16,6 @@ export function useMe(): {
   });
   return {
     email: data?.email ?? null,
-    isDefaultOwner: data?.isDefaultOwner === true,
     loading: isPending,
   };
 }

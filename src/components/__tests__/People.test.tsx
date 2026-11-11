@@ -33,8 +33,8 @@ function face(id: string, overrides: Partial<SerializedFace> = {}): SerializedFa
 }
 
 const people = [
-  { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 2, cover: face('c1') },
-  { id: 'pe2', name: 'Ravi', faceCount: 1, photoCount: 1, cover: null },
+  { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 2, canEdit: true, cover: face('c1') },
+  { id: 'pe2', name: 'Ravi', faceCount: 1, photoCount: 1, canEdit: true, cover: null },
 ];
 const group = (...ids: string[]): FaceGroup => ({ faces: ids.map((i) => face(i)) });
 
@@ -43,7 +43,7 @@ const show = () => renderWithProviders(<People />, { route: '/people', path: '/p
 describe('People', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com', isDefaultOwner: true });
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com' });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
     vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
@@ -56,8 +56,8 @@ describe('People', () => {
 
   it('sorts people alphabetically by default and by face count on request', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
-      { id: 'a', name: 'Amy', faceCount: 1, photoCount: 1, cover: null },
-      { id: 'b', name: 'Bo', faceCount: 5, photoCount: 2, cover: null },
+      { id: 'a', name: 'Amy', faceCount: 1, photoCount: 1, canEdit: true, cover: null },
+      { id: 'b', name: 'Bo', faceCount: 5, photoCount: 2, canEdit: true, cover: null },
     ]);
     show();
     const names = () => screen.getAllByRole('link', { name: /faces?$/ }).map((l) => l.getAttribute('href'));
@@ -180,6 +180,7 @@ describe('People', () => {
       name: `Person ${String(i).padStart(2, '0')}`,
       faceCount: 14 - i,
       photoCount: 1,
+      canEdit: true,
       cover: face(`c${i}`),
     }));
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(lots);
@@ -207,12 +208,12 @@ describe('People', () => {
     expect(await screen.findByText(/No faces yet/)).toBeInTheDocument();
   });
 
-  it('hides naming controls and unnamed groups for a non-default owner', async () => {
-    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'viewer@example.com', isDefaultOwner: false });
+  it('hides naming controls for a viewer, whose unnamed groups the Worker returns empty', async () => {
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'viewer@example.com' });
+    vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({ groups: [], scanned: 0, nextCursor: null });
     show();
     await screen.findByRole('link', { name: /Asha/ });
     expect(screen.queryByText('Unnamed groups')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Name this group' })).not.toBeInTheDocument();
-    expect(workerApiClient.getFaceGroups).not.toHaveBeenCalled();
   });
 });

@@ -16,18 +16,18 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 describe('useMe', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('is not the default owner while loading', async () => {
-    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'o@example.com', isDefaultOwner: true });
+  it('has no email while loading, then the resolved one', async () => {
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'o@example.com' });
     const { result } = renderHook(() => useMe(), { wrapper });
-    expect(result.current).toEqual({ email: null, isDefaultOwner: false, loading: true });
-    await waitFor(() => expect(result.current.isDefaultOwner).toBe(true));
-    expect(result.current).toEqual({ email: 'o@example.com', isDefaultOwner: true, loading: false });
+    expect(result.current).toEqual({ email: null, loading: true });
+    await waitFor(() => expect(result.current.email).toBe('o@example.com'));
+    expect(result.current).toEqual({ email: 'o@example.com', loading: false });
   });
 
-  it('stays not-owner when the request fails', async () => {
+  it('has no email when the request fails', async () => {
     vi.mocked(workerApiClient.getMe).mockRejectedValue(new Error('boom'));
     const { result } = renderHook(() => useMe(), { wrapper });
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.isDefaultOwner).toBe(false);
+    expect(result.current.email).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 export interface SerializedPhoto {
   id: string;
-  /** True when the current user may edit this photo (owns its album, or is the default owner for album-less photos). */
+  /** True when the current user may edit this photo (owns its album). */
   canEdit: boolean;
   contentHash?: string;
   source?: string;
@@ -104,7 +104,6 @@ export interface AlbumsPageResponse {
 
 export interface MeResponse {
   email: string;
-  isDefaultOwner: boolean;
 }
 
 export interface AlbumsResponse {
@@ -137,6 +136,8 @@ export interface PersonSummary {
   name: string;
   faceCount: number;
   photoCount: number;
+  /** The caller owns this person (may rename, delete, name faces); false for another owner's person. */
+  canEdit: boolean;
   cover: SerializedFace | null;
 }
 

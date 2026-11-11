@@ -3,7 +3,6 @@ import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useMe } from '../hooks/useMe';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
@@ -89,7 +88,6 @@ const PersonFaceFooter = ({
 const PersonPage = () => {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const { isDefaultOwner } = useMe();
   const queryClient = useQueryClient();
   const { params, page, size, offset, update } = useListParams(24, PHOTO_PAGE_SIZES);
   const requestedSort = params.get('sort');
@@ -201,7 +199,7 @@ const PersonPage = () => {
                 </Text>
               </Stack>
             </Group>
-            {isDefaultOwner && (
+            {person?.canEdit && (
               <Group gap="xs">
                 <Button
                   variant="light"
@@ -254,7 +252,7 @@ const PersonPage = () => {
             </Group>
           )}
 
-          {isDefaultOwner && (
+          {person?.canEdit && (
             <Group gap="xs">
               <Button size="xs" loading={review.isPending && !cursor} onClick={() => review.mutate(null)}>
                 Review suggestions
@@ -328,7 +326,7 @@ const PersonPage = () => {
         <PhotoGrid
           photos={photos}
           footer={(photo) =>
-            isDefaultOwner ? (
+            person?.canEdit ? (
               <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
             ) : null
           }

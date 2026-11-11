@@ -67,7 +67,7 @@ describe('Timeline', () => {
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver);
     vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
-      { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, cover: null },
+      { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, canEdit: true, cover: null },
     ]);
     vi.mocked(workerApiClient.getTimeline).mockResolvedValue(monthPage);
     vi.mocked(workerApiClient.getTimelineBuckets).mockResolvedValue({

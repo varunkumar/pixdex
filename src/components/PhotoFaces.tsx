@@ -3,7 +3,6 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { useMe } from '../hooks/useMe';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
@@ -167,18 +166,17 @@ const FaceRow = ({
 };
 
 /** People found in a photo, with controls to name them and correct automatic matches. */
-const PhotoFaces = ({ photoId }: { photoId: string }) => {
+const PhotoFaces = ({ photoId, canEdit }: { photoId: string; canEdit: boolean }) => {
   const queryClient = useQueryClient();
-  const { isDefaultOwner } = useMe();
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
   });
-  // The people list only feeds the naming controls, which only the default owner sees.
+  // The people list only feeds the naming controls, which only the album owner sees.
   const { data: people = [] } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
-    enabled: isDefaultOwner,
+    enabled: canEdit,
   });
 
   const refresh = () => {
@@ -213,8 +211,8 @@ const PhotoFaces = ({ photoId }: { photoId: string }) => {
               key={f.id}
               face={f}
               index={i}
-              people={people}
-              canManage={isDefaultOwner}
+              people={people.filter((p) => p.canEdit)}
+              canManage={canEdit}
               onNamed={onNamed}
               onChanged={refresh}
             />

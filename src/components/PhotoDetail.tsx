@@ -252,7 +252,7 @@ const PhotoDetail = () => {
         </Stack>
       </Card>
 
-      <PhotoFaces photoId={photo.id} />
+      <PhotoFaces photoId={photo.id} canEdit={photo.canEdit} />
 
       {(photo.suggestedCaption || photo.suggestedHashtags.length > 0) && (
         <Card withBorder>

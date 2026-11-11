@@ -3,7 +3,6 @@ import { notifications } from '@mantine/notifications';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMe } from '../hooks/useMe';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE } from '../services/peopleKeys';
@@ -149,7 +148,6 @@ const People = () => {
   const sort = SORT_OPTIONS.find((o) => o.value === params.get('sort'))?.value ?? 'name';
   const [groupPage, setGroupPage] = useState(1);
   const [groupSize, setGroupSize] = useState<number>(GROUP_PAGE_SIZES[0]);
-  const { isDefaultOwner } = useMe();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const { data: people = [], isSuccess: peopleLoaded } = useQuery({
     queryKey: ['people'],
@@ -160,14 +158,13 @@ const People = () => {
     queryFn: ({ pageParam }) => workerApiClient.getFaceGroups(pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    // Unnamed groups exist only to be named, which only the default owner can do.
-    enabled: isDefaultOwner,
   });
 
-  const groups = (!isDefaultOwner ? [] : (groupsQuery.data?.pages.flatMap((p) => p.groups) ?? [])).filter(
+  // The Worker returns unassigned faces of albums the caller owns only (nothing for a pure viewer).
+  const groups = (groupsQuery.data?.pages.flatMap((p) => p.groups) ?? []).filter(
     (g) => g.faces.length > 0 && !hidden.has(g.faces[0].id)
   );
-  const loaded = peopleLoaded && (!isDefaultOwner || groupsQuery.isSuccess);
+  const loaded = peopleLoaded && groupsQuery.isSuccess;
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = groupsQuery;
 
   // Groups come from the Worker a cursor page at a time: load more until the current page is full.
@@ -249,7 +246,7 @@ const People = () => {
               <GroupCard
                 key={g.faces[0].id}
                 group={g}
-                people={people}
+                people={people.filter((p) => p.canEdit)}
                 onDone={(key) => setHidden((prev) => new Set(prev).add(key))}
               />
             ))}
