@@ -116,7 +116,15 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
 
   // The albums row exists now (trigger). First photo(s) of an album stamp its owner: one single-row write.
   if (needsStamp && p.album) {
-    await c.env.DB.prepare('UPDATE albums SET owner_email = ? WHERE name = ? AND owner_email IS NULL').bind(p.ownerEmail, p.album).run();
+    const stamped = await c.env.DB.prepare('UPDATE albums SET owner_email = ? WHERE name = ? AND owner_email IS NULL').bind(p.ownerEmail, p.album).run();
+    if (!stamped.meta.changes) {
+      // Lost a race: another owner stamped the album between the check and now. Undo a photo this call created.
+      const a = await c.env.DB.prepare('SELECT owner_email FROM albums WHERE name = ?').bind(p.album).first<{ owner_email: string | null }>();
+      if (a?.owner_email && a.owner_email !== p.ownerEmail) {
+        if (!edits) await c.env.DB.prepare('DELETE FROM photos WHERE id = ?').bind(p.id).run();
+        return c.json({ error: 'album is owned by another user' }, 409);
+      }
+    }
   }
 
   return c.json({ id: p.id }, 201);

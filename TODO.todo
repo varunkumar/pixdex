@@ -1,4 +1,8 @@
 Album sharing:
+  - groups and match candidate scans (idx_faces_assign_status rowid window with 2 PK lookups per row) are not bounded by rows read when other owners have many unassigned faces; fix idea: cap the rowid window and return nextCursor when it is hit, or denormalize the album owner onto faces
+  - The albums trigger deletes the album row when its last photo leaves, losing owner_email and shared_with (re-ingest then re-stamps the owner but the shares are gone); keep the row or move ownership and shares to a table the trigger does not touch
+  - visibleAlbumsSql is a SCAN albums (the OR with json_each blocks the index); fix idea: UNION of the idx_albums_owner_email branch and a partial index on shared_with IS NOT NULL
+  - Ingest race: when two owners ingest into a new album at once, the loser's photo is deleted only if that call created it; a re-index of an existing photo that loses the race stays written (needs more than one ingest identity, so unreachable today)
   - Support other users adding their own photos: the ingest token is still one shared secret and the agent sends one ownerEmail; add per-user ingest tokens that bind an owner
   - Photos with no album (root-level files) are invisible to everyone; surface or reject them in the agent (it indexes them without an album today)
   - Allow the same album name under different owners (photos.owner_email and an (owner_email, name) album key)

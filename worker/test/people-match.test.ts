@@ -111,6 +111,10 @@ describe('people groups and matching', () => {
     expect(groups).toEqual({ groups: [], scanned: 0, nextCursor: null });
     const match = (await (await call('POST', `/people/${pid}/match`, {})).json()) as any;
     expect(match.scanned).toBe(0);
+    const applied = (await (await call('POST', `/people/${pid}/match`, { apply: true })).json()) as any;
+    expect(applied).toMatchObject({ auto: [], suggestions: [], scanned: 0 });
+    const assigned = await env.DB.prepare("SELECT COUNT(*) AS n FROM faces WHERE assign_status != 'confirmed' AND person_id IS NOT NULL").first<{ n: number }>();
+    expect(assigned?.n).toBe(0);
     const theirs = (await (await call('GET', '/people/groups', undefined, 'other@example.com')).json()) as any;
     expect(theirs.scanned).toBe(2);
   });

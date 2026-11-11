@@ -195,7 +195,7 @@ describe('album sharing: scoped photo reads', () => {
     });
   });
 
-  describe('a non-default owner', () => {
+  describe('another album owner', () => {
     const OTHER = 'other@example.com';
 
     it('sees and may edit their own album, and sees sharedWith only for it', async () => {

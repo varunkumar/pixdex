@@ -3,6 +3,21 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs helper without type declarations
 import { buildBackfillSql, normalizeOwnerEmail, ownerEmailFromDotenv, resolveOwnerEmail } from '../scripts/backfill-owner-lib.mjs';
 
+// @ts-expect-error plain .mjs helper without type declarations
+import { parseArgs } from '../scripts/backfill-owner-args.mjs';
+
+describe('backfill-owner args', () => {
+  it('accepts no args, --local and --dry-run', () => {
+    expect(parseArgs([])).toEqual({ local: false, dryRun: false });
+    expect(parseArgs(['--local', '--dry-run'])).toEqual({ local: true, dryRun: true });
+  });
+  it('rejects anything else with a usage message', () => {
+    for (const bad of [['--remote'], ['--local', 'x'], ['-l'], ['--command=DROP']]) {
+      expect(parseArgs(bad).error).toMatch(/Usage/);
+    }
+  });
+});
+
 describe('backfill-owner helpers', () => {
   it('lowercases and trims a valid email', () => {
     expect(normalizeOwnerEmail('  Me@Example.COM ')).toBe('me@example.com');

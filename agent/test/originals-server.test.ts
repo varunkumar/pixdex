@@ -52,7 +52,7 @@ describe('originals server', () => {
     expect(await response.text()).toBe('fake jpeg bytes');
   });
 
-  it('looks the photo up as the default owner (read token plus OWNER_EMAIL)', async () => {
+  it('looks the photo up as the configured owner (read token plus OWNER_EMAIL)', async () => {
     const lookup = vi.fn().mockResolvedValue({ source: 'local', path: filePath });
     await start({ fetchIndexedPhoto: lookup });
 

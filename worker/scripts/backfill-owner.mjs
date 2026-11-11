@@ -6,14 +6,18 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from './backfill-owner-args.mjs';
 import { buildBackfillSql, resolveOwnerEmail } from './backfill-owner-lib.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const workerDir = resolve(here, '..');
 const dotenvPath = resolve(workerDir, '../agent/.env');
-const args = new Set(process.argv.slice(2));
-const local = args.has('--local');
-const dryRun = args.has('--dry-run');
+const parsed = parseArgs(process.argv.slice(2));
+if ('error' in parsed) {
+  console.error(parsed.error);
+  process.exit(2);
+}
+const { local, dryRun } = parsed;
 
 let email;
 try {

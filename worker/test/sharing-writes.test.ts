@@ -303,6 +303,20 @@ describe('ingest and album ownership', () => {
       expect(await owner('Kanha')).toBe(OWNER);
     });
 
+    it('409s and removes the new photo when another owner stamps the album first (race)', async () => {
+      await run(`CREATE TRIGGER test_race AFTER INSERT ON albums WHEN new.owner_email IS NULL
+        BEGIN UPDATE albums SET owner_email = 'other@example.com' WHERE name = new.name; END`);
+      try {
+        const before = await count();
+        const res = await ingest(payload(U1, 'Raced'));
+        expect(res.status).toBe(409);
+        expect(await count()).toBe(before);
+        expect(await owner('Raced')).toBeFalsy();
+      } finally {
+        await run('DROP TRIGGER test_race');
+      }
+    });
+
     it('does not stamp a photo without an album, and writes the stamp once per album', async () => {
       const { album: _a, ...noAlbum } = payload(U1, 'x') as Record<string, unknown>;
       expect((await ingest(noAlbum)).status).toBe(201);

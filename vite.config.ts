@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   // The Worker requires a viewer identity on every read. In dev there is no
   // Access JWT, so the proxy asserts one: DEV_VIEWER_EMAIL (to try another
-  // user's view) or else the default owner.
+  // user's view) or else OWNER_EMAIL (the album owner, dev only).
   const viewerEmail = env.DEV_VIEWER_EMAIL || env.OWNER_EMAIL;
   return {
     plugins: [react()],

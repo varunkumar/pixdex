@@ -362,7 +362,7 @@ describe('live library counts', () => {
     const live = await fetchLiveCounts(env, ['A', 'A', 'B'], fetchFn as unknown as typeof fetch);
     expect(live).toEqual({ total: 12, byAlbum: { A: 5, B: 12 } });
     expect(fetchFn).toHaveBeenCalledTimes(3);
-    // The Worker requires a viewer identity on every read; counts are the default owner's.
+    // The Worker requires a viewer identity on every read; counts are the configured owner's.
     const init = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(init.headers).toMatchObject({ Authorization: 'Bearer t', 'X-Viewer-Email': 'owner@example.com' });
 
