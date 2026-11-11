@@ -127,7 +127,7 @@ const Layout = () => {
             {email && (
               <Menu position="bottom-end" width={240}>
                 <Menu.Target>
-                  <ActionIcon variant="transparent" radius="xl" aria-label={`Account menu for ${email}`}>
+                  <ActionIcon variant="transparent" radius="xl" size={44} aria-label={`Account menu for ${email}`}>
                     <UserAvatar email={email} tooltip={false} />
                   </ActionIcon>
                 </Menu.Target>
