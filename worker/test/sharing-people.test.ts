@@ -64,8 +64,9 @@ describe('album sharing: people, faces and daily pick', () => {
     const owner = (await json('/people', OWNER)).people.map((p: any) => p.id);
     expect(owner).toEqual(['p-hidden', 'p-mixed']);
     const other = (await json('/people', 'other@example.com')).people;
-    // Another owner's people with a face in a photo they can see are listed too, read-only.
-    expect(other.map((p: any) => [p.id, p.canEdit])).toEqual([['p-hidden', false], ['p-mixed', false], ['p-other', true]]);
+    // Another owner's people with a face in a photo they can see are listed too, read-only and unnamed (their
+    // name is the owner's private label), after the caller's own named people.
+    expect(other.map((p: any) => [p.id, p.canEdit, p.name])).toEqual([['p-other', true, 'Mixed'], ['p-hidden', false, null], ['p-mixed', false, null]]);
   });
 
   it('shows a stranger no people', async () => {

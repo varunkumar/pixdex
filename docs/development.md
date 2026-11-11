@@ -63,6 +63,8 @@ Notes:
 - Migration `0016_album_shares.sql` (`albums.owner_email`, `albums.shared_with`, `persons.owner_email`, lowercase triggers and the per-owner
   unique person-name index) is additive and auto-applies on merge. It also drops the old global `idx_persons_name_lower`
   (replaced by `idx_persons_owner_name_lower`); dropping an index is metadata-only, so no Time Travel bookmark is needed.
+- Migration `0017_person_labels.sql` (the empty `person_labels` table, its unique index and triggers) is additive and auto-applies on
+  merge: no backfill, no Time Travel bookmark needed. From then on a non-owner no longer receives the owner's person names.
 - The agent is not deployed; it runs on your Mac.
 
 ### Rollout order for album sharing
@@ -207,6 +209,12 @@ There are no fast paths: every read is scoped for every user, the owner included
   (`SEARCH ph USING INDEX sqlite_autoindex_photos_1 (id=?)`, `SEARCH a USING COVERING INDEX idx_albums_owner_email`) and
   keep rowid paging and the CPU budgets; groups short-circuits with one covering-index probe when the caller owns no
   album. Ingest auto-match loads references per owner (cached 60 s per owner) and shares the same MAC budget.
+- Person labels: name resolution is `CASE WHEN p.owner_email = ? THEN p.name ELSE (SELECT name FROM person_labels WHERE viewer_email = ?
+  AND person_id = p.id) END`, i.e. one primary-key probe (`SEARCH pl USING INDEX sqlite_autoindex_person_labels_1 (viewer_email=? AND
+  person_id=?)`, asserted in `query-plans.test.ts`) per returned person or face row, only for rows the caller does not own, inside the
+  existing statement (no extra round trip, no new scan). `PUT /people/:id/label` costs the `personRole` reads, one probe on
+  `idx_person_labels_viewer_name_lower` and one upsert (1 row written); `DELETE` costs the same reads plus a 1-row delete.
+  Deleting a person adds a trigger delete on `person_labels` (one indexed PK-prefix delete). The table starts empty.
 - `GET /me` is one request per session (`staleTime: Infinity`) with no D1 read.
 - PATCH photo, album cover and share writes each add one `albums` primary-key read (`albumRole`); `PUT /albums/shares`
   also writes one `albums` row.

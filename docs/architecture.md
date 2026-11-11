@@ -77,6 +77,16 @@ reject and unassign need the face's album to be the caller's and any named perso
 caller's people and other owners' people with a visible assigned face (`canEdit` per person); groups and match candidates
 only cover faces in albums the caller owns, and matching never crosses owners (references cached per owner).
 
+Person names are the owner's private labels. Every route that returns a person name resolves it for the caller through
+`PERSON_NAME_SQL` (`worker/src/db/faces.ts`): the owner gets `persons.name`; anyone else gets their own row from `person_labels`
+or `null` (the UI shows "Unnamed person"). This covers the `GET /people` list and its sort, face covers and `personName` on
+`GET /photos/:id/faces`; search and timeline filter by person id only, so a name can neither be matched nor leaked. A viewer
+sets or clears their label with `PUT`/`DELETE /people/:id/label` (404 invisible person, 400 for the owner, 409 on a clash,
+body `{ name }` trimmed 1 to 80 characters). Data model (migration `0017_person_labels.sql`, additive):
+`person_labels(viewer_email, person_id, name, created_at)`, primary key `(viewer_email, person_id)`, unique index
+`(viewer_email, lower(name))`, lowercase-email triggers, and an `AFTER DELETE ON persons` trigger that removes the labels.
+Uniqueness is among a viewer's labels only: a label may equal the name of a person they own.
+
 Originals: for every user, including the album owner, the Function first calls Worker `GET /access/photo/:id`
 (READ_TOKEN plus their email); only a 204 is proxied to the agent tunnel, anything else is 404.
 Thumbnails: one `content_hash` lookup joined to the album by primary key per request (the browser caches them for a year).
@@ -92,7 +102,7 @@ bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `ti
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
 `no-cache`. The only writes the browser can make are `PUT albums/cover`,
-`PUT albums/shares`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, and `POST` to `people`,
+`PUT albums/shares`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`,
 `people/:id/faces`, `people/:id/match`, `people/:id/cover` and `faces/:id/assign|reject|unassign`
 (bodies JSON only, DELETE has none), all forwarded with the read token through
 one shared helper with per-method allowlists.

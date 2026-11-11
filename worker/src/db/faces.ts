@@ -26,10 +26,21 @@ export interface SerializedFace {
   matchScore: number | null;
 }
 
-/** Shared SELECT for face reads. Never selects the embedding. */
+/**
+ * The person name as the caller may see it: the owner's own name for their people, else the caller's private
+ * label for that person, else NULL. Binds two caller emails, in order. The label lookup is a scalar subquery on
+ * the person_labels primary key (viewer_email, person_id), evaluated only for rows the caller does not own.
+ */
+export const PERSON_NAME_SQL = `CASE WHEN p.owner_email = ? THEN p.name
+  ELSE (SELECT pl.name FROM person_labels pl WHERE pl.viewer_email = ? AND pl.person_id = p.id) END`;
+
+/** The two binds PERSON_NAME_SQL needs, which come first in any statement built on FACE_SELECT. */
+export const nameBinds = (user: { email: string }): [string, string] => [user.email, user.email];
+
+/** Shared SELECT for face reads. Never selects the embedding. Callers must bind nameBinds(user) first. */
 export const FACE_SELECT = `SELECT f.id, f.photo_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,
   f.det_score, f.person_id, f.assign_status, f.match_score, f.crop_key,
-  p.name AS person_name, ph.content_hash AS content_hash
+  ${PERSON_NAME_SQL} AS person_name, ph.content_hash AS content_hash
   FROM faces f
   JOIN photos ph ON ph.id = f.photo_id
   LEFT JOIN persons p ON p.id = f.person_id`;

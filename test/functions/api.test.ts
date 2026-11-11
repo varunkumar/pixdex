@@ -336,6 +336,23 @@ describe('/api proxy POST, PATCH people, DELETE', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('PUT and DELETE forward people/<id>/label only', async () => {
+    expect((await send(onRequestPut, 'PUT', '/api/people/p1/label')).status).toBe(200);
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://worker.example.dev/people/p1/label');
+    expect(fetchMock.mock.calls[0][1].method).toBe('PUT');
+    expect(fetchMock.mock.calls[0][1].body).toBe('{"name":"Asha"}');
+    expect((await send(onRequestDelete, 'DELETE', '/api/people/p1/label', null)).status).toBe(200);
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://worker.example.dev/people/p1/label');
+    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
+    for (const path of ['/api/people/p1/label/x', '/api/people/p1/labels']) {
+      expect((await send(onRequestPut, 'PUT', path)).status).toBe(404);
+      expect((await send(onRequestDelete, 'DELETE', path, null)).status).toBe(404);
+    }
+    expect((await send(onRequestPost, 'POST', '/api/people/p1/label')).status).toBe(404);
+    expect((await send(onRequestPatch, 'PATCH', '/api/people/p1/label')).status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('write handlers return 502 when the worker is unreachable', async () => {
     fetchMock.mockRejectedValueOnce(new Error('down'));
     expect((await send(onRequestPost, 'POST', '/api/people')).status).toBe(502);
