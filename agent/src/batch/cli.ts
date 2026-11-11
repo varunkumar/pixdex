@@ -88,7 +88,7 @@ export async function runIndexBatch(config: AgentConfig, args: string[]): Promis
 }
 
 /**
- * Library counts from the Worker, as the default owner; undefined when it cannot be reached
+ * Library counts from the Worker, as the album owner (OWNER_EMAIL); undefined when it cannot be reached
  * or READ_TOKEN or OWNER_EMAIL is unset (the Worker requires X-Viewer-Email on every read).
  */
 export async function fetchLiveCounts(

@@ -33,7 +33,8 @@ export interface IndexFileEvent {
 /**
  * Derives an album name from a photo's path: the folder directly above a
  * "Processed" folder if there is one (".../Bandipur/Processed/x.jpg" ->
- * "Bandipur"), otherwise the photo's own parent folder.
+ * "Bandipur"), otherwise the photo's own parent folder. A file at the root of a drive has no
+ * album: it is indexed without one and, with no album, is visible to nobody.
  */
 export function albumFromPath(filePath: string): string | undefined {
   const folders = path.dirname(filePath).split(path.sep).filter(Boolean);

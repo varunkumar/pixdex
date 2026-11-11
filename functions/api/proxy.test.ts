@@ -11,7 +11,6 @@ const env = {
   READ_TOKEN: 'secret-token',
   ORIGINALS_BASE_URL: 'https://originals.example.dev',
   ORIGINALS_TOKEN: 'originals-token',
-  OWNER_EMAIL: 'Owner@Example.com',
   ACCESS_TEAM_DOMAIN: TEAM_DOMAIN,
   ACCESS_AUD: AUD,
 };
@@ -76,7 +75,7 @@ describe('Pages Function identity', () => {
     expect(upstreamCalls()).toHaveLength(0);
   });
 
-  it.each(['OWNER_EMAIL', 'ACCESS_TEAM_DOMAIN', 'ACCESS_AUD'])('fails closed when %s is unset', async (name) => {
+  it.each(['ACCESS_TEAM_DOMAIN', 'ACCESS_AUD'])('fails closed when %s is unset', async (name) => {
     const res = await get('/api/albums', 'owner@example.com', {}, { ...env, [name]: '' });
     expect(res.status).toBe(500);
     expect(upstreamCalls()).toHaveLength(0);
@@ -117,7 +116,7 @@ describe('Pages Function identity', () => {
   });
 
   describe('originals', () => {
-    it('returns 404 for a non-owner when the access check is 404, without calling the tunnel', async () => {
+    it('returns 404 when the access check is 404, without calling the tunnel', async () => {
       accessStatus = 404;
       const res = await get('/api/originals/p1', 'friend@example.com');
       expect(res.status).toBe(404);
@@ -130,7 +129,7 @@ describe('Pages Function identity', () => {
       expect(h.get('x-viewer-email')).toBe('friend@example.com');
     });
 
-    it('proxies a non-owner original when the access check is 204', async () => {
+    it('proxies an original when the access check is 204', async () => {
       const res = await get('/api/originals/p1', 'friend@example.com');
       expect(res.status).toBe(200);
       const calls = upstreamCalls();
@@ -149,10 +148,13 @@ describe('Pages Function identity', () => {
       expect(upstreamCalls()).toHaveLength(1);
     });
 
-    it('makes no access call for the default owner (case-insensitive)', async () => {
+    it('runs the access check for every user, including the album owner', async () => {
       const res = await get('/api/originals/p1', 'OWNER@example.COM');
       expect(res.status).toBe(200);
-      expect(upstreamCalls().map(([url]) => String(url))).toEqual(['https://originals.example.dev/originals/p1']);
+      const calls = upstreamCalls();
+      expect(String(calls[0][0])).toBe('https://worker.example.dev/access/photo/p1');
+      expect(new Headers(calls[0][1].headers).get('x-viewer-email')).toBe('owner@example.com');
+      expect(String(calls[1][0])).toBe('https://originals.example.dev/originals/p1');
     });
   });
 });

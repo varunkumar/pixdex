@@ -12,8 +12,6 @@ import { verifyAccessJwt } from '../_lib/access';
 interface Env {
   WORKER_URL: string;
   READ_TOKEN: string;
-  // The default owner's email (same value as the Worker's OWNER_EMAIL var).
-  OWNER_EMAIL?: string;
   // Cloudflare Access team domain (e.g. myteam.cloudflareaccess.com) and the
   // Pages application's audience tag, used to verify the Access JWT.
   ACCESS_TEAM_DOMAIN?: string;
@@ -70,21 +68,19 @@ function cacheControlFor(path: string, ok: boolean): string {
   return 'private, no-cache';
 }
 
-const normalizeEmail = (value: string | undefined): string => (value ?? '').trim().toLowerCase();
-
 // Resolves the caller's verified email, or the response to send instead. Fails
-// closed: without the owner and Access config nothing is proxied, and without a
+// closed: without the Access config nothing is proxied, and without a
 // valid Access JWT the answer is a bare 401.
 async function identify(request: Request, env: Env): Promise<{ email: string } | Response> {
-  if (!normalizeEmail(env.OWNER_EMAIL) || !env.ACCESS_TEAM_DOMAIN?.trim() || !env.ACCESS_AUD?.trim()) {
+  if (!env.ACCESS_TEAM_DOMAIN?.trim() || !env.ACCESS_AUD?.trim()) {
     return new Response('Proxy is not configured', { status: 500 });
   }
   const viewer = await verifyAccessJwt(request.headers.get('Cf-Access-Jwt-Assertion'), env);
   return viewer ?? new Response('Unauthorized', { status: 401, headers: { 'Cache-Control': 'no-store' } });
 }
 
-// For anyone but the default owner, an original is served only when the Worker
-// confirms the caller may see the photo (204). One extra Worker call, non-owners only.
+// An original is served only when the Worker confirms the caller may see the photo (204), for
+// every user including the album's owner. One Worker call (a photo and an album primary-key lookup) per original.
 async function mayViewOriginal(path: string, email: string, env: Env): Promise<boolean> {
   const id = path.slice('originals/'.length);
   try {
@@ -110,7 +106,7 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
     return new Response('Not found', { status: 404 });
   }
 
-  if (isOriginal && email !== normalizeEmail(env.OWNER_EMAIL)) {
+  if (isOriginal) {
     if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
     if (!(await mayViewOriginal(path, email, env))) {
       return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });

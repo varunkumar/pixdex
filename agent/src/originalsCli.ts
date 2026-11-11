@@ -18,7 +18,7 @@ export function runServeOriginals(config: AgentConfig, deps: RunServeOriginalsDe
 
   if (!config.OWNER_EMAIL) {
     console.error(
-      'OWNER_EMAIL must be set to run serve-originals (the same value as the Worker\'s OWNER_EMAIL; it is sent as X-Viewer-Email to look up photos)'
+      'OWNER_EMAIL must be set to run serve-originals (the album owner; it is sent as X-Viewer-Email to look up photos)'
     );
     return 1;
   }

@@ -30,6 +30,9 @@ export interface ProcessFileDeps {
 
 export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps): Promise<void> {
   const { cloudflareClient, ollamaClient, config } = deps;
+  // Fail before any Ollama work: every photo is indexed on behalf of one album owner.
+  const ownerEmail = config.OWNER_EMAIL?.trim().toLowerCase();
+  if (!ownerEmail) throw new Error('OWNER_EMAIL must be set in agent/.env to index photos (the album owner)');
 
   const exif = await extractExifData(input.localPath);
   const analysis = await analyzeImage(input.localPath, ollamaClient, { album: input.album });
@@ -40,6 +43,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
 
   const payload: IngestPhotoPayload = {
     id: randomUUID(),
+    ownerEmail,
     contentHash: input.contentHash,
     source: input.source,
     path: input.sourcePath,

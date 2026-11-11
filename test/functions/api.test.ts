@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Routing, header and caching behaviour. JWT verification itself is covered by
 // functions/_lib/access.test.ts and functions/api/proxy.test.ts; here every
-// request is the verified default owner.
+// request is a verified user; the Worker's access check for originals is stubbed to 204.
 vi.mock('../../functions/_lib/access', () => ({
   verifyAccessJwt: vi.fn(async () => ({ email: 'owner@example.com' })),
 }));
@@ -15,11 +15,10 @@ const env = {
   READ_TOKEN: 'secret-token',
   ORIGINALS_BASE_URL: 'https://originals.example.dev',
   ORIGINALS_TOKEN: 'originals-token',
-  OWNER_EMAIL: 'owner@example.com',
   ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com',
   ACCESS_AUD: 'aud',
 };
-const identityEnv = { OWNER_EMAIL: env.OWNER_EMAIL, ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN, ACCESS_AUD: env.ACCESS_AUD };
+const identityEnv = { ACCESS_TEAM_DOMAIN: env.ACCESS_TEAM_DOMAIN, ACCESS_AUD: env.ACCESS_AUD };
 
 function call(path: string, headers: Record<string, string> = {}, e: Record<string, string> = env) {
   return onRequestGet({
@@ -32,9 +31,14 @@ describe('/api proxy', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+    fetchMock = vi.fn(async (url: unknown) =>
+      String(url).includes('/access/photo/') ? new Response(null, { status: 204 }) : new Response('{"ok":true}', { status: 200 })
+    );
     vi.stubGlobal('fetch', fetchMock);
   });
+
+  /** Calls that reached the originals tunnel (the Worker access check is a separate call). */
+  const tunnelCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('https://originals.example.dev'));
 
   it('forwards allowed read routes with the server-side bearer token', async () => {
     const res = await call('/api/search?q=tiger&album=Kanha');
@@ -90,7 +94,7 @@ describe('/api proxy', () => {
     it('forwards to the tunnel with the originals token, not the read token', async () => {
       const res = await call('/api/originals/p1?token=leaked', { accept: 'image/*' });
       expect(res.status).toBe(200);
-      const [url, init] = fetchMock.mock.calls[0];
+      const [url, init] = tunnelCalls()[0];
       expect(String(url)).toBe('https://originals.example.dev/originals/p1');
       const h = new Headers(init.headers);
       expect(h.get('authorization')).toBe('Bearer originals-token');
@@ -100,19 +104,19 @@ describe('/api proxy', () => {
     it('adds Access service-token headers for originals only, when configured', async () => {
       const withAccess = { ...env, ACCESS_CLIENT_ID: 'id.access', ACCESS_CLIENT_SECRET: 'sek' };
       await call('/api/originals/p1', {}, withAccess);
-      const o = new Headers(fetchMock.mock.calls[0][1].headers);
+      const o = new Headers(tunnelCalls()[0][1].headers);
       expect(o.get('cf-access-client-id')).toBe('id.access');
       expect(o.get('cf-access-client-secret')).toBe('sek');
 
       await call('/api/albums', {}, withAccess);
-      const w = new Headers(fetchMock.mock.calls[1][1].headers);
+      const w = new Headers(fetchMock.mock.calls[fetchMock.mock.calls.length - 1][1].headers);
       expect(w.get('cf-access-client-id')).toBeNull();
       expect(w.get('cf-access-client-secret')).toBeNull();
     });
 
     it('omits Access headers when the service token is not configured', async () => {
       await call('/api/originals/p1');
-      expect(new Headers(fetchMock.mock.calls[0][1].headers).get('cf-access-client-id')).toBeNull();
+      expect(new Headers(tunnelCalls()[0][1].headers).get('cf-access-client-id')).toBeNull();
     });
 
     it('does not use the originals token for worker routes', async () => {
@@ -126,7 +130,10 @@ describe('/api proxy', () => {
     });
 
     it('returns 502 when the tunnel is unreachable', async () => {
-      fetchMock.mockRejectedValueOnce(new Error('connect failed'));
+      fetchMock.mockImplementation(async (url: unknown) => {
+        if (String(url).includes('/access/photo/')) return new Response(null, { status: 204 });
+        throw new Error('connect failed');
+      });
       expect((await call('/api/originals/p1')).status).toBe(502);
     });
 
@@ -142,7 +149,9 @@ describe('/api proxy', () => {
           ['set-cookie', '__cf_bm=x; Path=/'],
         ],
       });
-      fetchMock.mockResolvedValueOnce(upstream);
+      fetchMock.mockImplementation(async (url: unknown) =>
+        String(url).includes('/access/photo/') ? new Response(null, { status: 204 }) : upstream
+      );
       const res = await call('/api/originals/p1');
       expect(res.headers.get('set-cookie')).toBeNull();
       expect(res.headers.get('content-type')).toBe('image/jpeg');

@@ -129,6 +129,7 @@ describe('CloudflareClient', () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 201 }));
     const payload: IngestPhotoPayload = {
       id: 'photo-1',
+      ownerEmail: 'owner@example.com',
       contentHash: 'a'.repeat(64),
       source: 'local',
       filename: 'a.jpg',
@@ -154,6 +155,7 @@ describe('CloudflareClient', () => {
     await expect(
       client.ingestPhoto({
         id: 'x',
+        ownerEmail: 'owner@example.com',
         contentHash: 'a'.repeat(64),
         source: 'local',
         filename: 'a.jpg',
