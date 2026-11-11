@@ -38,7 +38,7 @@ never leave local disk or Google Drive.
   Resolve names only through `PERSON_NAME_SQL` in `worker/src/db/faces.ts` (a scalar subquery on the `person_labels` primary key,
   run only for rows the caller does not own); never select `p.name` raw. A viewer sets their label with `PUT`/`DELETE
   /people/:id/label` (migration `0017_person_labels.sql`: table `person_labels (viewer_email, person_id, name, created_at)`,
-  unique per viewer on `lower(name)` among labels only, lowercase-email triggers, `persons_labels_ad` trigger deletes labels when a
+  unique per viewer on `lower(name)` among labels only, `idx_person_labels_person` for the delete trigger, lowercase-email triggers, `persons_labels_ad` trigger deletes labels when a
   person is deleted). 404 if the person is not visible, 400 for the owner (they use `PATCH /people/:id`), 409 on a clash.
   A label never changes matching or grants any other access. Search and timeline filter by person id, never by name.
 - Write authorization (worker): every non-ingest write authorizes itself in its handler (`albumRole`, `faceRoles`, `personRole`)

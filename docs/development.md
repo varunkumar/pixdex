@@ -214,7 +214,7 @@ There are no fast paths: every read is scoped for every user, the owner included
   person_id=?)`, asserted in `query-plans.test.ts`) per returned person or face row, only for rows the caller does not own, inside the
   existing statement (no extra round trip, no new scan). `PUT /people/:id/label` costs the `personRole` reads, one probe on
   `idx_person_labels_viewer_name_lower` and one upsert (1 row written); `DELETE` costs the same reads plus a 1-row delete.
-  Deleting a person adds a trigger delete on `person_labels` (one indexed PK-prefix delete). The table starts empty.
+  Deleting a person adds a trigger delete on `person_labels` (an index search on `idx_person_labels_person`). The table starts empty.
 - `GET /me` is one request per session (`staleTime: Infinity`) with no D1 read.
 - PATCH photo, album cover and share writes each add one `albums` primary-key read (`albumRole`); `PUT /albums/shares`
   also writes one `albums` row.

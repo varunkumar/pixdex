@@ -62,6 +62,28 @@ describe('viewer-private person labels', () => {
     expect(JSON.stringify([people, faces])).not.toMatch(/Mom|Zed/);
   });
 
+  it('the raw JSON of /people, photo faces and a face write response never contains the owner name, labelled or not', async () => {
+    await run("UPDATE albums SET owner_email = ? WHERE name = 'Ranthambore'", VIEWER2);
+    await send('PUT', '/people/mom/label', VIEWER2, { name: 'Mum' });
+    for (const as of [VIEWER, VIEWER2]) {
+      for (const path of ['/people', '/photos/kanha/faces']) {
+        const text = await (await send('GET', path, as)).text();
+        expect(text).not.toMatch(/Mom|Zed/);
+      }
+    }
+    // A face write response: the viewer owns Ranthambore and its person, so the response is for a non-owned person only
+    // when it is the owner's; the owner's own write must still show the owner's name, a viewer's rejected write shows nothing.
+    const denied = await (await send('POST', '/faces/f1/unassign', VIEWER, {})).text();
+    expect(denied).not.toMatch(/Mom|Zed/);
+    await run("UPDATE persons SET owner_email = ? WHERE id = 'hid'", VIEWER2);
+    await insertFace('f4', 'ranth', null, 'unassigned');
+    const written = await (await send('POST', '/faces/f4/assign', VIEWER2, { personId: 'hid' })).text();
+    expect(written).toContain('Hidden');
+    // The same face seen by a third party (another viewer of Ranthambore) carries no name.
+    await run(`UPDATE albums SET shared_with = '["viewer@example.com"]' WHERE name = 'Ranthambore'`);
+    expect(await (await send('GET', '/photos/ranth/faces', VIEWER)).text()).not.toMatch(/Hidden/);
+  });
+
   it('the owner still sees their own names', async () => {
     const { people } = await get('/people', OWNER);
     expect(people.map((p: any) => p.name)).toEqual(['Hidden', 'Mom', 'Zed']);

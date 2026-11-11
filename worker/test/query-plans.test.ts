@@ -83,6 +83,9 @@ describe('person label resolution', () => {
     );
     expect(p).toMatch(/SEARCH pl USING (COVERING )?INDEX sqlite_autoindex_person_labels_1 \(viewer_email=\? AND person_id=\?\)/);
   });
+  it('deleting labels by person uses idx_person_labels_person', async () => {
+    expect(await plan('DELETE FROM person_labels WHERE person_id = ?', 'x')).toMatch(/idx_person_labels_person/);
+  });
   it('the clash check uses the per-viewer name index', async () => {
     const p = await plan('SELECT 1 AS x FROM person_labels WHERE viewer_email = ? AND lower(name) = lower(?) AND person_id != ?', U.email, 'x', '');
     expect(p).toMatch(/idx_person_labels_viewer_name_lower/);

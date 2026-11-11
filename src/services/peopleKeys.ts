@@ -13,6 +13,19 @@ export const SEARCH_KEYS = [
 /** Shown for a person the caller has not named themselves (the owner's name is never sent to them). */
 export const UNNAMED_PERSON = 'Unnamed person';
 
+/**
+ * Filter options for a list of people. Several unnamed people (a viewer with no labels) are told apart by list
+ * order ("Unnamed person 1", "Unnamed person 2"); display only, the ids are unchanged.
+ */
+export function personOptions(people: { id: string; name: string | null }[]): { value: string; label: string }[] {
+  const unnamed = people.filter((p) => p.name === null).length;
+  let n = 0;
+  return people.map((p) => ({
+    value: p.id,
+    label: p.name ?? (unnamed > 1 ? `${UNNAMED_PERSON} ${++n}` : UNNAMED_PERSON),
+  }));
+}
+
 export function errorMessage(err: unknown, naming: boolean): string {
   const message = err instanceof Error ? err.message : '';
   if (message.includes('409')) return 'That name already exists';

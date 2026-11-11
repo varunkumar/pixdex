@@ -203,6 +203,7 @@ BEGIN SELECT RAISE(ABORT, 'emails on persons must be lowercase'); END;`,
   PRIMARY KEY (viewer_email, person_id)
 );`,
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_person_labels_viewer_name_lower ON person_labels (viewer_email, lower(name));',
+  'CREATE INDEX IF NOT EXISTS idx_person_labels_person ON person_labels(person_id);',
   `CREATE TRIGGER IF NOT EXISTS person_labels_email_lower_bi BEFORE INSERT ON person_labels
 WHEN new.viewer_email <> lower(new.viewer_email)
 BEGIN SELECT RAISE(ABORT, 'emails on person_labels must be lowercase'); END;`,

@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS person_labels (
 );
 -- A viewer's labels are unique case-insensitively (only among labels, not against persons they own).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_person_labels_viewer_name_lower ON person_labels (viewer_email, lower(name));
+-- Makes the delete-by-person trigger and DELETE ... WHERE person_id = ? an index search.
+CREATE INDEX IF NOT EXISTS idx_person_labels_person ON person_labels(person_id);
 CREATE TRIGGER IF NOT EXISTS person_labels_email_lower_bi BEFORE INSERT ON person_labels
 WHEN new.viewer_email <> lower(new.viewer_email)
 BEGIN SELECT RAISE(ABORT, 'emails on person_labels must be lowercase'); END;

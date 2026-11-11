@@ -8,7 +8,7 @@ import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient
 import { onThisDayToday, parseDateQuery, quickRange } from '../services/dateQuery';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
-import { UNNAMED_PERSON } from '../services/peopleKeys';
+import { personOptions } from '../services/peopleKeys';
 
 const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string }[] = [
   { value: 'relevance', label: 'Best match' },
@@ -61,7 +61,7 @@ const Search = () => {
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
   });
-  const peopleOptions = namedPeople.map((p) => ({ value: p.id, label: p.name ?? UNNAMED_PERSON }));
+  const peopleOptions = personOptions(namedPeople);
 
   // No term, album or person means nothing to look for: show a prompt, not the whole library.
   const hasCriteria = q !== '' || album !== '' || people.length > 0 || from !== '' || to !== '' || onThisDay !== '';
