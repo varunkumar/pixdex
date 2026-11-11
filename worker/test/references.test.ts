@@ -78,19 +78,42 @@ describe('loadReferences', () => {
 describe('loadReferencesCached', () => {
   beforeEach(async () => {
     for (const t of ['faces', 'persons']) await env.DB.prepare(`DELETE FROM ${t}`).run();
-    await env.DB.prepare('INSERT INTO persons (id, name, created_at) VALUES (?, ?, ?)').bind('p1', 'Anu', 't').run();
+    await env.DB.prepare('INSERT INTO persons (id, name, owner_email, created_at) VALUES (?, ?, ?, ?)').bind('p1', 'Anu', 'o@example.com', 't').run();
     clearReferencesCache();
   });
 
   it('reuses the result within the TTL and refetches after it or a clear', async () => {
     await addConfirmed('p1', 0, '2026-01-01');
     const t0 = 1_000_000;
-    expect((await loadReferencesCached(env.DB, t0))[0].vectors).toHaveLength(1);
+    expect((await loadReferencesCached(env.DB, 'o@example.com', t0))[0].vectors).toHaveLength(1);
     await addConfirmed('p1', 1, '2026-01-02');
-    expect((await loadReferencesCached(env.DB, t0 + REFERENCES_CACHE_TTL_MS - 1))[0].vectors).toHaveLength(1);
-    expect((await loadReferencesCached(env.DB, t0 + REFERENCES_CACHE_TTL_MS))[0].vectors).toHaveLength(2);
+    expect((await loadReferencesCached(env.DB, 'o@example.com', t0 + REFERENCES_CACHE_TTL_MS - 1))[0].vectors).toHaveLength(1);
+    expect((await loadReferencesCached(env.DB, 'o@example.com', t0 + REFERENCES_CACHE_TTL_MS))[0].vectors).toHaveLength(2);
     await addConfirmed('p1', 2, '2026-01-03');
     clearReferencesCache();
-    expect((await loadReferencesCached(env.DB, t0 + REFERENCES_CACHE_TTL_MS + 1))[0].vectors).toHaveLength(3);
+    expect((await loadReferencesCached(env.DB, 'o@example.com', t0 + REFERENCES_CACHE_TTL_MS + 1))[0].vectors).toHaveLength(3);
+  });
+});
+
+describe('per-owner references', () => {
+  beforeEach(async () => {
+    for (const t of ['faces', 'persons']) await env.DB.prepare(`DELETE FROM ${t}`).run();
+    await env.DB.prepare("INSERT INTO persons (id, name, owner_email, created_at) VALUES ('a1', 'Anu', 'a@example.com', 't'), ('b1', 'Anu', 'b@example.com', 't')").run();
+    await addConfirmed('a1', 0, '2026-01-01');
+    await addConfirmed('b1', 1, '2026-01-01');
+    await addConfirmed('b1', 2, '2026-01-02');
+    clearReferencesCache();
+  });
+
+  it('loads only the given owner\'s people', async () => {
+    expect((await loadReferences(env.DB, { owner: 'a@example.com' })).map((r) => [r.personId, r.vectors.length])).toEqual([['a1', 1]]);
+    expect((await loadReferences(env.DB, { owner: 'b@example.com' })).map((r) => [r.personId, r.vectors.length])).toEqual([['b1', 2]]);
+    expect(await loadReferences(env.DB, { owner: 'nobody@example.com' })).toEqual([]);
+  });
+
+  it('caches each owner separately', async () => {
+    expect((await loadReferencesCached(env.DB, 'a@example.com', 1))[0].personId).toBe('a1');
+    expect((await loadReferencesCached(env.DB, 'b@example.com', 2))[0].personId).toBe('b1');
+    expect((await loadReferencesCached(env.DB, 'a@example.com', 3))[0].personId).toBe('a1');
   });
 });

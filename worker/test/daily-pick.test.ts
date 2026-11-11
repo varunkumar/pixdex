@@ -8,7 +8,7 @@ async function seed(
   description: string,
   instagramSuggested: string | null,
   aestheticScore: number | null = null,
-  album: string | null = null
+  album: string | null = 'Pick'
 ) {
   await env.DB.prepare(
     `INSERT INTO photos (id, content_hash, source, filename, subjects, description, suggested_caption, suggested_hashtags, model_provider, model_name, search_text, last_indexed, instagram_suggested, aesthetic_score, album)

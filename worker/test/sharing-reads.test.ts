@@ -35,7 +35,7 @@ describe('album sharing: scoped photo reads', () => {
     await run('UPDATE photos SET aesthetic_score = 8');
     await run(`UPDATE albums SET shared_with = '["viewer@example.com"]' WHERE name = 'Kanha'`);
     await run("UPDATE albums SET owner_email = 'other@example.com' WHERE name = 'Sundarbans'");
-    // Kanha and Ranthambore stay owned by the default owner (owner_email NULL).
+    // Kanha and Ranthambore are owned by OWNER (test fixture trigger); 'none' has no album, so nobody sees it.
     for (const photo of ['kanha', 'ranth']) {
       await run(
         `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, crop_key, created_at)
@@ -49,10 +49,10 @@ describe('album sharing: scoped photo reads', () => {
   });
 
   describe('/search', () => {
-    it('shows the default owner Kanha, Ranthambore and the unalbumed photo, not other owners', async () => {
+    it('shows an owner their albums only, nothing of other owners or unalbumed', async () => {
       const body = await json('/search', OWNER);
-      expect(body.results.map((p: any) => p.id).sort()).toEqual(['kanha', 'none', 'ranth']);
-      expect(body.total).toBe(3);
+      expect(body.results.map((p: any) => p.id).sort()).toEqual(['kanha', 'ranth']);
+      expect(body.total).toBe(2);
     });
 
     it('shows a viewer only the shared album and counts only visible rows', async () => {
@@ -92,7 +92,7 @@ describe('album sharing: scoped photo reads', () => {
     it('scopes month and day zoom and the group totals', async () => {
       for (const zoom of ['month', 'day']) {
         const owner = await json(`/timeline?zoom=${zoom}`, OWNER);
-        expect(group(owner)).toEqual(['kanha', 'none', 'ranth']);
+        expect(group(owner)).toEqual(['kanha', 'ranth']);
         const viewer = await json(`/timeline?zoom=${zoom}`, VIEWER);
         expect(group(viewer)).toEqual(['kanha']);
         expect(viewer.groups.reduce((n: number, g: any) => n + g.total, 0)).toBe(1);
@@ -109,7 +109,6 @@ describe('album sharing: scoped photo reads', () => {
       expect(await json('/timeline/buckets', OWNER)).toEqual({
         buckets: [
           { month: '2026-03', total: 2 },
-          { month: '2026-02', total: 1 },
         ],
         undated: 0,
       });
@@ -146,7 +145,7 @@ describe('album sharing: scoped photo reads', () => {
       expect((await get('/photos/kanha', VIEWER)).status).toBe(200);
       expect((await json('/photos/kanha', VIEWER)).canEdit).toBe(false);
       expect((await json('/photos/kanha', OWNER)).canEdit).toBe(true);
-      expect((await json('/photos/none', OWNER)).canEdit).toBe(true);
+      expect((await get('/photos/none', OWNER)).status).toBe(404);
       expect((await get('/photos/ranth', VIEWER)).status).toBe(404);
       expect((await get('/photos/none', VIEWER)).status).toBe(404);
       expect((await get('/photos/sundar', OWNER)).status).toBe(404);
@@ -178,9 +177,9 @@ describe('album sharing: scoped photo reads', () => {
       expect((await get('/thumbnails/hash-ranth-0123456789', OWNER)).status).toBe(200);
     });
 
-    it('serves the default owner a thumbnail with no photo row, and gates other users on a visible photo', async () => {
+    it('gates every user, the owner included, on a visible photo row', async () => {
       await env.THUMBNAILS.put('orphan-hash-0123456789.jpg', new Uint8Array([7]));
-      expect((await get('/thumbnails/orphan-hash-0123456789', OWNER)).status).toBe(200);
+      expect((await get('/thumbnails/orphan-hash-0123456789', OWNER)).status).toBe(404);
       expect((await get('/thumbnails/orphan-hash-0123456789', VIEWER)).status).toBe(404);
       await run(`UPDATE albums SET shared_with = '[]' WHERE name = 'Kanha'`);
       expect((await get('/thumbnails/hash-kanha-0123456789', VIEWER)).status).toBe(404);
@@ -215,15 +214,16 @@ describe('album sharing: scoped photo reads', () => {
     });
   });
 
-  describe('single-user state (no album has an owner_email)', () => {
-    it('the default owner still sees every album and the counters total', async () => {
+  describe('albums with no owner yet (before the backfill)', () => {
+    it('are invisible to everyone until stamped', async () => {
       await run('UPDATE albums SET owner_email = NULL');
+      expect((await json('/albums', OWNER)).albums).toEqual([]);
+      expect((await json('/albums?limit=12&sort=name', OWNER))).toEqual({ albums: [], total: 0 });
+      expect((await json('/search', OWNER)).total).toBe(0);
+      expect((await get('/photos/kanha', OWNER)).status).toBe(404);
+      expect((await get('/thumbnails/hash-kanha-0123456789', OWNER)).status).toBe(404);
+      await run("UPDATE albums SET owner_email = 'owner@example.com' WHERE owner_email IS NULL");
       expect((await json('/albums', OWNER)).albums).toEqual(['Kanha', 'Ranthambore', 'Sundarbans']);
-      const page = await json('/albums?limit=12&sort=name', OWNER);
-      expect(page.total).toBe(3);
-      expect(page.albums.map((a: any) => a.name)).toEqual(['Kanha', 'Ranthambore', 'Sundarbans']);
-      expect((await json('/search', OWNER)).total).toBe(4);
-      expect((await json('/albums?limit=12&name=Kanha', OWNER)).albums).toHaveLength(1);
     });
   });
 });

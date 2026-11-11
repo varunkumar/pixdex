@@ -7,6 +7,7 @@
     "typecheck": "tsc --noEmit",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "backfill-owner": "node scripts/backfill-owner.mjs",
     "gen:albums-migration": "esbuild scripts/gen-albums-migration.ts --bundle --platform=node --format=esm | node --input-type=module"
   },
   "dependencies": {

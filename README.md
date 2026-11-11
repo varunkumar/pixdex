@@ -229,19 +229,22 @@ selected people). The description and suggested caption are not editable.
 
 ### Sharing albums
 
-An album's owner sees a Share button on the album card and album page. It opens a dialog to list the Google
-sign-in emails allowed to view the album (each address must match the person's Google sign-in email). People you
-share with see the album with a "Shared with you" badge and cannot rate, edit, set covers, share or manage people;
-only the default owner manages people. Those controls are hidden in the UI and refused by the Worker.
+Every album has one owner: the `OWNER_EMAIL` in `agent/.env` when the agent indexes it (the first photo of an album
+stamps its owner; indexing into an album owned by someone else is refused). An album's owner sees a Share button on the
+album card and album page. It opens a dialog to list the Google sign-in emails allowed to view the album (each address
+must match the person's Google sign-in email). People you share with see the album with a "Shared with you" badge and cannot
+rate, edit, set covers, share or name faces in it. People are per owner: you manage the people you created, and others'
+people appear read-only where their faces are in photos you can see. Those controls are hidden in the UI and refused by the
+Worker. Photos indexed with no album (files at the root of a drive) are visible to nobody, so keep every photo in a folder.
 
 Setup (the Pages Function does the identity check, so Cloudflare Access must sit in front of the Pages site):
 
-1. Set `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` as Pages variables, `OWNER_EMAIL` on the Worker as a
-   secret (`cd worker && npx wrangler secret put OWNER_EMAIL`; a dashboard variable is deleted by the next deploy),
-   and `OWNER_EMAIL` in `agent/.env` (needed by `serve-originals` and `index-status`). All three must be the same
-   address. See `.env.example` and the rollout order in `docs/development.md`.
-2. Deploy the Function and Worker first, then change the Access policy from "only me" to allow any Google account.
-   Visitors without a share see nothing; the owner's own view is unchanged.
+1. Set `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` as Pages variables, and `OWNER_EMAIL` in `agent/.env` (the Worker and Pages
+   no longer read it; delete the old Worker secret if you set one). See `.env.example` and the rollout order in
+   `docs/development.md`.
+2. Deploy the Function and Worker, then run `cd worker && npm run backfill-owner` once. It stamps `OWNER_EMAIL` (from the
+   environment or `agent/.env`) on every existing album and person (`--dry-run` prints the SQL, `--local` targets the local
+   D1). Until it runs nothing is visible to you. Then change the Access policy from "only me" to allow any Google account.
 3. Share an album from its card or page by entering the person's Google sign-in email. Removing the email revokes
    access, though images already cached in their browser may stay visible for a while.
 

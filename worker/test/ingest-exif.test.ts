@@ -7,11 +7,13 @@ const base = {
   contentHash: 'hash-exif',
   source: 'local' as const,
   filename: 'tiger.jpg',
+  album: 'Tigers',
   subjects: ['tiger'],
   tags: ['tiger'],
   description: 'A tiger on a rock.',
   modelProvider: 'ollama',
   modelName: 'qwen',
+  ownerEmail: 'owner@example.com',
 };
 
 const exif = {

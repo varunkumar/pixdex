@@ -33,8 +33,8 @@ export async function requireReadToken(
     return c.text('Unauthorized', 401);
   }
 
-  // Fail closed: without an owner address or a forwarded identity nobody is resolvable.
-  if (!c.env.OWNER_EMAIL || !(c.req.header('X-Viewer-Email') ?? '').trim()) {
+  // Fail closed: without a forwarded identity nobody is resolvable.
+  if (!(c.req.header('X-Viewer-Email') ?? '').trim()) {
     return c.text('Unauthorized', 401);
   }
 

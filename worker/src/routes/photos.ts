@@ -2,19 +2,14 @@ import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { albumRole, userOf } from '../access';
-import { canEditPhoto, photoAccessForRequest, scopeForRequest, visibleAlbumsSql } from '../db/visibility';
+import { canEditPhoto, photoAccess, visibleAlbumsSql } from '../db/visibility';
 import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
   const user = userOf(c);
-  // Default owner with no album owners: one photos read. Otherwise the album comes from a primary-key
-  // join (photoAccess) that also yields canEdit, so no albums scan and no second query.
-  const access = await photoAccessForRequest(c.env.DB, user, 'p');
-  if (!access) {
-    const row = await c.env.DB.prepare('SELECT * FROM photos WHERE id = ?').bind(id).first<PhotoRow>();
-    return row ? c.json(serializePhoto(row, true)) : c.text('Not Found', 404);
-  }
+  // The album comes from a primary-key join (photoAccess) that also yields canEdit: no albums scan, no second query.
+  const access = photoAccess(user, 'p');
   const row = await c.env.DB.prepare(`SELECT p.*, va.owner_email AS va_owner_email FROM photos p${access.join} WHERE p.id = ?${access.where}`)
     .bind(id, ...access.params)
     .first<PhotoRow & { va_owner_email: string | null }>();
@@ -127,10 +122,8 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // The rich, paginated shape is opt-in (limit or offset present). A bare request
   // keeps the original list of names so an older cached frontend does not break.
   const user = userOf(c);
-  // Empty scope (default owner, no album has an owner): no predicate, the original queries.
-  const open = (await scopeForRequest(c.env.DB, user, 'album')).sql === '';
   const v = visibleAlbumsSql(user);
-  const filter = open ? { where: '', and: '', params: [] as unknown[] } : { where: ` WHERE name IN ${v.sql}`, and: ` AND name IN ${v.sql}`, params: v.params };
+  const filter = { where: ` WHERE name IN ${v.sql}`, and: ` AND name IN ${v.sql}`, params: v.params };
   const wantsPage = c.req.query('limit') !== undefined || c.req.query('offset') !== undefined;
   if (c.req.query('names') === '1' || !wantsPage) {
     const result = await c.env.DB.prepare(`SELECT name FROM albums${filter.where} ORDER BY name`)
@@ -162,7 +155,7 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
 
   return c.json({
     albums: rows.results.map((r) => {
-      const owns = user.isDefaultOwner ? r.owner_email === null || r.owner_email === user.email : r.owner_email === user.email;
+      const owns = r.owner_email === user.email;
       return {
         name: r.name,
         photoCount: r.photo_count,

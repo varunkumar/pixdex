@@ -18,6 +18,8 @@ export type ExifFields = z.infer<typeof exifFieldsSchema>;
 
 export const ingestPhotoSchema = z.extend(z.object({
   id: z.uuid(),
+  /** The album owner the agent indexes for; stamped on the album by the first photo that creates it. */
+  ownerEmail: z.string().check(z.trim(), z.toLowerCase(), z.email()),
   contentHash: z.string().check(z.minLength(1)),
   source: z.enum(['local', 'google_drive']),
   path: z.optional(z.string()),

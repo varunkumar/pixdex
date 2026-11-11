@@ -41,8 +41,8 @@ async function ingest(faces: F[]) {
 const rowAt = (x: number) =>
   env.DB.prepare('SELECT * FROM faces WHERE photo_id = ? AND abs(bbox_x - ?) < 0.001').bind(PHOTO, x).first<any>();
 
-async function addPerson(id: string, name: string) {
-  await env.DB.prepare('INSERT INTO persons (id, name, created_at) VALUES (?, ?, ?)').bind(id, name, 't').run();
+async function addPerson(id: string, name: string, owner = 'owner@example.com') {
+  await env.DB.prepare('INSERT INTO persons (id, name, owner_email, created_at) VALUES (?, ?, ?, ?)').bind(id, name, owner, 't').run();
 }
 /** Confirmed reference face on a second photo-less id (photo_id is not constrained). */
 async function addConfirmed(personId: string, v: Float32Array, createdAt: string) {
@@ -61,12 +61,23 @@ describe('automatic matching at ingest', () => {
       headers: ingestHeaders(),
       body: JSON.stringify({
         id: PHOTO, contentHash: HASH, source: 'local', filename: 'p.jpg', subjects: ['people'],
-        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen',
+        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen', ownerEmail: 'owner@example.com', album: 'Group',
       }),
     });
     expect(res.status).toBe(201);
     await addPerson('p1', 'Priya');
     await addConfirmed('p1', vec(1, 2), '2026-01-01');
+  });
+
+  it('only matches people of the album owner, never another owner\'s', async () => {
+    await env.DB.prepare('DELETE FROM persons').run();
+    await env.DB.prepare('DELETE FROM faces').run();
+    await addPerson('theirs', 'Priya', 'other@example.com');
+    await env.DB.prepare("UPDATE persons SET owner_email = 'other@example.com' WHERE id = 'theirs'").run();
+    await addConfirmed('theirs', vec(1, 2), '2026-01-01');
+    const r = await ingest([{ x: 0.1, v: vec(0.9) }]);
+    expect(r.matched).toBe(0);
+    expect((await rowAt(0.1)).assign_status).toBe('unassigned');
   });
 
   it('a new face close to a named person is saved as auto with its score', async () => {

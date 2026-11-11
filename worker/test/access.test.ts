@@ -6,25 +6,22 @@ import { OWNER_TEST_EMAIL, readHeaders } from './helpers';
 const me = (headers: Record<string, string>) => SELF.fetch('https://example.com/me', { headers });
 
 describe('viewer identity', () => {
-  it('reports the owner as default owner', async () => {
+  it('reports the resolved email only', async () => {
     const response = await me(readHeaders());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ email: OWNER_TEST_EMAIL, isDefaultOwner: true });
+    expect(await response.json()).toEqual({ email: OWNER_TEST_EMAIL });
   });
 
-  it('normalizes the email and reports non-owners', async () => {
+  it('normalizes the email', async () => {
     const response = await me(readHeaders('Viewer@Example.COM '));
-    expect(await response.json()).toEqual({ email: 'viewer@example.com', isDefaultOwner: false });
+    expect(await response.json()).toEqual({ email: 'viewer@example.com' });
   });
 
-  it('fails closed with 401 when the Worker has no OWNER_EMAIL', async () => {
+  it('needs no owner address configured: any forwarded identity resolves', async () => {
     const ctx = createExecutionContext();
-    const request = new Request('https://example.com/me', { headers: readHeaders() });
-    const response = await worker.fetch(request, { ...env, OWNER_EMAIL: '' }, ctx);
+    const response = await worker.fetch(new Request('https://example.com/me', { headers: readHeaders() }), { ...env }, ctx);
     await waitOnExecutionContext(ctx);
-    expect(response.status).toBe(401);
-    const search = await worker.fetch(new Request('https://example.com/search', { headers: readHeaders() }), { ...env, OWNER_EMAIL: undefined }, ctx);
-    expect(search.status).toBe(401);
+    expect(response.status).toBe(200);
   });
 
   it('rejects a missing identity header', async () => {

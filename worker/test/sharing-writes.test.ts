@@ -1,8 +1,8 @@
 import { env, SELF } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import app from '../src/index';
 import { guardedWrites } from '../src/access';
-import { OWNER_TEST_EMAIL, readHeaders } from './helpers';
+import { OWNER_TEST_EMAIL, readHeaders, restoreAlbumOwnerFixture, withoutAlbumOwnerFixture } from './helpers';
 
 const OWNER = OWNER_TEST_EMAIL;
 const VIEWER = 'viewer@example.com';
@@ -41,32 +41,94 @@ beforeEach(async () => {
   await run("UPDATE albums SET owner_email = 'other@example.com' WHERE name = 'Sundarbans'");
 });
 
-describe('people management writes are default-owner only', () => {
-  const writes: [string, string, unknown?][] = [
-    ['POST', '/people', { name: 'X' }],
-    ['PATCH', '/people/p1', { name: 'Y' }],
-    ['DELETE', '/people/p1'],
-    ['POST', '/people/p1/faces', { faceIds: ['f1'] }],
-    ['POST', '/people/p1/match', {}],
-    ['POST', '/people/p1/cover', { faceId: 'f1' }],
-    ['POST', '/faces/f1/assign', { personId: 'p1' }],
-    ['POST', '/faces/f1/reject', { personId: 'p1' }],
-    ['POST', '/faces/f1/unassign', {}],
-  ];
+async function insertFace(id: string, photoId: string, personId: string | null = null, status = 'unassigned') {
+  await run(
+    `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, person_id, assign_status, created_at)
+     VALUES (?, ?, 0.1, 0.1, 0.3, 0.3, 0.9, zeroblob(2048), 'm', ?, ?, '2026-01-01T00:00:00.000Z')`,
+    id,
+    photoId,
+    personId,
+    status
+  );
+}
+const personCount = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM persons').first<{ n: number }>())!.n;
 
-  it.each(writes)('%s %s gives a non-default user 403 and changes nothing', async (method, path, body) => {
-    await run("INSERT INTO persons (id, name, created_at) VALUES ('p1', 'P', 'x')");
-    for (const who of [VIEWER, STRANGER]) {
-      const res = await send(method, path, who, body);
-      expect(res.status).toBe(403);
-    }
-    const names = await env.DB.prepare('SELECT id, name FROM persons').all();
-    expect(names.results).toEqual([{ id: 'p1', name: 'P' }]);
-    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM faces').first<{ n: number }>())?.n).toBe(0);
+describe('people and face writes need ownership', () => {
+  // OWNER owns Kanha (shared with VIEWER) and person p1 with a confirmed face f1; f2 is unassigned.
+  // OTHER owns Sundarbans, person po (face fs there) and nothing else.
+  beforeEach(async () => {
+    await run("INSERT INTO persons (id, name, owner_email, created_at) VALUES ('p1', 'P', 'owner@example.com', 'x'), ('po', 'Po', 'other@example.com', 'x')");
+    await insertFace('f1', 'kanha', 'p1', 'confirmed');
+    await insertFace('f2', 'kanha2');
+    await insertFace('fs', 'sund', 'po', 'confirmed');
   });
 
-  it('still lets the default owner create a person', async () => {
-    expect((await send('POST', '/people', OWNER, { name: 'Ok' })).status).toBe(201);
+  const writes: [string, string, unknown?][] = [
+    ['POST', '/people', { name: 'X', faceIds: ['f2'] }],
+    ['PATCH', '/people/p1', { name: 'Y' }],
+    ['DELETE', '/people/p1'],
+    ['POST', '/people/p1/faces', { faceIds: ['f2'] }],
+    ['POST', '/people/p1/match', {}],
+    ['POST', '/people/p1/cover', { faceId: 'f1' }],
+    ['POST', '/faces/f2/assign', { personId: 'p1' }],
+    ['POST', '/faces/f2/reject', { personId: 'p1' }],
+    ['POST', '/faces/f1/unassign', {}],
+  ];
+  const snapshot = async () => JSON.stringify([
+    (await env.DB.prepare('SELECT id, name, owner_email, cover_face_id FROM persons ORDER BY id').all()).results,
+    (await env.DB.prepare('SELECT id, person_id, assign_status FROM faces ORDER BY id').all()).results,
+    (await env.DB.prepare('SELECT * FROM face_rejections').all()).results,
+  ]);
+
+  it.each(writes)('%s %s: a viewer of the album gets 403, a stranger 404, and nothing changes', async (method, path, body) => {
+    const before = await snapshot();
+    expect((await send(method, path, VIEWER, body)).status).toBe(403);
+    expect((await send(method, path, STRANGER, body)).status).toBe(404);
+    expect(await snapshot()).toBe(before);
+  });
+
+  it('another owner cannot touch this owner\'s faces or people either way (404, nothing visible)', async () => {
+    const before = await snapshot();
+    expect((await send('POST', '/faces/f2/assign', OTHER, { personId: 'po' })).status).toBe(404);
+    expect((await send('POST', '/faces/fs/assign', OWNER, { personId: 'p1' })).status).toBe(404);
+    expect((await send('POST', '/faces/f2/assign', OWNER, { personId: 'po' })).status).toBe(404);
+    expect((await send('PATCH', '/people/po', OWNER, { name: 'Z' })).status).toBe(404);
+    expect(await snapshot()).toBe(before);
+  });
+
+  it('a viewer who can see another owner\'s person gets 403 on it, while their own faces need their own person', async () => {
+    await run("UPDATE albums SET owner_email = ? WHERE name = 'Sundarbans'", VIEWER);
+    await run("UPDATE persons SET owner_email = ? WHERE id = 'po'", VIEWER);
+    // VIEWER owns Sundarbans and person po, and is shared Kanha: assign fs to po works, f2 (Kanha) is 403, p1 is 403.
+    expect((await send('POST', '/faces/fs/assign', VIEWER, { personId: 'po' })).status).toBe(200);
+    expect((await send('POST', '/faces/fs/assign', VIEWER, { personId: 'p1' })).status).toBe(403);
+    expect((await send('POST', '/faces/f2/assign', VIEWER, { personId: 'po' })).status).toBe(403);
+  });
+
+  it('owners can create, rename, assign, reject, unassign, set a cover and delete their own people', async () => {
+    const created = await send('POST', '/people', OWNER, { name: 'New', faceIds: ['f2'] });
+    expect(created.status).toBe(201);
+    const { id } = await created.json<any>();
+    expect((await env.DB.prepare('SELECT owner_email FROM persons WHERE id = ?').bind(id).first<any>()).owner_email).toBe(OWNER);
+    expect((await send('PATCH', `/people/${id}`, OWNER, { name: 'Newer' })).status).toBe(200);
+    expect((await send('POST', `/people/${id}/cover`, OWNER, { faceId: 'f2' })).status).toBe(200);
+    expect((await send('POST', '/faces/f2/unassign', OWNER, {})).status).toBe(200);
+    expect((await send('POST', '/faces/f2/assign', OWNER, { personId: id })).status).toBe(200);
+    expect((await send('POST', '/faces/f2/reject', OWNER, { personId: id })).status).toBe(200);
+    expect((await send('POST', `/people/${id}/match`, OWNER, {})).status).toBe(200);
+    expect((await send('DELETE', `/people/${id}`, OWNER)).status).toBe(204);
+  });
+
+  it('names are unique per owner, case-insensitively, and free across owners', async () => {
+    expect((await send('POST', '/people', OWNER, { name: 'p' })).status).toBe(409);
+    expect((await send('POST', '/people', OTHER, { name: 'p' })).status).toBe(201);
+    expect((await send('POST', '/people', OTHER, { name: 'P' })).status).toBe(409);
+    expect((await send('PATCH', '/people/p1', OWNER, { name: 'PO' })).status).toBe(200);
+    expect(await personCount()).toBe(3);
+  });
+
+  it('a stranger may create a person of their own with no faces', async () => {
+    expect((await send('POST', '/people', STRANGER, { name: 'Mine' })).status).toBe(201);
   });
 });
 
@@ -74,10 +136,10 @@ describe('PATCH /photos/:id', () => {
   const edit = { caption: 'edited' };
   const caption = async (id: string) => (await env.DB.prepare('SELECT user_caption FROM photos WHERE id = ?').bind(id).first<{ user_caption: string | null }>())?.user_caption;
 
-  it('lets the album owner edit, and the default owner edit an album-less photo', async () => {
+  it('lets the album owner edit, but nobody edits an album-less photo', async () => {
     expect((await send('PATCH', '/photos/kanha', OWNER, edit)).status).toBe(200);
     expect(await caption('kanha')).toBe('edited');
-    expect((await send('PATCH', '/photos/loose', OWNER, edit)).status).toBe(200);
+    expect((await send('PATCH', '/photos/loose', OWNER, edit)).status).toBe(404);
     expect((await send('PATCH', '/photos/sund', OTHER, edit)).status).toBe(200);
   });
 
@@ -88,13 +150,13 @@ describe('PATCH /photos/:id', () => {
     expect(await caption('kanha')).toBeNull();
   });
 
-  it('gives a stranger 404, and nobody but the default owner edits an album-less photo', async () => {
+  it('gives a stranger 404, on a shared photo and on an album-less one', async () => {
     expect((await send('PATCH', '/photos/kanha', STRANGER, edit)).status).toBe(404);
     expect((await send('PATCH', '/photos/loose', STRANGER, edit)).status).toBe(404);
     expect(await caption('kanha')).toBeNull();
   });
 
-  it('gives the default owner 404 on a photo in another user\'s album they cannot see', async () => {
+  it('gives an owner 404 on a photo in another user\'s album they cannot see', async () => {
     expect((await send('PATCH', '/photos/sund', OWNER, edit)).status).toBe(404);
   });
 
@@ -144,7 +206,7 @@ describe('PUT /albums/shares', () => {
     expect(await sharedWith('Kanha')).toBe(before);
   });
 
-  it('gives 404 for an unknown album and for one the default owner cannot see', async () => {
+  it('gives 404 for an unknown album and for one the owner cannot see', async () => {
     expect((await send('PUT', '/albums/shares', STRANGER, { album: 'Nope', emails: [] })).status).toBe(404);
     expect((await send('PUT', '/albums/shares', OWNER, { album: 'Sundarbans', emails: [] })).status).toBe(404);
   });
@@ -194,6 +256,7 @@ describe('ingest and album ownership', () => {
     suggestedCaption: 'c',
     modelProvider: 'ollama',
     modelName: 'm',
+    ownerEmail: 'owner@example.com',
     ...extra,
   });
   const ingest = (body: unknown) =>
@@ -206,22 +269,50 @@ describe('ingest and album ownership', () => {
   const U2 = '123e4567-e89b-12d3-a456-426614174002';
   const count = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM photos').first<{ n: number }>())!.n;
 
+  const owner = (album: string) => env.DB.prepare('SELECT owner_email FROM albums WHERE name = ?').bind(album).first<{ owner_email: string | null }>().then((r) => r?.owner_email);
+
   it('409s into another user\'s album and writes nothing', async () => {
     const before = await count();
     expect((await ingest(payload(U1, 'Sundarbans'))).status).toBe(409);
     expect(await count()).toBe(before);
   });
 
-  it('allows new, NULL-owner and OWNER_EMAIL-owned albums', async () => {
-    expect((await ingest(payload(U1, 'Brand New'))).status).toBe(201);
-    expect((await ingest(payload(U2, 'Kanha'))).status).toBe(201);
-    await run("UPDATE albums SET owner_email = 'owner@example.com' WHERE name = 'Kanha'");
-    expect((await ingest(payload(U2, 'Kanha'))).status).toBe(201);
+  it('requires a valid ownerEmail and lowercases it', async () => {
+    const { ownerEmail: _drop, ...without } = payload(U1, 'Kanha') as Record<string, unknown>;
+    expect((await ingest(without)).status).toBe(400);
+    expect((await ingest(payload(U1, 'Kanha', { ownerEmail: 'not-an-email' }))).status).toBe(400);
+    expect((await ingest(payload(U1, 'Kanha', { ownerEmail: '  Owner@Example.COM ' }))).status).toBe(201);
+  });
+
+  describe('stamping the album owner', () => {
+    beforeEach(withoutAlbumOwnerFixture);
+    afterEach(restoreAlbumOwnerFixture);
+
+    it('the first photo of a new album stamps it, a later photo by the same owner keeps it', async () => {
+      expect((await ingest(payload(U1, 'Brand New'))).status).toBe(201);
+      expect(await owner('Brand New')).toBe(OWNER);
+      expect((await ingest(payload(U2, 'Brand New'))).status).toBe(201);
+      expect(await owner('Brand New')).toBe(OWNER);
+    });
+
+    it('stamps a NULL-owner album the first time, then 409s anyone else', async () => {
+      await run("UPDATE albums SET owner_email = NULL WHERE name = 'Kanha'");
+      expect((await ingest(payload(U1, 'Kanha'))).status).toBe(201);
+      expect(await owner('Kanha')).toBe(OWNER);
+      expect((await ingest(payload(U2, 'Kanha', { ownerEmail: 'other@example.com' }))).status).toBe(409);
+      expect(await owner('Kanha')).toBe(OWNER);
+    });
+
+    it('does not stamp a photo without an album, and writes the stamp once per album', async () => {
+      const { album: _a, ...noAlbum } = payload(U1, 'x') as Record<string, unknown>;
+      expect((await ingest(noAlbum)).status).toBe(201);
+      expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM albums WHERE owner_email IS NULL").first<{ n: number }>())!.n).toBe(0);
+    });
   });
 
   it('drops owner_email and shared_with from the body', async () => {
-    expect((await ingest(payload(U1, 'Kanha', { owner_email: 'evil@example.com', shared_with: ['evil@example.com'], ownerEmail: 'evil@example.com' }))).status).toBe(201);
+    expect((await ingest(payload(U1, 'Kanha', { owner_email: 'evil@example.com', shared_with: ['evil@example.com'] }))).status).toBe(201);
     const a = await env.DB.prepare("SELECT owner_email, shared_with FROM albums WHERE name = 'Kanha'").first();
-    expect(a).toEqual({ owner_email: null, shared_with: '["viewer@example.com"]' });
+    expect(a).toEqual({ owner_email: 'owner@example.com', shared_with: '["viewer@example.com"]' });
   });
 });

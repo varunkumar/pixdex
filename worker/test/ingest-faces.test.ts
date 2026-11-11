@@ -8,11 +8,13 @@ const photo = {
   contentHash: 'hash-faces',
   source: 'local' as const,
   filename: 'group.jpg',
+  album: 'Groups',
   subjects: ['people'],
   tags: ['people'],
   description: 'A group photo.',
   modelProvider: 'ollama',
   modelName: 'qwen',
+  ownerEmail: 'owner@example.com',
 };
 const MODEL = 'buffalo_l';
 

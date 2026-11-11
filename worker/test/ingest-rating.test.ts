@@ -13,8 +13,8 @@ describe('POST /ingest/rating', () => {
   beforeEach(async () => {
     await env.DB.prepare('DELETE FROM photos').run();
     await env.DB.prepare(
-      `INSERT INTO photos (id, content_hash, source, filename, model_provider, model_name, last_indexed)
-       VALUES ('p1','h1','local','p1.jpg','ollama','m','2026-09-18T00:00:00.000Z')`
+      `INSERT INTO photos (id, content_hash, source, filename, album, model_provider, model_name, last_indexed)
+       VALUES ('p1','h1','local','p1.jpg','A','ollama','m','2026-09-18T00:00:00.000Z')`
     ).run();
   });
 

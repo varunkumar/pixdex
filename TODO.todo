@@ -1,18 +1,17 @@
 Album sharing:
-  - Support other users adding their own photos (per-user ingest tokens that set albums.owner_email)
+  - Support other users adding their own photos: the ingest token is still one shared secret and the agent sends one ownerEmail; add per-user ingest tokens that bind an owner
+  - Photos with no album (root-level files) are invisible to everyone; surface or reject them in the agent (it indexes them without an album today)
   - Allow the same album name under different owners (photos.owner_email and an (owner_email, name) album key)
-  - Per-owner people management
   - Stranger load: with Access open to any Google account, a signed-in account with no shares still runs scoped queries that scan the albums table (about one scan per statement, several per search); add a rate limit rule on /api/* and/or an album_shares(email, album) lookup table so a stranger costs about 0 rows
-  - Scoped search: viewers (and the default owner once another owner exists) lose the date_time and last_indexed early exit and read and sort every visible row per page; for the unfiltered total use SUM(photo_count) over the visible albums instead of COUNT(*) over photos
+  - Scoped search: every user loses the date_time and last_indexed early exit and read and sort every visible row per page; for the unfiltered total use SUM(photo_count) over the visible albums instead of COUNT(*) over photos
   - Access hardening in functions/_lib/access.ts: negative-cache failed JWKS fetches (a forged kid can trigger a certs fetch per request while the endpoint fails), check the iss claim, serve a stale JWKS for a short grace period after the certs endpoint fails, add a timeout to the originals access subrequest
-  - Vite dev proxy: fail loudly when neither DEV_VIEWER_EMAIL nor OWNER_EMAIL is set (it currently forwards a client X-Viewer-Email)
+  - Vite dev proxy: fail loudly when neither DEV_VIEWER_EMAIL nor OWNER_EMAIL (root .env) is set (it currently forwards a client X-Viewer-Email)
   - A removed share can still show thumbnails and originals already cached in the viewer's browser (originals 1h, thumbnails immutable); decide whether to shorten or revalidate caches for non-owners
   - Share dialog: enforce the 50 email cap in the UI (maxTags), dedupe case-insensitively, test the 400/403/404 error display, keep an email typed but not yet committed when Save is clicked, and verify the dialog and AlbumCard layout in a browser (jsdom only so far)
   - Viewer daily pick is the same photo every day until ratings change (no write path to rotate it); pick by day hash instead
   - Empty state: a signed-in user with nothing shared sees empty lists and "No photos available" on /daily; show a "Nothing has been shared with you yet" message
-  - Route-enumeration test (worker/test/sharing-writes.test.ts) ignores app.all writes and does not prove an albumWrite handler really calls albumRole; wrap the check so it cannot be forgotten
-  - canEditFor for the default owner still scans albums once another owner exists (the partial index cannot serve the NULL branch); revisit with multi-owner ingest
-  - A photo in an album owned by someone else but shared with the default owner has path null for the agent originals lookup (R6), so its original cannot be served; handle with multi-owner ingest
+  - Route-enumeration test (worker/test/sharing-writes.test.ts) ignores app.all writes and does not prove a guardedWrite handler really calls albumRole, faceRoles or personRole; wrap the check so it cannot be forgotten (guardedWrite, formerly albumWrite)
+  - A photo in an album owned by someone else but shared with another user has path null for the agent originals lookup (R6), so its original cannot be served; handle with multi-owner ingest
   - Measure after rollout: wrangler tail pixdex-worker --format json and wrangler d1 insights pixdex --timePeriod 30d; replace the EXPLAIN-based estimates in docs/development.md with real rows read
   - Test gaps: scoped search with the people filter and with sort, timeline year zoom and undated groups for non-owners, tiered search fallback as a non-owner
 

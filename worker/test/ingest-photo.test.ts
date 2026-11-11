@@ -25,6 +25,7 @@ const payload = {
   suggestedHashtags: ['leopard', 'wildlife', 'kanha'],
   modelProvider: 'ollama',
   modelName: 'qwen3.5:27b-mlx',
+  ownerEmail: 'owner@example.com',
 };
 
 describe('POST /ingest/photo', () => {

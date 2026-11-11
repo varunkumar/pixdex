@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import type { Env } from '../types';
 import { COMBINED_SCORE_SQL, combinedScore } from '../db/rating';
 import { userOf } from '../access';
-import { canEditFor, scopeForRequest } from '../db/visibility';
+import { canEditFor, scopeFor } from '../db/visibility';
 import { effectiveText, serializePhoto, type PhotoRow } from '../db/photos';
 
 const SEASON_MONTHS: Record<string, number[]> = {
@@ -72,37 +72,36 @@ function buildResponse(row: PhotoRow, canEdit: boolean) {
   };
 }
 
-// Candidate cap for non-default users: the pick is read-only for them, so a bounded top-rated scan is enough.
-const SHARED_CANDIDATES = 200;
+// Candidate cap: a bounded top-rated scan keeps the CPU and rows read per request fixed, whatever the library size.
+const PICK_CANDIDATES = 200;
+const REPICK_DAYS = 90;
 
 export async function dailyPickRoute(c: Context<{ Bindings: Env }>) {
   const user = userOf(c);
-  const scope = await scopeForRequest(c.env.DB, user, 'album');
-  const canEdit = await canEditFor(c.env.DB, user, scope);
+  const scope = scopeFor(user, 'album');
+  const canEdit = await canEditFor(c.env.DB, user);
   const today = new Date().toISOString().slice(0, 10);
 
-  // Idempotent-per-day: if a photo was already picked today, return it again
-  // instead of re-scanning and re-picking (and re-writing) on every call.
-  // Non-default users never read or write the shared pick state.
-  if (user.isDefaultOwner) {
-    const alreadyPicked = await c.env.DB.prepare(
-      `SELECT ${SELECT_COLUMNS} FROM photos WHERE instagram_suggested LIKE ?${scope.sql} ORDER BY instagram_suggested DESC LIMIT 1`
-    )
-      .bind(`${today}%`, ...scope.params)
-      .first<PhotoRow>();
+  // Idempotent-per-day: if a visible photo was already picked today, return it again
+  // instead of re-scanning and re-picking on every call.
+  const alreadyPicked = await c.env.DB.prepare(
+    `SELECT ${SELECT_COLUMNS} FROM photos WHERE instagram_suggested LIKE ?${scope.sql} ORDER BY instagram_suggested DESC LIMIT 1`
+  )
+    .bind(`${today}%`, ...scope.params)
+    .first<PhotoRow>();
 
-    if (alreadyPicked) {
-      return c.json(buildResponse(alreadyPicked, canEdit(alreadyPicked.album)));
-    }
+  if (alreadyPicked) {
+    return c.json(buildResponse(alreadyPicked, canEdit(alreadyPicked.album)));
   }
 
-  const all = user.isDefaultOwner
-    ? await c.env.DB.prepare(`SELECT ${SELECT_COLUMNS} FROM photos${scope.sql ? ` WHERE 1=1${scope.sql}` : ''}`).bind(...scope.params).all<PhotoRow>()
-    : await c.env.DB.prepare(
-        `SELECT ${SELECT_COLUMNS} FROM photos WHERE 1=1${scope.sql} ORDER BY ${COMBINED_SCORE_SQL} IS NULL, ${COMBINED_SCORE_SQL} DESC, id LIMIT ${SHARED_CANDIDATES}`
-      )
-        .bind(...scope.params)
-        .all<PhotoRow>();
+  // Recently picked photos sort last so the 200 candidates are mostly eligible ones.
+  const cutoff = new Date(Date.now() - REPICK_DAYS * 86_400_000).toISOString();
+  const all = await c.env.DB.prepare(
+    `SELECT ${SELECT_COLUMNS} FROM photos WHERE 1=1${scope.sql}
+     ORDER BY (instagram_suggested IS NOT NULL AND instagram_suggested > ?), ${COMBINED_SCORE_SQL} IS NULL, ${COMBINED_SCORE_SQL} DESC, id LIMIT ${PICK_CANDIDATES}`
+  )
+    .bind(...scope.params, cutoff)
+    .all<PhotoRow>();
   if (all.results.length === 0) {
     return c.text('No photos available', 404);
   }
@@ -132,7 +131,8 @@ export async function dailyPickRoute(c: Context<{ Bindings: Env }>) {
 
   const best = pool.reduce((a, b) => (score(b) > score(a) ? b : a));
 
-  if (user.isDefaultOwner) {
+  // The pick is only recorded on photos the user owns (shared viewers never write the owner's pick state).
+  if (canEdit(best.album)) {
     const now = new Date().toISOString();
     await c.env.DB.prepare('UPDATE photos SET instagram_suggested = ? WHERE id = ?').bind(now, best.id).run();
     best.instagram_suggested = now;

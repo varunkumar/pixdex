@@ -60,22 +60,27 @@ Cloudflare Access sits in front of the Pages site and, after login, adds a signe
 The Pages Function (`functions/_lib/access.ts`) verifies it (RS256 signature against the team JWKS at
 `https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`, cached per isolate for an hour; `aud` must be `ACCESS_AUD`;
 `exp`/`nbf` checked) and sends the verified, lowercased email to the Worker as `X-Viewer-Email`. It never trusts a
-plain email header and drops any client-sent `X-Viewer-Email`. No valid JWT gives 401; a missing `OWNER_EMAIL`,
-`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` gives 500 (fail closed). The Worker requires READ_TOKEN and `X-Viewer-Email`
-on every read and write.
+plain email header and drops any client-sent `X-Viewer-Email`. No valid JWT gives 401; a missing `ACCESS_TEAM_DOMAIN` or
+`ACCESS_AUD` gives 500 (fail closed). The Worker requires READ_TOKEN and `X-Viewer-Email` on every read and write.
 
-Access model (`worker/src/access.ts`, `worker/src/db/visibility.ts`): the viewer whose email equals `OWNER_EMAIL`
-is the default owner. `albums.owner_email` NULL means the default owner; `albums.shared_with` is a JSON array of
-lowercase emails or NULL (migration `0016`). A user sees an album when they own it or are in `shared_with`; the
-default owner also sees NULL-owner albums. Photo reads (search, timeline, buckets, albums, photo, faces, daily pick)
-are filtered by that scope; an invisible resource is 404, and a viewer's write is 403. `PUT /albums/shares` (owner
-only) replaces `shared_with`; `GET /me` returns `{ email, isDefaultOwner }`. People and faces management is
-default-owner only. While no album has another owner, the default owner takes a fast path with no scope predicate.
+Access model (`worker/src/access.ts`, `worker/src/db/visibility.ts`): there is no default owner. `albums.owner_email` is the
+album's owner; `albums.shared_with` is a JSON array of lowercase emails or NULL (migration `0016`). A user sees an album when
+they own it or are in `shared_with`. An album with a NULL owner, and any photo with no album, is visible to nobody until the
+one-time `worker/scripts/backfill-owner.mjs` stamps the albums (and people) with the owner address. Photo reads (search,
+timeline, buckets, albums, photo, faces, daily pick) are always filtered by that scope (`scopeFor` or the primary-key join in
+`photoAccess`; there is no unscoped fast path); an invisible resource is 404, and a viewer's write is 403. `PUT /albums/shares`
+(owner only) replaces `shared_with`; `GET /me` returns `{ email }`. The Worker never reads `OWNER_EMAIL`: the agent sends
+it as `ownerEmail` with each ingested photo (`POST /ingest/photo`), and the first photo of an album stamps the album's owner.
 
-Originals: the default owner is proxied straight to the agent tunnel. Any other user first triggers a Function call
-to Worker `GET /access/photo/:id` (READ_TOKEN plus their email); only a 204 is proxied, anything else is 404.
-Thumbnails: the default owner is served with no D1 query; others get one `content_hash` lookup joined to the album by
-primary key. Single-photo reads use that join (`photoAccess`), list reads use the album subquery (`scopeFor`).
+People are per owner (`persons.owner_email`, unique name per owner). A person is editable only by its owner; face assign,
+reject and unassign need the face's album to be the caller's and any named person to be theirs. `GET /people` returns the
+caller's people and other owners' people with a visible assigned face (`canEdit` per person); groups and match candidates
+only cover faces in albums the caller owns, and matching never crosses owners (references cached per owner).
+
+Originals: for every user, including the album owner, the Function first calls Worker `GET /access/photo/:id`
+(READ_TOKEN plus their email); only a 204 is proxied to the agent tunnel, anything else is 404.
+Thumbnails: one `content_hash` lookup joined to the album by primary key per request (the browser caches them for a year).
+Single-photo reads use that join (`photoAccess`), list reads use the album subquery (`scopeFor`).
 Viewers get `path` and `driveFileId` as null in photo responses (the owner's local path and Drive id are owner-only).
 
 ### `functions/api/[[path]].ts` - Pages Function proxy
@@ -297,8 +302,8 @@ Licence: InsightFace pretrained weights are non-commercial, personal use only.
 
 | Where | Variables |
 | --- | --- |
-| Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (all three required); local dev only: `DEV_VIEWER_EMAIL` |
-| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (required by `serve-originals`, used by `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
-| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN`, `OWNER_EMAIL` (`wrangler secret put OWNER_EMAIL`; a secret, not a dashboard var, which a deploy would delete; if unset every Worker call is 401; must equal the Pages and agent `OWNER_EMAIL`) |
+| Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (both required); local dev only: `DEV_VIEWER_EMAIL` |
+| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (the album owner: required to index, sent as `ownerEmail`; also the viewer for `serve-originals` and `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
+| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN` (the Worker never reads `OWNER_EMAIL`; an old Worker secret of that name can be deleted) |
 
 Never prefix server-side secrets with `VITE_`.

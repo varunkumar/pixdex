@@ -185,6 +185,15 @@ BEGIN SELECT RAISE(ABORT, 'emails on albums must be lowercase'); END;`,
   `CREATE TRIGGER IF NOT EXISTS albums_emails_lower_bu BEFORE UPDATE OF owner_email, shared_with ON albums
 WHEN (new.owner_email IS NOT NULL AND new.owner_email <> lower(new.owner_email)) OR (new.shared_with IS NOT NULL AND new.shared_with <> lower(new.shared_with))
 BEGIN SELECT RAISE(ABORT, 'emails on albums must be lowercase'); END;`,
+  'ALTER TABLE persons ADD COLUMN owner_email TEXT;',
+  'DROP INDEX IF EXISTS idx_persons_name_lower;',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_persons_owner_name_lower ON persons (owner_email, lower(name));',
+  `CREATE TRIGGER IF NOT EXISTS persons_owner_lower_bi BEFORE INSERT ON persons
+WHEN new.owner_email IS NOT NULL AND new.owner_email <> lower(new.owner_email)
+BEGIN SELECT RAISE(ABORT, 'emails on persons must be lowercase'); END;`,
+  `CREATE TRIGGER IF NOT EXISTS persons_owner_lower_bu BEFORE UPDATE OF owner_email ON persons
+WHEN new.owner_email IS NOT NULL AND new.owner_email <> lower(new.owner_email)
+BEGIN SELECT RAISE(ABORT, 'emails on persons must be lowercase'); END;`,
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

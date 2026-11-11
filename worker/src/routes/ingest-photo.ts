@@ -16,13 +16,14 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
     return c.json({ error: z.flattenError(parsed.error) }, 400);
   }
   const p = parsed.data;
-  // An album owned by another user is not the agent's to write into (one point lookup, ingest only).
+  // An album owned by another user is not this owner's to write into (one point lookup, ingest only).
+  let needsStamp = false;
   if (p.album) {
     const a = await c.env.DB.prepare('SELECT owner_email FROM albums WHERE name = ?').bind(p.album).first<{ owner_email: string | null }>();
-    const owner = (c.env.OWNER_EMAIL ?? '').trim().toLowerCase();
-    if (a?.owner_email && a.owner_email !== owner) {
+    if (a?.owner_email && a.owner_email !== p.ownerEmail) {
       return c.json({ error: 'album is owned by another user' }, 409);
     }
+    needsStamp = !a?.owner_email;
   }
   // A re-index must not undo the owner's edits, so index their versions when set.
   const edits = await c.env.DB.prepare(
@@ -111,6 +112,11 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
       return c.json({ error: 'content_hash already exists for a different id' }, 409);
     }
     throw err;
+  }
+
+  // The albums row exists now (trigger). First photo(s) of an album stamp its owner: one single-row write.
+  if (needsStamp && p.album) {
+    await c.env.DB.prepare('UPDATE albums SET owner_email = ? WHERE name = ? AND owner_email IS NULL').bind(p.ownerEmail, p.album).run();
   }
 
   return c.json({ id: p.id }, 201);

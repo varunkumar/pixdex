@@ -7,10 +7,10 @@ const ingestHeaders = () => ({ Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Con
 const HASH = 'hash-match';
 const PHOTO = '123e4567-e89b-12d3-a456-426614174000';
 
-const call = (method: string, path: string, body?: unknown) =>
+const call = (method: string, path: string, body?: unknown, as?: string) =>
   SELF.fetch(`https://example.com${path}`, {
     method,
-    headers: { ...readHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...readHeaders(as), 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
@@ -74,7 +74,7 @@ describe('people groups and matching', () => {
       headers: ingestHeaders(),
       body: JSON.stringify({
         id: PHOTO, contentHash: HASH, source: 'local', filename: 'p.jpg', subjects: ['people'],
-        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen',
+        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen', ownerEmail: 'owner@example.com', album: 'Group',
       }),
     });
     expect(res.status).toBe(201);
@@ -98,6 +98,21 @@ describe('people groups and matching', () => {
     const ids = body.groups.flatMap((g: any) => g.faces.map((f: any) => f.id));
     expect(ids).not.toContain(await idAt(0.4));
     expect(JSON.stringify(body)).not.toContain('embedding');
+  });
+
+  it('groups and match only consider faces in albums the caller owns', async () => {
+    const pid = await refPerson();
+    await ingest([{ x: 0.1, v: vec(1, 1) }, { x: 0.2, v: vec(0.99, 1) }]);
+    const mine = (await (await call('GET', '/people/groups')).json()) as any;
+    expect(mine.scanned).toBe(2);
+    // The photo's album moves to another owner who shared it with the caller: faces stay visible but are not theirs.
+    await env.DB.prepare("UPDATE albums SET owner_email = 'other@example.com', shared_with = '[\"owner@example.com\"]' WHERE name = 'Group'").run();
+    const groups = (await (await call('GET', '/people/groups')).json()) as any;
+    expect(groups).toEqual({ groups: [], scanned: 0, nextCursor: null });
+    const match = (await (await call('POST', `/people/${pid}/match`, {})).json()) as any;
+    expect(match.scanned).toBe(0);
+    const theirs = (await (await call('GET', '/people/groups', undefined, 'other@example.com')).json()) as any;
+    expect(theirs.scanned).toBe(2);
   });
 
   it('groups pages with a cursor', async () => {

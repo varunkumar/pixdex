@@ -41,7 +41,7 @@ describe('album sharing: people, faces and daily pick', () => {
     await insertPhoto('ranth', 'Ranthambore');
     await run(`UPDATE albums SET shared_with = '["viewer@example.com"]' WHERE name = 'Kanha'`);
     await run("UPDATE albums SET owner_email = 'other@example.com' WHERE name = 'Ranthambore'");
-    await run("INSERT INTO persons (id, name, created_at) VALUES ('p-mixed', 'Mixed', 'x'), ('p-hidden', 'Hidden', 'x')");
+    await run("INSERT INTO persons (id, name, owner_email, created_at) VALUES ('p-mixed', 'Mixed', 'owner@example.com', 'x'), ('p-hidden', 'Hidden', 'owner@example.com', 'x')");
     await insertFace('f-vis', 'kanha', 'p-mixed', 'confirmed');
     await insertFace('f-vis2', 'kanha2', 'p-mixed', 'auto');
     await insertFace('f-inv', 'ranth', 'p-mixed', 'confirmed', 5);
@@ -54,18 +54,31 @@ describe('album sharing: people, faces and daily pick', () => {
     expect(people.map((p: any) => p.id)).toEqual(['p-mixed']);
     expect(people[0].faceCount).toBe(2);
     expect(people[0].photoCount).toBe(2);
+    // A viewer sees the owner's person but cannot edit it.
+    expect(people[0].canEdit).toBe(false);
+  });
+
+  it('lists only the caller\'s own people when another owner has people of the same name', async () => {
+    await run("INSERT INTO persons (id, name, owner_email, created_at) VALUES ('p-other', 'Mixed', 'other@example.com', 'x')");
+    await insertFace('f-other', 'ranth', 'p-other', 'confirmed');
+    const owner = (await json('/people', OWNER)).people.map((p: any) => p.id);
+    expect(owner).toEqual(['p-hidden', 'p-mixed']);
+    const other = (await json('/people', 'other@example.com')).people;
+    // Another owner's people with a face in a photo they can see are listed too, read-only.
+    expect(other.map((p: any) => [p.id, p.canEdit])).toEqual([['p-hidden', false], ['p-mixed', false], ['p-other', true]]);
   });
 
   it('shows a stranger no people', async () => {
     expect((await json('/people', STRANGER)).people).toEqual([]);
   });
 
-  it('lists every person for the default owner, with counts over visible photos', async () => {
+  it('lists every person the caller owns, with counts over visible photos', async () => {
     const { people } = await json('/people', OWNER);
     expect(people.map((p: any) => p.id)).toEqual(['p-hidden', 'p-mixed']);
-    // Ranthambore is owned by someone else, so only the Kanha faces count for the default owner too.
+    // Ranthambore is owned by someone else, so only the Kanha faces count for the owner too.
     expect(people.find((p: any) => p.id === 'p-mixed').faceCount).toBe(2);
-    // The default owner still manages people with no visible faces, with zero counts.
+    expect(people.every((p: any) => p.canEdit === true)).toBe(true);
+    // The owner still manages people with no visible faces, with zero counts.
     expect(people.find((p: any) => p.id === 'p-hidden').faceCount).toBe(0);
   });
 
@@ -76,7 +89,7 @@ describe('album sharing: people, faces and daily pick', () => {
     expect(people[0].cover.photoId).not.toBe('ranth');
   });
 
-  it('returns empty groups for non-default users', async () => {
+  it('returns empty groups for users who own no album', async () => {
     expect(await json('/people/groups', VIEWER)).toEqual({ groups: [], scanned: 0, nextCursor: null });
     expect(await json('/people/groups', STRANGER)).toEqual({ groups: [], scanned: 0, nextCursor: null });
   });
@@ -117,7 +130,7 @@ describe('album sharing: people, faces and daily pick', () => {
     expect(await res.text()).toBe('No photos available');
   });
 
-  it('daily pick for the default owner never picks an invisible photo, and still writes', async () => {
+  it('daily pick for an album owner never picks an invisible photo, and still writes', async () => {
     await run("UPDATE photos SET aesthetic_score = 10 WHERE id = 'ranth'");
     const body = await json('/daily-pick', OWNER);
     expect(['kanha', 'kanha2']).toContain(body.photo.id);

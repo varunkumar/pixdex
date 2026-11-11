@@ -4,11 +4,11 @@ import type { User } from '../src/access';
 import { PHOTOS_MIGRATION_STATEMENTS } from '../migrations/index';
 // @ts-expect-error Vite raw import, resolved by the test runner
 import migration0016 from '../migrations/0016_album_shares.sql?raw';
-import { canEditPhoto, photoAccess, photoAccessForRequest, scopeFor, scopeForRequest, visibleAlbumsSql } from '../src/db/visibility';
+import { canEditFor, canEditPhoto, photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 
-const OWNER: User = { email: 'owner@example.com', isDefaultOwner: true };
-const ALICE: User = { email: 'alice@example.com', isDefaultOwner: false };
-const BOB: User = { email: 'bob@example.com', isDefaultOwner: false };
+const OWNER: User = { email: 'owner@example.com' };
+const ALICE: User = { email: 'alice@example.com' };
+const BOB: User = { email: 'bob@example.com' };
 
 const run = (sql: string, ...params: unknown[]) => env.DB.prepare(sql).bind(...params).run();
 const insert = (id: string, album: string | null) =>
@@ -36,15 +36,17 @@ describe('visibility SQL', () => {
     await insert('bobs', 'BobAlbum');
     await run("UPDATE albums SET owner_email = 'alice@example.com' WHERE name = 'AliceAlbum'");
     await run("UPDATE albums SET owner_email = 'bob@example.com' WHERE name = 'BobAlbum'");
+    await insert('ownerless', 'Ownerless');
+    await run("UPDATE albums SET owner_email = NULL WHERE name = 'Ownerless'");
     await run(`UPDATE albums SET shared_with = '["alice@example.com"]' WHERE name = 'Shared'`);
   });
 
-  it('default owner sees own, unalbumed and shared albums but not other owners', async () => {
+  it('an owner sees own and shared albums, never unalbumed photos, ownerless albums or other owners', async () => {
     await run(`UPDATE albums SET shared_with = '["owner@example.com"]' WHERE name = 'BobAlbum'`);
-    expect(await visibleIds(OWNER)).toEqual(['bobs', 'none', 'own', 'shared']);
+    expect(await visibleIds(OWNER)).toEqual(['bobs', 'own', 'shared']);
   });
 
-  it('a non-default user sees owned and shared albums only, never unalbumed photos', async () => {
+  it('a user sees owned and shared albums only, never unalbumed or ownerless photos', async () => {
     expect(await visibleIds(ALICE)).toEqual(['alice-own', 'shared']);
     expect(await visibleIds(BOB)).toEqual(['bobs']);
   });
@@ -69,21 +71,12 @@ describe('visibility SQL', () => {
     expect(await env.DB.prepare("SELECT 1 FROM albums WHERE name = 'Shared'").first()).toBeNull();
   });
 
-  it('scopeForRequest is empty for the default owner only while no album has an owner', async () => {
-    await run('UPDATE albums SET owner_email = NULL');
-    expect(await scopeForRequest(env.DB, OWNER, 'album')).toEqual({ sql: '', params: [] });
-    expect((await scopeForRequest(env.DB, ALICE, 'album')).sql).not.toBe('');
-    await run("UPDATE albums SET owner_email = 'alice@example.com' WHERE name = 'AliceAlbum'");
-    expect((await scopeForRequest(env.DB, OWNER, 'album')).sql).not.toBe('');
-    expect((await scopeForRequest(env.DB, ALICE, 'album')).sql).not.toBe('');
-  });
-
   it('photoAccess (single-photo point lookup) agrees with scopeFor for every photo and user', async () => {
     await run(`UPDATE albums SET shared_with = '["owner@example.com"]' WHERE name = 'BobAlbum'`);
     for (const user of [OWNER, ALICE, BOB]) {
       const a = photoAccess(user, 'p');
       const seen: string[] = [];
-      for (const id of ['alice-own', 'bobs', 'none', 'own', 'shared']) {
+      for (const id of ['alice-own', 'bobs', 'none', 'own', 'ownerless', 'shared']) {
         const row = await env.DB.prepare(`SELECT p.id FROM photos p${a.join} WHERE p.id = ?${a.where}`).bind(id, ...a.params).first();
         if (row) seen.push(id);
       }
@@ -91,21 +84,20 @@ describe('visibility SQL', () => {
     }
   });
 
-  it('photoAccessForRequest is null for the default owner only while no album has an owner', async () => {
-    await run('UPDATE albums SET owner_email = NULL');
-    expect(await photoAccessForRequest(env.DB, OWNER, 'p')).toBeNull();
-    expect(await photoAccessForRequest(env.DB, ALICE, 'p')).not.toBeNull();
-    await run("UPDATE albums SET owner_email = 'alice@example.com' WHERE name = 'AliceAlbum'");
-    expect(await photoAccessForRequest(env.DB, OWNER, 'p')).not.toBeNull();
-  });
-
-  it('canEditPhoto: owner of the album, or the default owner for unowned and unalbumed photos', () => {
-    expect(canEditPhoto(OWNER, null, null)).toBe(true);
-    expect(canEditPhoto(ALICE, null, null)).toBe(false);
-    expect(canEditPhoto(OWNER, 'Mine', null)).toBe(true);
-    expect(canEditPhoto(ALICE, 'Mine', null)).toBe(false);
+  it('canEditPhoto: only the owner of the photo\'s album', () => {
+    expect(canEditPhoto(OWNER, null, null)).toBe(false);
+    expect(canEditPhoto(OWNER, 'Mine', null)).toBe(false);
+    expect(canEditPhoto(ALICE, 'Mine', 'owner@example.com')).toBe(false);
     expect(canEditPhoto(ALICE, 'AliceAlbum', 'alice@example.com')).toBe(true);
     expect(canEditPhoto(OWNER, 'AliceAlbum', 'alice@example.com')).toBe(false);
+  });
+
+  it('canEditFor answers from one query over the user\'s own albums', async () => {
+    const can = await canEditFor(env.DB, ALICE);
+    expect(can('AliceAlbum')).toBe(true);
+    expect(can('Shared')).toBe(false);
+    expect(can('Ownerless')).toBe(false);
+    expect(can(null)).toBe(false);
   });
 });
 
@@ -119,6 +111,14 @@ describe('albums owner index (0016)', () => {
     const stmt = PHOTOS_MIGRATION_STATEMENTS.find((x) => x.includes('idx_albums_owner_email'));
     expect(stmt).toBeDefined();
     expect(migration0016 as string).toContain(stmt);
+  });
+});
+
+describe('persons ownership (0016)', () => {
+  it('has the same statements in 0016_album_shares.sql and the test statements', () => {
+    const stmts = PHOTOS_MIGRATION_STATEMENTS.filter((x) => /persons/.test(x) && /owner_email|DROP INDEX/.test(x));
+    expect(stmts.length).toBe(5);
+    for (const stmt of stmts) expect(migration0016 as string).toContain(stmt.replace(/;$/, ''));
   });
 });
 

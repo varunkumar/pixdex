@@ -45,7 +45,7 @@ describe('people routes', () => {
       headers: { Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: PHOTO, contentHash: 'hash-people', source: 'local', filename: 'p.jpg', subjects: ['people'],
-        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen',
+        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen', ownerEmail: 'owner@example.com', album: 'Group',
       }),
     });
     expect(res.status).toBe(201);

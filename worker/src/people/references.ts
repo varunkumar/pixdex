@@ -7,7 +7,7 @@ export interface PersonReferences {
 }
 
 /**
- * For each person (or one, via `opts.personId`), the REFERENCES_PER_PERSON
+ * For each person (or one, via `opts.personId`; or one owner's, via `opts.owner`, an index search on idx_persons_owner_name_lower), the REFERENCES_PER_PERSON
  * newest confirmed faces' vectors. "Newest" means newest by scan time
  * (faces.created_at), not by when the owner confirmed the face. People with no
  * confirmed faces are omitted.
@@ -17,8 +17,18 @@ export interface PersonReferences {
  * created_at) backwards and stops after the limit; CROSS JOIN pins persons as
  * the outer loop so faces are only fetched by rowid for the chosen ones.
  */
-export async function loadReferences(db: D1Database, opts: { personId?: string } = {}): Promise<PersonReferences[]> {
-  const where = opts.personId ? 'WHERE p.id = ?' : '';
+export async function loadReferences(db: D1Database, opts: { personId?: string; owner?: string } = {}): Promise<PersonReferences[]> {
+  const conds: string[] = [];
+  const binds: string[] = [];
+  if (opts.personId) {
+    conds.push('p.id = ?');
+    binds.push(opts.personId);
+  }
+  if (opts.owner) {
+    conds.push('p.owner_email = ?');
+    binds.push(opts.owner);
+  }
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
   const stmt = db.prepare(
     `SELECT p.id AS person_id, f.embedding
      FROM persons p
@@ -31,7 +41,7 @@ export async function loadReferences(db: D1Database, opts: { personId?: string }
      ${where}
      ORDER BY p.id, f.created_at DESC, f.rowid DESC`
   );
-  const { results } = await (opts.personId ? stmt.bind(opts.personId) : stmt).all<{
+  const { results } = await (binds.length ? stmt.bind(...binds) : stmt).all<{
     person_id: string;
     embedding: ArrayBuffer;
   }>();
@@ -47,21 +57,22 @@ export async function loadReferences(db: D1Database, opts: { personId?: string }
 /** How long auto-match may reuse loaded references; bulk indexing tolerates this much staleness. */
 export const REFERENCES_CACHE_TTL_MS = 60_000;
 
-let cache: { at: number; refs: PersonReferences[] } | undefined;
+const cache = new Map<string, { at: number; refs: PersonReferences[] }>();
 
 /**
- * loadReferences() for all people, memoised per Worker isolate for REFERENCES_CACHE_TTL_MS.
- * Only for auto-match during ingest: a person confirmed or changed in the last minute may be
- * missed (or a just-unassigned face still used) by that one pass. Owner-driven routes use
- * loadReferences directly and are always fresh.
+ * loadReferences() for one owner's people, memoised per Worker isolate and per owner for
+ * REFERENCES_CACHE_TTL_MS. Only for auto-match during ingest: a person confirmed or changed in the
+ * last minute may be missed (or a just-unassigned face still used) by that one pass. Owner-driven
+ * routes use loadReferences directly and are always fresh.
  */
-export async function loadReferencesCached(db: D1Database, now = Date.now()): Promise<PersonReferences[]> {
-  if (cache && now - cache.at < REFERENCES_CACHE_TTL_MS) return cache.refs;
-  const refs = await loadReferences(db);
-  cache = { at: now, refs };
+export async function loadReferencesCached(db: D1Database, owner: string, now = Date.now()): Promise<PersonReferences[]> {
+  const hit = cache.get(owner);
+  if (hit && now - hit.at < REFERENCES_CACHE_TTL_MS) return hit.refs;
+  const refs = await loadReferences(db, { owner });
+  cache.set(owner, { at: now, refs });
   return refs;
 }
 
 export function clearReferencesCache(): void {
-  cache = undefined;
+  cache.clear();
 }

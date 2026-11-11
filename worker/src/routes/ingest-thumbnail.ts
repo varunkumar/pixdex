@@ -37,17 +37,14 @@ export async function getThumbnailRoute(c: Context<{ Bindings: Env }>) {
   if (!contentHash) {
     return c.text('Bad Request', 400);
   }
-  // The default owner is served straight from R2 with no D1 query (the hot path). Everyone else needs a
-  // visible photo: one UNIQUE(content_hash) search plus one albums primary-key search (photoAccess).
-  const user = userOf(c);
-  if (!user.isDefaultOwner) {
-    const access = photoAccess(user, 'p');
-    const visible = await c.env.DB.prepare(`SELECT 1 AS x FROM photos p${access.join} WHERE p.content_hash = ?${access.where}`)
-      .bind(contentHash, ...access.params)
-      .first();
-    if (!visible) {
-      return c.text('Not Found', 404);
-    }
+  // Every viewer needs a visible photo: one UNIQUE(content_hash) search plus one albums primary-key
+  // search (photoAccess), so one D1 read per thumbnail request (the response is immutable-cached for a year).
+  const access = photoAccess(userOf(c), 'p');
+  const visible = await c.env.DB.prepare(`SELECT 1 AS x FROM photos p${access.join} WHERE p.content_hash = ?${access.where}`)
+    .bind(contentHash, ...access.params)
+    .first();
+  if (!visible) {
+    return c.text('Not Found', 404);
   }
   const object = await c.env.THUMBNAILS.get(keyFor(contentHash));
   if (!object) {

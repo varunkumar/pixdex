@@ -3,7 +3,7 @@ import type { Env } from '../types';
 import { COMBINED_SCORE_SQL } from '../db/rating';
 import { dateFilterSql, parseDateFilter } from '../db/dateFilter';
 import { userOf } from '../access';
-import { canEditFor, scopeForRequest, type Scope } from '../db/visibility';
+import { canEditFor, scopeFor, type Scope } from '../db/visibility';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 // Highlight rule for the zoomed-out views: a photo is shown when its combined
@@ -71,7 +71,7 @@ export async function timelineRoute(c: Context<{ Bindings: Env }>) {
   const cursor = c.req.query('cursor') || undefined;
 
   const user = userOf(c);
-  const access = await scopeForRequest(c.env.DB, user, 'photos.album');
+  const access = scopeFor(user, 'photos.album');
   const scope = scopeSql(c.req.query('album'), parsePeople(c.req.query('people')), access);
   const dates = dateFilterSql(parsedDates.filter);
 
@@ -149,7 +149,7 @@ export async function timelineRoute(c: Context<{ Bindings: Env }>) {
     .bind(...whereParams, ...rangeParams, ...pageKeys.map((g) => g.k))
     .all<PhotoRow & { gk: string }>();
 
-  const canEdit = await canEditFor(c.env.DB, user, access);
+  const canEdit = await canEditFor(c.env.DB, user);
   const byKey = new Map<string, ReturnType<typeof serializePhoto>[]>();
   for (const row of photoRows.results) {
     const list = byKey.get(row.gk) ?? [];
@@ -164,7 +164,7 @@ export async function timelineRoute(c: Context<{ Bindings: Env }>) {
 }
 
 export async function bucketsRoute(c: Context<{ Bindings: Env }>) {
-  const access = await scopeForRequest(c.env.DB, userOf(c), 'photos.album');
+  const access = scopeFor(userOf(c), 'photos.album');
   const scope = scopeSql(c.req.query('album'), parsePeople(c.req.query('people')), access);
   const rows = await c.env.DB.prepare(
     `SELECT CASE WHEN ${DATED} THEN substr(photos.date_time, 1, 7) ELSE NULL END AS month, COUNT(*) AS total

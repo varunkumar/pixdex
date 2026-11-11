@@ -46,11 +46,21 @@ describe('people schema', () => {
     expect(face?.bbox_w).toBe(0.3);
     await env.DB.prepare('UPDATE faces SET person_id = ? WHERE id = ?').bind('p1', 'f-ok').run();
 
+    // The unique name index is per owner: the same owner clashes, another owner (and a NULL owner) does not.
+    await env.DB.prepare("UPDATE persons SET owner_email = 'owner@example.com' WHERE id = 'p1'").run();
     await expect(
       env.DB.prepare(
-        "INSERT INTO persons (id, name, created_at) VALUES ('p2', 'priya', '2026-10-16T00:00:00.000Z')"
+        "INSERT INTO persons (id, name, owner_email, created_at) VALUES ('p2', 'priya', 'owner@example.com', '2026-10-16T00:00:00.000Z')"
       ).run()
     ).rejects.toThrow();
+    await env.DB.prepare(
+      "INSERT INTO persons (id, name, owner_email, created_at) VALUES ('p3', 'priya', 'other@example.com', '2026-10-16T00:00:00.000Z')"
+    ).run();
+    await expect(
+      env.DB.prepare(
+        "INSERT INTO persons (id, name, owner_email, created_at) VALUES ('p4', 'x', 'Mixed@Example.com', '2026-10-16T00:00:00.000Z')"
+      ).run()
+    ).rejects.toThrow(/lowercase/);
   });
 
   it('face_rejections primary key rejects a duplicate pair', async () => {

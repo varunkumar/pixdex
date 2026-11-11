@@ -1,0 +1,75 @@
+import { env } from 'cloudflare:test';
+import { describe, expect, it } from 'vitest';
+import { MATCHABLE_SQL } from '../src/people/matching';
+import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
+
+const U = { email: 'owner@example.com' };
+
+async function plan(sql: string, ...params: unknown[]): Promise<string> {
+  const r = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...params).all<{ detail: string }>();
+  return r.results.map((x) => x.detail).join('\n');
+}
+
+describe('query plans (no unbounded scans on the new owner paths)', () => {
+  it('canEditFor and visibleAlbumsSql search idx_albums_owner_email', async () => {
+    expect(await plan('SELECT name FROM albums WHERE owner_email = ?', U.email)).toMatch(/SEARCH albums USING (COVERING )?INDEX idx_albums_owner_email/);
+    const v = visibleAlbumsSql(U);
+    // The OR with json_each(shared_with) is one pass over the (small) albums table, materialised once per query.
+    expect(await plan(`SELECT name FROM albums WHERE name IN ${v.sql}`, ...v.params)).toMatch(/LIST SUBQUERY/);
+  });
+
+  it('thumbnail and single-photo access join albums by primary key', async () => {
+    const a = photoAccess(U, 'p');
+    const p = await plan(`SELECT 1 FROM photos p${a.join} WHERE p.content_hash = ?${a.where}`, 'h', ...a.params);
+    expect(p).toMatch(/SEARCH p USING INDEX sqlite_autoindex_photos_\d \(content_hash=\?\)/);
+    expect(p).toMatch(/SEARCH va USING PRIMARY KEY \(name=\?\)/);
+  });
+
+  it('person name uniqueness check uses the per-owner index', async () => {
+    const p = await plan('SELECT id FROM persons WHERE owner_email = ? AND lower(name) = lower(?) AND id != ?', U.email, 'x', '');
+    expect(p).toMatch(/idx_persons_owner_name_lower/);
+  });
+
+  it('groups and match candidates', async () => {
+    const g = await plan(
+      `SELECT f.rowid AS rid, f.id, f.embedding FROM faces f JOIN photos ph ON ph.id = f.photo_id JOIN albums a ON a.name = ph.album
+       WHERE f.assign_status = 'unassigned' AND ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ? ORDER BY f.rowid LIMIT 50`,
+      0,
+      U.email
+    );
+    expect(g).toMatch(/SEARCH f USING INDEX idx_faces_assign_status \(assign_status=\? AND rowid>\?\)/);
+    expect(g).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
+    expect(g).toMatch(/SEARCH a USING COVERING INDEX idx_albums_owner_email/);
+    const s = scopeFor(U, 'ph.album');
+    const l = await plan(
+      `SELECT p.id, COUNT(f.id) FROM persons p LEFT JOIN faces f ON f.person_id = p.id AND f.assign_status IN ('confirmed', 'auto')
+       AND EXISTS (SELECT 1 FROM photos ph WHERE ph.id = f.photo_id${s.sql}) GROUP BY p.id HAVING p.owner_email = ? OR COUNT(f.id) > 0`,
+      ...s.params,
+      U.email
+    );
+    expect(l).toMatch(/SEARCH f USING INDEX idx_faces_person_status_created/);
+    expect(l).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
+    const ids = await plan(
+      `SELECT f.id FROM json_each(?) j CROSS JOIN faces f ON f.id = j.value JOIN photos ph ON ph.id = f.photo_id JOIN albums a ON a.name = ph.album WHERE f.assign_status = 'unassigned' AND a.owner_email IS NOT NULL`,
+      '[]'
+    );
+    expect(ids).toMatch(/SEARCH f USING INDEX sqlite_autoindex_faces_1 \(id=\?\)/);
+    expect(ids).toMatch(/SEARCH a USING PRIMARY KEY \(name=\?\)/);
+    const role = await plan(
+      `SELECT j.value, va.owner_email FROM json_each(?) j LEFT JOIN faces f ON f.id = j.value LEFT JOIN photos ph ON ph.id = f.photo_id LEFT JOIN albums va ON va.name = ph.album`,
+      '[]'
+    );
+    expect(role).not.toMatch(/SCAN (f|ph|va)\b/);
+    const seen = await plan(
+      `SELECT 1 FROM faces f JOIN photos ph ON ph.id = f.photo_id JOIN albums va ON va.name = ph.album WHERE f.person_id = ? AND f.assign_status IN ('confirmed','auto') AND (va.owner_email = ? OR EXISTS (SELECT 1 FROM json_each(va.shared_with) WHERE value = ?)) LIMIT 1`,
+      'p', U.email, U.email
+    );
+    expect(seen).toMatch(/SEARCH f USING INDEX idx_faces_person_status_created \(person_id=\? AND assign_status=\?\)/);
+    expect(seen).toMatch(/SEARCH va USING PRIMARY KEY/);
+    const refs = await plan(
+      `SELECT p.id FROM persons p CROSS JOIN faces f ON f.rowid IN (SELECT f2.rowid FROM faces f2 WHERE f2.person_id = p.id AND f2.assign_status = 'confirmed' ORDER BY f2.created_at DESC, f2.rowid DESC LIMIT 30) WHERE p.owner_email = ?`,
+      U.email
+    );
+    expect(refs).toMatch(/SEARCH p USING INDEX idx_persons_owner_name_lower \(owner_email=\?\)/);
+  });
+});

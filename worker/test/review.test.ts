@@ -17,6 +17,7 @@ const payload = {
   album: 'Bandipur',
   modelProvider: 'ollama',
   modelName: 'qwen3.5:27b-mlx',
+  ownerEmail: 'owner@example.com',
   aestheticScore: 6,
   shortCaption: 'Serpent eagle',
 };

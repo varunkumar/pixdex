@@ -4,7 +4,7 @@ import { expandQueryTiers } from '../search/synonyms';
 import { COMBINED_SCORE_SQL } from '../db/rating';
 import { dateFilterSql, parseDateFilter } from '../db/dateFilter';
 import { userOf } from '../access';
-import { canEditFor, scopeForRequest } from '../db/visibility';
+import { canEditFor, scopeFor } from '../db/visibility';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 export async function searchRoute(c: Context<{ Bindings: Env }>) {
@@ -30,8 +30,8 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
 
   const user = userOf(c);
   // Computed once per request and reused by every query (including the COUNT).
-  const access = await scopeForRequest(c.env.DB, user, 'photos.album');
-  const canEdit = await canEditFor(c.env.DB, user, access);
+  const access = scopeFor(user, 'photos.album');
+  const canEdit = await canEditFor(c.env.DB, user);
 
   async function run(match: string | null) {
     const params: unknown[] = [];
