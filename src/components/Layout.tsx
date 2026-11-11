@@ -5,6 +5,7 @@ import {
   Button,
   Container,
   Group,
+  Menu,
   NavLink,
   Text,
   useComputedColorScheme,
@@ -14,8 +15,10 @@ import { useDisclosure } from '@mantine/hooks';
 import type { IconType } from 'react-icons';
 import { MdAlbum, MdAutoAwesome, MdDarkMode, MdHome, MdLightMode, MdLogout, MdPeople, MdPhoto, MdSearch, MdTimeline } from 'react-icons/md';
 import { Link, Outlet, useMatch } from 'react-router-dom';
+import { useMe } from '../hooks/useMe';
 import { usePromptApiSupport } from '../hooks/usePromptApiSupport';
 import { BRAND, HEADER_GRADIENT } from '../theme';
+import { UserAvatar } from './UserAvatar';
 
 interface NavItem {
   to: string;
@@ -71,6 +74,7 @@ const Layout = () => {
   const [opened, { toggle, close }] = useDisclosure(false);
   const { setColorScheme } = useMantineColorScheme();
   const scheme = useComputedColorScheme('light');
+  const { email } = useMe();
   const links = usePromptApiSupport() === 'supported' ? [...LINKS, AI_SEARCH_LINK] : LINKS;
 
   return (
@@ -120,17 +124,37 @@ const Layout = () => {
             >
               {scheme === 'dark' ? <MdLightMode /> : <MdDarkMode />}
             </ActionIcon>
-            <Button
-              component="a"
-              href="/cdn-cgi/access/logout"
-              variant="subtle"
-              color="white"
-              size="compact-md"
-              leftSection={<MdLogout />}
-              visibleFrom="sm"
-            >
-              Log out
-            </Button>
+            {email && (
+              <Menu position="bottom-end" width={240}>
+                <Menu.Target>
+                  <ActionIcon variant="transparent" radius="xl" size={44} aria-label={`Account menu for ${email}`}>
+                    <UserAvatar email={email} tooltip={false} />
+                  </ActionIcon>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Signed in as</Menu.Label>
+                  <Text size="sm" px="sm" pb="xs" style={{ wordBreak: 'break-all' }}>
+                    {email}
+                  </Text>
+                  <Menu.Item component="a" href="/cdn-cgi/access/logout" leftSection={<MdLogout />}>
+                    Log out
+                  </Menu.Item>
+                </Menu.Dropdown>
+              </Menu>
+            )}
+            {!email && (
+              <Button
+                component="a"
+                href="/cdn-cgi/access/logout"
+                variant="subtle"
+                color="white"
+                size="compact-md"
+                leftSection={<MdLogout />}
+                visibleFrom="sm"
+              >
+                Log out
+              </Button>
+            )}
           </Group>
         </Group>
       </AppShell.Header>
@@ -139,6 +163,14 @@ const Layout = () => {
         {links.map((item) => (
           <DrawerLink key={item.to} {...item} onNavigate={close} />
         ))}
+        {email && (
+          <Group gap="sm" px="sm" py="xs" wrap="nowrap">
+            <UserAvatar email={email} tooltip={false} />
+            <Text size="sm" style={{ wordBreak: 'break-all' }}>
+              {email}
+            </Text>
+          </Group>
+        )}
         <NavLink component="a" href="/cdn-cgi/access/logout" label="Log out" leftSection={<MdLogout />} />
       </AppShell.Navbar>
 

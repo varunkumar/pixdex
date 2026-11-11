@@ -85,7 +85,7 @@ describe('Albums', () => {
       albums: [
         album('Mine', { sharedWith: ['a@example.com'] }),
         album('Private', { sharedWith: [] }),
-        album('Theirs', { role: 'viewer' }),
+        album('Theirs', { role: 'viewer', ownerEmail: 'owner@example.com' }),
       ],
       total: 3,
     });
@@ -93,7 +93,9 @@ describe('Albums', () => {
     await screen.findByText('Mine');
     // Two owned albums get a Share button, the viewer album does not.
     expect(screen.getAllByRole('button', { name: 'Share' })).toHaveLength(2);
-    expect(screen.getAllByText('Shared')).toHaveLength(1);
+    expect(screen.getByText('Shared with 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Shared by owner@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('Shared with you')).toHaveLength(1);
     const theirs = screen.getByText('Theirs').closest('a') as HTMLElement;
     expect(theirs.parentElement?.querySelector('button')).toBeNull();

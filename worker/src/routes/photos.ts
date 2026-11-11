@@ -163,7 +163,7 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
         coverThumbnailUrl: r.content_hash ? `/thumbnails/${r.content_hash}` : null,
         latestDate: r.latest_date ?? null,
         role: owns ? ('owner' as const) : ('viewer' as const),
-        ...(owns ? { sharedWith: parseShared(r.shared_with) } : {}),
+        ...(owns ? { sharedWith: parseShared(r.shared_with) } : { ownerEmail: r.owner_email }),
       };
     }),
     total: totalRow?.total ?? 0,

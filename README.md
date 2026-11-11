@@ -231,8 +231,10 @@ selected people). The description and suggested caption are not editable.
 
 Every album has one owner: the `OWNER_EMAIL` in `agent/.env` when the agent indexes it (the first photo of an album
 stamps its owner; indexing into an album owned by someone else is refused). An album's owner sees a Share button on the
-album card and album page. It opens a dialog to list the Google sign-in emails allowed to view the album (each address
-must match the person's Google sign-in email). People you share with see the album with a "Shared with you" badge and cannot
+album card and album page. It opens a dialog listing the owner and the people with access (each with an avatar) and lets you
+add or remove Google sign-in emails (each address must match the person's Google sign-in email). The header shows your own
+avatar and email (initials on a colour derived from the email, drawn locally, no third-party avatar service); album cards
+show the sharees as an avatar stack. People you share with see the album with the owner's avatar and "Shared by <owner>" and cannot
 rate, edit, set covers, share or name faces in it. People are per owner: you manage the people you created, and others'
 people appear read-only where their faces are in photos you can see. Those controls are hidden in the UI and refused by the
 Worker. A person's name belongs to its owner and is never sent to anyone else: you see "Unnamed person" until you give them your
