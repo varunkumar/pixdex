@@ -97,11 +97,11 @@ web UI. For each photo the agent:
 
 | Job | Model | Runs on | Notes |
 |---|---|---|---|
-| Describe, tag, rate, caption | `qwen3.5:27b-mlx` | Ollama (`OLLAMA_BASE_URL`, default `http://localhost:11434`) | Default `OLLAMA_MODEL`, override in `agent/.env`. The model name is stored on each photo. |
+| Describe, tag, rate, caption | `qwen3.8:27b-mlx` | Ollama (`OLLAMA_BASE_URL`, default `http://localhost:11434`) | Set `OLLAMA_MODEL` in `agent/.env` (the built-in default is still `qwen3.5:27b-mlx`). The model name is stored on each photo. Changing the model does not re-index existing photos: they are skipped by content hash and keep their old data, so a library can mix models. |
 | Face detection and embeddings | InsightFace `buffalo_l` | Local Python sidecar (CoreML, CPU fallback) | Optional. The weights are non-commercial, so personal use only. |
 
-Setup: install [Ollama](https://ollama.com), `ollama pull qwen3.5:27b-mlx`, then
-copy `agent/.env.example` to `agent/.env` and set `CLOUDFLARE_API_BASE_URL` and
+Setup: install [Ollama](https://ollama.com), `ollama pull qwen3.8:27b-mlx`, then
+copy `agent/.env.example` to `agent/.env` and set `OLLAMA_MODEL=qwen3.8:27b-mlx`, `CLOUDFLARE_API_BASE_URL` and
 `INGEST_TOKEN` (the same value as the Worker's secret).
 
 ### Face sidecar (optional)
