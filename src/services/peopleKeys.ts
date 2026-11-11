@@ -10,6 +10,9 @@ export const SEARCH_KEYS = [
   'people-groups',
 ];
 
+/** Shown for a person the caller has not named themselves (the owner's name is never sent to them). */
+export const UNNAMED_PERSON = 'Unnamed person';
+
 export function errorMessage(err: unknown, naming: boolean): string {
   const message = err instanceof Error ? err.message : '';
   if (message.includes('409')) return 'That name already exists';

@@ -15,6 +15,8 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     rejectFace: vi.fn(),
     unassignFace: vi.fn(),
     setPersonCover: vi.fn(),
+    setPersonLabel: vi.fn(),
+    clearPersonLabel: vi.fn(),
     matchPersonAll: vi.fn(),
     thumbnailUrl: vi.fn((f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`),
   },
@@ -240,5 +242,19 @@ describe('PhotoFaces', () => {
     expect(screen.queryByRole('textbox', { name: 'Existing person' })).not.toBeInTheDocument();
     // The name comes from the faces response; the people list (management only) is never requested.
     expect(workerApiClient.getPeople).not.toHaveBeenCalled();
+  });
+
+  it('on a photo the caller does not own, shows Unnamed person for an unlabeled person and only offers a private name', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face({ id: 'f2', personId: 'pe1', personName: null, status: 'confirmed' }),
+    ]);
+    vi.mocked(workerApiClient.setPersonLabel).mockResolvedValue();
+    show(false);
+    expect(await screen.findByText('Unnamed person')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Not / })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add my name' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'My name for this person' }), { target: { value: 'Mum' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save my name' }));
+    await waitFor(() => expect(workerApiClient.setPersonLabel).toHaveBeenCalledWith('pe1', 'Mum'));
   });
 });

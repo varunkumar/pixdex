@@ -220,6 +220,16 @@ export class WorkerApiClient {
     await this.sendJson('PATCH', `/people/${encodeURIComponent(id)}`, { name });
   }
 
+  /** Sets the caller's own private name for a person they can see but do not own. */
+  async setPersonLabel(id: string, name: string): Promise<void> {
+    await this.sendJson('PUT', `/people/${encodeURIComponent(id)}/label`, { name });
+  }
+
+  /** Clears the caller's private name for a person. */
+  async clearPersonLabel(id: string): Promise<void> {
+    await this.sendJson('DELETE', `/people/${encodeURIComponent(id)}/label`);
+  }
+
   async deletePerson(id: string): Promise<void> {
     await this.sendJson('DELETE', `/people/${encodeURIComponent(id)}`);
   }

@@ -177,6 +177,16 @@ describe('WorkerApiClient', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/people/n1', jsonInit('PATCH', { name: 'B' }));
     });
 
+    it('setPersonLabel PUTs the name and clearPersonLabel DELETEs the label', async () => {
+      fetchMock.mockResolvedValue(ok({ id: 'n1', name: 'Mum' }));
+      await client.setPersonLabel('n1', 'Mum');
+      expect(fetchMock).toHaveBeenCalledWith('/api/people/n1/label', jsonInit('PUT', { name: 'Mum' }));
+      fetchMock.mockResolvedValue({ ok: true, type: 'basic', status: 204 });
+      await expect(client.clearPersonLabel('n1')).resolves.toBeUndefined();
+      expect(fetchMock.mock.calls[1][0]).toBe('/api/people/n1/label');
+      expect(fetchMock.mock.calls[1][1].method).toBe('DELETE');
+    });
+
     it('deletePerson DELETEs and tolerates an empty 204 body', async () => {
       fetchMock.mockResolvedValue({ ok: true, type: 'basic', status: 204 });
       await expect(client.deletePerson('n1')).resolves.toBeUndefined();

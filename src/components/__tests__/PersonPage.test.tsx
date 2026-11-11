@@ -19,6 +19,8 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     renamePerson: vi.fn(),
     setPersonCover: vi.fn(),
     deletePerson: vi.fn(),
+    setPersonLabel: vi.fn(),
+    clearPersonLabel: vi.fn(),
     thumbnailUrl: vi.fn((f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`),
   },
 }));
@@ -222,5 +224,27 @@ describe('PersonPage', () => {
     for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
+  });
+
+  it('shows Unnamed person for a viewer with no label, and lets them set their own name and nothing else', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      { id: 'pe1', name: null, faceCount: 3, photoCount: 1, canEdit: false, cover: null },
+    ]);
+    vi.mocked(workerApiClient.setPersonLabel).mockResolvedValue();
+    show();
+    expect(await screen.findByRole('heading', { name: 'Unnamed person' })).toBeInTheDocument();
+    for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Add my name' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'My name for this person' }), { target: { value: 'Aunt' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save my name' }));
+    await waitFor(() => expect(workerApiClient.setPersonLabel).toHaveBeenCalledWith('pe1', 'Aunt'));
+  });
+
+  it('does not offer the viewer label editor to the owner', async () => {
+    show();
+    await screen.findByRole('heading', { name: 'Asha' });
+    expect(screen.queryByRole('button', { name: /my name/ })).not.toBeInTheDocument();
   });
 });

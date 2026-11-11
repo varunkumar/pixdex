@@ -6,6 +6,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import type { TimelineGroup, TimelineZoom } from '../types/api';
 import PhotoGrid from './PhotoGrid';
 import TimelineScrubber from './TimelineScrubber';
+import { UNNAMED_PERSON } from '../services/peopleKeys';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -52,7 +53,7 @@ const Timeline = () => {
 
   const { data: albums = [] } = useQuery({ queryKey: ['album-names'], queryFn: () => workerApiClient.getAlbums() });
   const { data: namedPeople = [] } = useQuery({ queryKey: ['people'], queryFn: () => workerApiClient.getPeople() });
-  const peopleOptions = namedPeople.map((p) => ({ value: p.id, label: p.name }));
+  const peopleOptions = namedPeople.map((p) => ({ value: p.id, label: p.name ?? UNNAMED_PERSON }));
 
   // Keyed by album and people only, so the scrubber lists every month with photos whatever the zoom, jump or rating cut-off.
   const { data: bucketData } = useQuery({

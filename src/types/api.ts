@@ -133,7 +133,8 @@ export interface SerializedFace {
 
 export interface PersonSummary {
   id: string;
-  name: string;
+  /** The owner's name for their own people; for anyone else's person, the caller's private label or null. */
+  name: string | null;
   faceCount: number;
   photoCount: number;
   /** The caller owns this person (may rename, delete, name faces); false for another owner's person. */
