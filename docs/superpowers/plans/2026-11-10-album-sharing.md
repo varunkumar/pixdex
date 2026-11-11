@@ -1,5 +1,13 @@
 # Album Sharing Implementation Plan
 
+> **Superseded in part (2026-11-11).** This document describes the first design. What shipped differs:
+> there is no default owner and the Worker never reads `OWNER_EMAIL`; every album has an explicit `albums.owner_email`
+> (a NULL owner belongs to nobody) and photos with no album are visible to nobody; people are per owner
+> (`persons.owner_email`, migration 0016) and a viewer sees other owners' people read-only; existing data is stamped once by
+> the local script `worker/scripts/backfill-owner.mjs` (`cd worker && npm run backfill-owner`); a person's name is private to
+> its owner, and viewers set their own names through `person_labels` (migration 0017). The current behaviour is in
+> `AGENTS.md`, `docs/architecture.md` and `docs/development.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let people share albums with other Google accounts as read-only viewers, with authorization per album so one person can own some albums and view others.
