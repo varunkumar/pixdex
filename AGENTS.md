@@ -15,12 +15,13 @@ never leave local disk or Google Drive.
   `isDefaultOwner` from `useMe()` (`src/hooks/useMe.ts`, `GET /me`, `staleTime: Infinity`, false while loading).
   The share dialog is `src/components/ShareAlbumModal.tsx`.
 - Access model: `albums.owner_email` NULL means the default owner (`OWNER_EMAIL`); `albums.shared_with` is a JSON array
-  of lowercase emails or NULL. A user sees their own albums, albums shared with them, and (default owner only) albums with
+  of lowercase emails or NULL. Emails are always stored lowercase and compared exactly (triggers in migration 0016 abort any
+  other write), so queries never wrap them in lower(). A user sees their own albums, albums shared with them, and (default owner only) albums with
   no owner. Per-album authorization: owner or viewer of an album can read it; invisible is 404, a viewer's write is 403.
   People and face management is default-owner only (library-wide). Worker routes: `GET /me` (viewer email and
   `isDefaultOwner`, no D1), `PUT /albums/shares` (owner only, max 50 emails), `GET /access/photo/:id` (204 or 404,
   called by the Function with READ_TOKEN to authorize non-owner originals). Every Worker read and write needs
-  `X-Viewer-Email` as well as READ_TOKEN (else 401). Config: `OWNER_EMAIL` (Worker secret only, never a dashboard var; Pages env; `agent/.env`; all three the same address),
+  `X-Viewer-Email` as well as READ_TOKEN (else 401). Config: `OWNER_EMAIL` (Worker secret, never a dashboard var, which a deploy deletes; a `[vars]` entry would commit the address; Pages env; `agent/.env`; all three the same address),
   `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (Pages env); if any Pages one is unset every `/api` call returns 500. Rollout order
   is in `docs/development.md`.
 - Write authorization (worker): people and face writes use `requireDefaultOwner`; `PATCH /photos/:id`, `PUT /albums/cover`

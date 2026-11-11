@@ -69,7 +69,8 @@ The Worker now returns 401 without `X-Viewer-Email` and the Function returns 500
 design (fail closed). So:
 
 1. Before merging, set Pages variables `OWNER_EMAIL`, `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (the Access application's
-   audience tag), and the Worker `OWNER_EMAIL` as a secret only: `cd worker && npx wrangler secret put OWNER_EMAIL`.
+   audience tag), and the Worker `OWNER_EMAIL` as a secret (recommended): `cd worker && npx wrangler secret put OWNER_EMAIL`.
+   A secret survives deploys and keeps your address out of the repository. A `[vars]` entry in `worker/wrangler.toml` would also work but commits the address.
    Not a dashboard plain-text variable: `worker/wrangler.toml` has no `[vars]` and no `keep_vars`, so the next
    `wrangler deploy` deletes dashboard variables and the Worker then answers 401 to everything (fail closed).
    The Pages `OWNER_EMAIL`, the Worker `OWNER_EMAIL` and the one in `agent/.env` must be the same address: the

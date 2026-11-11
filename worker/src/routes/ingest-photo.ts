@@ -20,7 +20,7 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
   if (p.album) {
     const a = await c.env.DB.prepare('SELECT owner_email FROM albums WHERE name = ?').bind(p.album).first<{ owner_email: string | null }>();
     const owner = (c.env.OWNER_EMAIL ?? '').trim().toLowerCase();
-    if (a?.owner_email && a.owner_email.trim().toLowerCase() !== owner) {
+    if (a?.owner_email && a.owner_email !== owner) {
       return c.json({ error: 'album is owned by another user' }, 409);
     }
   }

@@ -32,7 +32,7 @@ export async function albumRole(db: D1Database, user: User, album: string | null
   if (album === null) return user.isDefaultOwner ? 'owner' : null;
   const row = await db
     .prepare(
-      'SELECT lower(owner_email) AS owner, EXISTS(SELECT 1 FROM json_each(albums.shared_with) WHERE lower(value) = ?) AS shared FROM albums WHERE name = ?'
+      'SELECT owner_email AS owner, EXISTS(SELECT 1 FROM json_each(albums.shared_with) WHERE value = ?) AS shared FROM albums WHERE name = ?'
     )
     .bind(user.email, album)
     .first<{ owner: string | null; shared: number }>();

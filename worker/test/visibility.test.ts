@@ -121,3 +121,50 @@ describe('albums owner index (0016)', () => {
     expect(migration0016 as string).toContain(stmt);
   });
 });
+
+describe('lowercase emails on albums (0016)', () => {
+  const insertAlbum = (owner: string | null, shared: string | null, name = 'CaseAlbum') =>
+    run(
+      "INSERT INTO albums (name, photo_count, newest_indexed, cover_photo_id, owner_email, shared_with) VALUES (?, 1, '2026-01-01', 'p', ?, ?)",
+      name,
+      owner,
+      shared
+    );
+
+  beforeEach(async () => {
+    await run("DELETE FROM albums WHERE name LIKE 'CaseAlbum%'");
+  });
+
+  it('accepts lowercase and NULL emails', async () => {
+    await insertAlbum('owner@example.com', '["a@example.com","b@example.com"]');
+    await insertAlbum(null, null, 'CaseAlbum2');
+    const row = await env.DB.prepare("SELECT owner_email FROM albums WHERE name = 'CaseAlbum'").first();
+    expect(row).toEqual({ owner_email: 'owner@example.com' });
+  });
+
+  it('refuses a mixed-case owner_email or shared_with on insert', async () => {
+    await expect(insertAlbum('Owner@Example.com', null)).rejects.toThrow(/lowercase/);
+    await expect(insertAlbum(null, '["Viewer@Example.com"]')).rejects.toThrow(/lowercase/);
+  });
+
+  it('refuses a mixed-case owner_email or shared_with on update and leaves the row alone', async () => {
+    await insertAlbum('owner@example.com', '["a@example.com"]');
+    await expect(run("UPDATE albums SET owner_email = 'Owner@Example.com' WHERE name = 'CaseAlbum'")).rejects.toThrow(/lowercase/);
+    await expect(run("UPDATE albums SET shared_with = '[\"A@example.com\"]' WHERE name = 'CaseAlbum'")).rejects.toThrow(/lowercase/);
+    const row = await env.DB.prepare("SELECT owner_email, shared_with FROM albums WHERE name = 'CaseAlbum'").first();
+    expect(row).toEqual({ owner_email: 'owner@example.com', shared_with: '["a@example.com"]' });
+  });
+
+  it('does not block the album refresh upsert (it never names those columns)', async () => {
+    await insertAlbum('owner@example.com', null);
+    await run("UPDATE albums SET photo_count = 5 WHERE name = 'CaseAlbum'");
+    const row = await env.DB.prepare("SELECT photo_count, owner_email FROM albums WHERE name = 'CaseAlbum'").first();
+    expect(row).toEqual({ photo_count: 5, owner_email: 'owner@example.com' });
+  });
+
+  it('has the same trigger SQL in 0016_album_shares.sql and the test statements', () => {
+    const stmts = PHOTOS_MIGRATION_STATEMENTS.filter((x) => x.includes('albums_emails_lower_'));
+    expect(stmts).toHaveLength(2);
+    for (const stmt of stmts) expect(migration0016 as string).toContain(stmt.replace(/;$/, ''));
+  });
+});

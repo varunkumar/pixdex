@@ -212,10 +212,10 @@ describe('ingest and album ownership', () => {
     expect(await count()).toBe(before);
   });
 
-  it('allows new, NULL-owner and OWNER_EMAIL-owned (any case) albums', async () => {
+  it('allows new, NULL-owner and OWNER_EMAIL-owned albums', async () => {
     expect((await ingest(payload(U1, 'Brand New'))).status).toBe(201);
     expect((await ingest(payload(U2, 'Kanha'))).status).toBe(201);
-    await run("UPDATE albums SET owner_email = 'Owner@Example.com' WHERE name = 'Kanha'");
+    await run("UPDATE albums SET owner_email = 'owner@example.com' WHERE name = 'Kanha'");
     expect((await ingest(payload(U2, 'Kanha'))).status).toBe(201);
   });
 
