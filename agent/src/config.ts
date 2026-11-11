@@ -4,6 +4,10 @@ const configSchema = z.object({
   CLOUDFLARE_API_BASE_URL: z.string().url(),
   INGEST_TOKEN: z.string().min(1),
   READ_TOKEN: z.string().min(1).optional(),
+  // The album owner's email. Sent as ownerEmail on every ingested photo (the first photo of an album
+  // stamps its owner) and as X-Viewer-Email on originals and index-status Worker reads. The Worker
+  // never reads it from its own environment: it lives only here.
+  OWNER_EMAIL: z.string().trim().min(1).optional(),
   OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
   OLLAMA_MODEL: z.string().min(1).default('qwen3.5:27b-mlx'),
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),

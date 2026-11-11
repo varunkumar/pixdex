@@ -1,8 +1,9 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { combinedScore } from '../src/db/rating';
+import { readHeaders } from './helpers';
 
-const read = { Authorization: `Bearer ${env.READ_TOKEN}` };
+const read = readHeaders();
 const ID = '123e4567-e89b-12d3-a456-426614174000';
 
 const payload = {
@@ -16,6 +17,7 @@ const payload = {
   album: 'Bandipur',
   modelProvider: 'ollama',
   modelName: 'qwen3.5:27b-mlx',
+  ownerEmail: 'owner@example.com',
   aestheticScore: 6,
   shortCaption: 'Serpent eagle',
 };

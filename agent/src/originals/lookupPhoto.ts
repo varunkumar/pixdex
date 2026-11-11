@@ -7,11 +7,13 @@ export async function fetchIndexedPhoto(
   baseUrl: string,
   id: string,
   readToken: string,
-  fetchFn: typeof fetch = fetch
+  fetchFn: typeof fetch = fetch,
+  // The Worker requires X-Viewer-Email on every read; serve-originals passes OWNER_EMAIL.
+  viewerEmail?: string
 ): Promise<IndexedPhotoLookup | null> {
-  const response = await fetchFn(`${baseUrl}/photos/${id}`, {
-    headers: { Authorization: `Bearer ${readToken}` },
-  });
+  const headers: Record<string, string> = { Authorization: `Bearer ${readToken}` };
+  if (viewerEmail) headers['X-Viewer-Email'] = viewerEmail;
+  const response = await fetchFn(`${baseUrl}/photos/${id}`, { headers });
 
   if (response.status === 404) {
     return null;

@@ -19,6 +19,7 @@ describe('DailySuggestion', () => {
     vi.mocked(workerApiClient.getDailyPick).mockResolvedValue({
       photo: {
         id: 'p1',
+        canEdit: true,
         path: null,
         driveFileId: null,
         dateTime: null,

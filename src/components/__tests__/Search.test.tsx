@@ -25,8 +25,8 @@ describe('Search', () => {
     vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: page(10), total: 56 });
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
-      { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, cover: null },
-      { id: 'b2', name: 'Ravi', faceCount: 2, photoCount: 2, cover: null },
+      { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, canEdit: true, cover: null },
+      { id: 'b2', name: 'Ravi', faceCount: 2, photoCount: 2, canEdit: true, cover: null },
     ]);
   });
 

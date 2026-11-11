@@ -24,6 +24,8 @@ const PhotoReview = ({ photo }: { photo: SerializedPhoto }) => {
     },
   });
 
+  if (!photo.canEdit) return null;
+
   const overrides = photo.overrides;
   const edited = !!overrides && (overrides.shortCaption != null || overrides.subjects != null || overrides.tags != null);
 

@@ -8,6 +8,7 @@ import PersonPage from '../PersonPage';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
+    getMe: vi.fn(),
     getPeople: vi.fn(),
     searchPage: vi.fn(),
     getPhotoFaces: vi.fn(),
@@ -43,9 +44,10 @@ const show = () => renderWithProviders(<PersonPage />, { route: '/people/pe1', p
 describe('PersonPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com' });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
-      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: null },
+      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, canEdit: true, cover: null },
     ]);
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto({ id: 'p1' })], total: 1 });
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([]);
@@ -85,7 +87,7 @@ describe('PersonPage', () => {
 
   it('shows the cover face beside the name', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
-      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: face('c9', { personId: 'pe1' }) },
+      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, canEdit: true, cover: face('c9', { personId: 'pe1' }) },
     ]);
     show();
     const heading = await screen.findByRole('heading', { name: 'Asha' });
@@ -117,7 +119,7 @@ describe('PersonPage', () => {
 
   it('shows a Cover badge instead of the button when this photo holds the cover face', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
-      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, cover: face('c9', { personId: 'pe1' }) },
+      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, canEdit: true, cover: face('c9', { personId: 'pe1' }) },
     ]);
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
       face('c9', { personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
@@ -208,5 +210,17 @@ describe('PersonPage', () => {
         expect.objectContaining({ people: ['pe1'], limit: 24, offset: 24 })
       )
     );
+  });
+
+  it('hides rename, delete, matching and per-photo face controls for a person the caller does not own', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, canEdit: false, cover: null },
+    ]);
+    show();
+    expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument();
+    await screen.findByText('A leopard in a tree.');
+    for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
   });
 });

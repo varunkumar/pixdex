@@ -1,6 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { SEARCH_PRIMARY_BACKFILL_SQL, SEARCH_TEXT_BACKFILL_SQL } from '../migrations/index';
+import { readHeaders } from './helpers';
 
 async function seed(
   id: string,
@@ -31,7 +32,7 @@ async function seed(
 
 async function ids(query: string): Promise<string[]> {
   const response = await SELF.fetch(`https://example.com/search?q=${encodeURIComponent(query)}`, {
-    headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+    headers: readHeaders(),
   });
   return ((await response.json()) as any).results.map((r: { id: string }) => r.id);
 }
@@ -45,7 +46,7 @@ describe('GET /search', () => {
 
   it('finds a synonym-expanded match via "big cat"', async () => {
     const response = await SELF.fetch('https://example.com/search?q=big%20cat', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     const body = (await response.json()) as any;
     expect(response.status).toBe(200);
@@ -56,21 +57,21 @@ describe('GET /search', () => {
 
   it('reports the total matching count independent of limit', async () => {
     const response = await SELF.fetch('https://example.com/search?limit=1', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     const body = (await response.json()) as any;
     expect(body.results.length).toBe(1);
     expect(body.total).toBe(2);
 
     const filtered = await SELF.fetch('https://example.com/search?album=Kanha', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(((await filtered.json()) as any).total).toBe(1);
   });
 
   it('filters by album', async () => {
     const response = await SELF.fetch('https://example.com/search?album=Kaziranga', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     const body = (await response.json()) as any;
     expect(body.results.map((r: { id: string }) => r.id)).toEqual(['photo-elephant']);
@@ -78,7 +79,7 @@ describe('GET /search', () => {
 
   it('clamps a negative limit instead of returning the whole table', async () => {
     const response = await SELF.fetch('https://example.com/search?limit=-1', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     const body = (await response.json()) as any;
     expect(response.status).toBe(200);
@@ -89,7 +90,7 @@ describe('GET /search', () => {
 
   it('clamps a negative offset to zero', async () => {
     const response = await SELF.fetch('https://example.com/search?offset=-5', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     expect(response.status).toBe(200);
     const body = (await response.json()) as any;
@@ -247,7 +248,7 @@ describe('GET /search', () => {
     await insert('new', '2026-05-01T00:00:00.000Z');
 
     const response = await SELF.fetch('https://example.com/search?album=Kanha&sort=date', {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     const body = (await response.json()) as any;
     expect(body.results.map((r: { id: string }) => r.id)).toEqual(['new', 'old', 'undated']);
@@ -267,7 +268,7 @@ describe('GET /search people filter', () => {
 
   async function get(qs: string): Promise<{ results: { id: string }[]; total: number }> {
     const response = await SELF.fetch(`https://example.com/search?${qs}`, {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     return (await response.json()) as any;
   }
@@ -334,7 +335,7 @@ describe('GET /search date filters', () => {
   }
   async function get(qs: string) {
     const response = await SELF.fetch(`https://example.com/search?${qs}`, {
-      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      headers: readHeaders(),
     });
     return { status: response.status, body: (await response.json()) as any };
   }

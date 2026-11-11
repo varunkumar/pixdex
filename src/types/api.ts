@@ -1,5 +1,7 @@
 export interface SerializedPhoto {
   id: string;
+  /** True when the current user may edit this photo (owns its album). */
+  canEdit: boolean;
   contentHash?: string;
   source?: string;
   path: string | null;
@@ -89,12 +91,19 @@ export interface AlbumSummary {
   coverThumbnailUrl: string | null;
   /** Capture date of the cover (newest) photo; null when the photo has no date. */
   latestDate: string | null;
+  role: 'owner' | 'viewer';
+  /** Lowercase emails the album is shared with; present only when role is 'owner'. */
+  sharedWith?: string[];
 }
 
 export interface AlbumsPageResponse {
   albums: AlbumSummary[];
   /** Total number of albums, ignoring limit/offset. */
   total: number;
+}
+
+export interface MeResponse {
+  email: string;
 }
 
 export interface AlbumsResponse {
@@ -127,6 +136,8 @@ export interface PersonSummary {
   name: string;
   faceCount: number;
   photoCount: number;
+  /** The caller owns this person (may rename, delete, name faces); false for another owner's person. */
+  canEdit: boolean;
   cover: SerializedFace | null;
 }
 

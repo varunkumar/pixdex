@@ -1,10 +1,21 @@
 // Same-origin read proxy for the Worker. The browser calls /api/* on the Pages
 // origin (already behind Cloudflare Access); this function adds the shared read
 // token server-side so it never ships in the frontend bundle or in URLs.
+//
+// Identity: every request must carry a Cloudflare Access JWT
+// (Cf-Access-Jwt-Assertion) that verifies against the team's JWKS. The verified
+// email is forwarded to the Worker as X-Viewer-Email; the Worker trusts it only
+// because the request also carries READ_TOKEN, which only this Function holds.
+
+import { verifyAccessJwt } from '../_lib/access';
 
 interface Env {
   WORKER_URL: string;
   READ_TOKEN: string;
+  // Cloudflare Access team domain (e.g. myteam.cloudflareaccess.com) and the
+  // Pages application's audience tag, used to verify the Access JWT.
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
   // Cloudflare Tunnel to the local originals server (optional until set up).
   ORIGINALS_BASE_URL?: string;
   ORIGINALS_TOKEN?: string;
@@ -22,6 +33,7 @@ interface Context {
 // Only the Worker's read routes are reachable through the proxy. /ingest/* and
 // anything else is deliberately not forwarded.
 const ALLOWED_PATHS = [
+  /^me$/,
   /^search$/,
   /^timeline$/,
   /^timeline\/buckets$/,
@@ -38,8 +50,9 @@ const ALLOWED_PATHS = [
 // Full-resolution local-disk originals, served by the agent through a tunnel.
 const ORIGINALS_PATH = /^originals\/[^/]+$/;
 
-// Request headers worth forwarding. Cookies (incl. the Access session) and any
-// client-supplied Authorization are intentionally dropped.
+// Request headers worth forwarding. Cookies (incl. the Access session), any
+// client-supplied Authorization and any client-supplied X-Viewer-Email are
+// intentionally dropped: headers are built from this allowlist only.
 const FORWARDED_HEADERS = ['accept', 'if-none-match', 'if-modified-since', 'range'];
 
 // Thumbnails are addressed by content hash, so they never change and can be
@@ -55,13 +68,49 @@ function cacheControlFor(path: string, ok: boolean): string {
   return 'private, no-cache';
 }
 
+// Resolves the caller's verified email, or the response to send instead. Fails
+// closed: without the Access config nothing is proxied, and without a
+// valid Access JWT the answer is a bare 401.
+async function identify(request: Request, env: Env): Promise<{ email: string } | Response> {
+  if (!env.ACCESS_TEAM_DOMAIN?.trim() || !env.ACCESS_AUD?.trim()) {
+    return new Response('Proxy is not configured', { status: 500 });
+  }
+  const viewer = await verifyAccessJwt(request.headers.get('Cf-Access-Jwt-Assertion'), env);
+  return viewer ?? new Response('Unauthorized', { status: 401, headers: { 'Cache-Control': 'no-store' } });
+}
+
+// An original is served only when the Worker confirms the caller may see the photo (204), for
+// every user including the album's owner. One Worker call (a photo and an album primary-key lookup) per original.
+async function mayViewOriginal(path: string, email: string, env: Env): Promise<boolean> {
+  const id = path.slice('originals/'.length);
+  try {
+    const response = await fetch(`${env.WORKER_URL.replace(/\/$/, '')}/access/photo/${id}`, {
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}`, 'X-Viewer-Email': email },
+    });
+    return response.status === 204;
+  } catch {
+    return false;
+  }
+}
+
 export const onRequestGet = async ({ request, env }: Context): Promise<Response> => {
+  const identity = await identify(request, env);
+  if (identity instanceof Response) return identity;
+  const { email } = identity;
+
   const incoming = new URL(request.url);
   const path = incoming.pathname.replace(/^\/api\//, '');
 
   const isOriginal = ORIGINALS_PATH.test(path);
   if (!isOriginal && !ALLOWED_PATHS.some((pattern) => pattern.test(path))) {
     return new Response('Not found', { status: 404 });
+  }
+
+  if (isOriginal) {
+    if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
+    if (!(await mayViewOriginal(path, email, env))) {
+      return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+    }
   }
 
   const baseUrl = isOriginal ? env.ORIGINALS_BASE_URL : env.WORKER_URL;
@@ -81,6 +130,8 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
     if (value) headers.set(name, value);
   }
   headers.set('Authorization', `Bearer ${token}`);
+  // The identity goes to the Worker only; the originals tunnel does not need it.
+  if (!isOriginal) headers.set('X-Viewer-Email', email);
   if (isOriginal && env.ACCESS_CLIENT_ID && env.ACCESS_CLIENT_SECRET) {
     headers.set('CF-Access-Client-Id', env.ACCESS_CLIENT_ID);
     headers.set('CF-Access-Client-Secret', env.ACCESS_CLIENT_SECRET);
@@ -105,8 +156,8 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
 // Browser writes. Each method has its own narrow allowlist. Bodies are JSON only,
 // so a cross-origin form post cannot trigger them (it would need a CORS preflight).
 const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
-  // Choosing an album's cover.
-  PUT: [/^albums\/cover$/],
+  // Choosing an album's cover; sharing an album (owner-only, enforced by the Worker).
+  PUT: [/^albums\/cover$/, /^albums\/shares$/],
   // Creating people, assigning faces to people, and face review.
   POST: [
     /^people$/,
@@ -127,6 +178,9 @@ async function forwardWrite(
   method: keyof typeof WRITE_PATHS,
   { request, env }: Context
 ): Promise<Response> {
+  const identity = await identify(request, env);
+  if (identity instanceof Response) return identity;
+
   const path = new URL(request.url).pathname.replace(/^\/api\//, '');
   if (!WRITE_PATHS[method].some((pattern) => pattern.test(path))) {
     return new Response('Not found', { status: 404 });
@@ -137,7 +191,10 @@ async function forwardWrite(
   }
   if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
 
-  const headers: Record<string, string> = { Authorization: `Bearer ${env.READ_TOKEN}` };
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${env.READ_TOKEN}`,
+    'X-Viewer-Email': identity.email,
+  };
   if (hasBody) headers['Content-Type'] = 'application/json';
 
   let response: Response;

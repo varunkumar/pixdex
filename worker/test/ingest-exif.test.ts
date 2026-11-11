@@ -1,16 +1,19 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
 const base = {
   id: '123e4567-e89b-12d3-a456-426614174000',
   contentHash: 'hash-exif',
   source: 'local' as const,
   filename: 'tiger.jpg',
+  album: 'Tigers',
   subjects: ['tiger'],
   tags: ['tiger'],
   description: 'A tiger on a rock.',
   modelProvider: 'ollama',
   modelName: 'qwen',
+  ownerEmail: 'owner@example.com',
 };
 
 const exif = {
@@ -24,7 +27,6 @@ const exif = {
 };
 
 const ingestHeaders = () => ({ Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' });
-const readHeaders = () => ({ Authorization: `Bearer ${env.READ_TOKEN}` });
 
 async function getPhoto(id: string) {
   const res = await SELF.fetch(`https://example.com/photos/${id}`, { headers: readHeaders() });

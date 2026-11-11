@@ -3,6 +3,7 @@ import type {
   AlbumsResponse,
   DailyPickResponse,
   FaceGroup,
+  MeResponse,
   MatchResponse,
   PersonSummary,
   PhotoReviewPatch,
@@ -151,6 +152,16 @@ export class WorkerApiClient {
     if (params.sort) query.set('sort', params.sort);
     if (params.name) query.set('name', params.name);
     return this.getJson<AlbumsPageResponse>(`/albums?${query.toString()}`);
+  }
+
+  async getMe(): Promise<MeResponse> {
+    return this.getJson<MeResponse>('/me');
+  }
+
+  /** Replaces the album's share list; returns the normalized emails the Worker stored. */
+  async setAlbumShares(album: string, emails: string[]): Promise<string[]> {
+    const response = await this.sendJson('PUT', '/albums/shares', { album, emails });
+    return ((await response.json()) as { album: string; emails: string[] }).emails;
   }
 
   async setAlbumCover(album: string, photoId: string): Promise<void> {

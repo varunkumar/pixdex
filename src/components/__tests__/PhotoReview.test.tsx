@@ -65,4 +65,10 @@ describe('PhotoReview', () => {
       expect(workerApiClient.updatePhoto).toHaveBeenCalledWith('p1', { caption: null, subjects: null, tags: null })
     );
   });
+
+  it('renders no review editor when the photo is not editable', () => {
+    renderWithProviders(<PhotoReview photo={{ ...photo, canEdit: false }} />);
+    expect(screen.queryByText('Edit details')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: '4' })).not.toBeInTheDocument();
+  });
 });

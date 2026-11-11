@@ -61,6 +61,12 @@ describe('loadConfig', () => {
     expect(withToken.READ_TOKEN).toBe('read-secret');
   });
 
+  it('leaves OWNER_EMAIL unset by default and respects an explicit override', () => {
+    const base = { CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev', INGEST_TOKEN: 'secret-token' };
+    expect(loadConfig(base).OWNER_EMAIL).toBeUndefined();
+    expect(loadConfig({ ...base, OWNER_EMAIL: 'owner@example.com' }).OWNER_EMAIL).toBe('owner@example.com');
+  });
+
   it('accepts and omits FACE_SIDECAR_URL', () => {
     const base = { CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev', INGEST_TOKEN: 't' };
     expect(loadConfig(base).FACE_SIDECAR_URL).toBeUndefined();

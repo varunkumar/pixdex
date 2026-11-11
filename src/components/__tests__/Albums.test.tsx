@@ -17,6 +17,7 @@ const album = (name: string, over = {}) => ({
   coverPhotoId: 'c1',
   coverThumbnailUrl: '/thumbnails/h1',
   latestDate: '2026-03-01T10:00:00.000Z',
+  role: 'owner' as const,
   ...over,
 });
 
@@ -77,5 +78,24 @@ describe('Albums', () => {
     vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({ albums: [], total: 0 });
     renderWithProviders(<Albums />, { route: '/albums' });
     expect(await screen.findByText(/no albums yet/i)).toBeInTheDocument();
+  });
+
+  it('shows owner controls on owned albums and none on a shared-with-you album, in one list', async () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: [
+        album('Mine', { sharedWith: ['a@example.com'] }),
+        album('Private', { sharedWith: [] }),
+        album('Theirs', { role: 'viewer' }),
+      ],
+      total: 3,
+    });
+    renderWithProviders(<Albums />, { route: '/albums' });
+    await screen.findByText('Mine');
+    // Two owned albums get a Share button, the viewer album does not.
+    expect(screen.getAllByRole('button', { name: 'Share' })).toHaveLength(2);
+    expect(screen.getAllByText('Shared')).toHaveLength(1);
+    expect(screen.getAllByText('Shared with you')).toHaveLength(1);
+    const theirs = screen.getByText('Theirs').closest('a') as HTMLElement;
+    expect(theirs.parentElement?.querySelector('button')).toBeNull();
   });
 });

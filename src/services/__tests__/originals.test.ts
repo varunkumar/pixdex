@@ -4,6 +4,7 @@ import type { SerializedPhoto } from '../../types/api';
 
 const basePhoto: SerializedPhoto = {
   id: 'p1',
+  canEdit: true,
   path: null,
   driveFileId: null,
   dateTime: null,

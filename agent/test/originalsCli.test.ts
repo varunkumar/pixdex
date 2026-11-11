@@ -10,6 +10,7 @@ const baseConfig: AgentConfig = {
   ORIGINALS_PORT: 8787,
   ORIGINALS_TOKEN: 'originals-secret',
   READ_TOKEN: 'the-read-token',
+  OWNER_EMAIL: 'owner@example.com',
 };
 
 describe('runServeOriginals', () => {
@@ -30,6 +31,17 @@ describe('runServeOriginals', () => {
 
     expect(code).toBe(1);
     expect(createServer).not.toHaveBeenCalled();
+  });
+
+  it('returns 1 with a clear message, without starting a server, when OWNER_EMAIL is unset', () => {
+    const createServer = vi.fn();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const code = runServeOriginals({ ...baseConfig, OWNER_EMAIL: undefined }, { createServer });
+
+    expect(code).toBe(1);
+    expect(createServer).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(expect.stringMatching(/OWNER_EMAIL must be set/));
+    error.mockRestore();
   });
 
   it('returns 1 without starting a server when READ_TOKEN is unset', () => {

@@ -199,21 +199,23 @@ const PersonPage = () => {
                 </Text>
               </Stack>
             </Group>
-            <Group gap="xs">
-              <Button
-                variant="light"
-                size="xs"
-                onClick={() => {
-                  setNewName(person.name);
-                  setRenaming(true);
-                }}
-              >
-                Rename
-              </Button>
-              <Button variant="light" color="red" size="xs" onClick={() => setConfirmingDelete(true)}>
-                Delete
-              </Button>
-            </Group>
+            {person?.canEdit && (
+              <Group gap="xs">
+                <Button
+                  variant="light"
+                  size="xs"
+                  onClick={() => {
+                    setNewName(person.name);
+                    setRenaming(true);
+                  }}
+                >
+                  Rename
+                </Button>
+                <Button variant="light" color="red" size="xs" onClick={() => setConfirmingDelete(true)}>
+                  Delete
+                </Button>
+              </Group>
+            )}
           </Group>
 
           {renaming && (
@@ -250,14 +252,16 @@ const PersonPage = () => {
             </Group>
           )}
 
-          <Group gap="xs">
-            <Button size="xs" loading={review.isPending && !cursor} onClick={() => review.mutate(null)}>
-              Review suggestions
-            </Button>
-            <Button size="xs" variant="light" loading={rematch.isPending} onClick={() => rematch.mutate()}>
-              Re-run matching
-            </Button>
-          </Group>
+          {person?.canEdit && (
+            <Group gap="xs">
+              <Button size="xs" loading={review.isPending && !cursor} onClick={() => review.mutate(null)}>
+                Review suggestions
+              </Button>
+              <Button size="xs" variant="light" loading={rematch.isPending} onClick={() => rematch.mutate()}>
+                Re-run matching
+              </Button>
+            </Group>
+          )}
           {progress && (
             <Text size="sm" c="dimmed" role="status">
               {progress}
@@ -321,9 +325,11 @@ const PersonPage = () => {
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
-          footer={(photo) => (
-            <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
-          )}
+          footer={(photo) =>
+            person?.canEdit ? (
+              <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
+            ) : null
+          }
         />
       )}
       {photoPage && (

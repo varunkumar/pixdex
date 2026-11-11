@@ -357,13 +357,18 @@ describe('live library counts', () => {
       const total = u.includes('album=A') ? 5 : 12;
       return new Response(JSON.stringify({ total }), { status: 200 });
     });
-    const env = { CLOUDFLARE_API_BASE_URL: 'https://w.example.dev/', READ_TOKEN: 't' };
+    const env = { CLOUDFLARE_API_BASE_URL: 'https://w.example.dev/', READ_TOKEN: 't', OWNER_EMAIL: 'owner@example.com' };
 
     const live = await fetchLiveCounts(env, ['A', 'A', 'B'], fetchFn as unknown as typeof fetch);
     expect(live).toEqual({ total: 12, byAlbum: { A: 5, B: 12 } });
     expect(fetchFn).toHaveBeenCalledTimes(3);
+    // The Worker requires a viewer identity on every read; counts are the configured owner's.
+    const init = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer t', 'X-Viewer-Email': 'owner@example.com' });
 
     expect(await fetchLiveCounts({}, ['A'])).toBeUndefined();
+    expect(await fetchLiveCounts({ ...env, OWNER_EMAIL: undefined }, ['A'], fetchFn as unknown as typeof fetch)).toBeUndefined();
+    expect(fetchFn).toHaveBeenCalledTimes(3);
     const failing = vi.fn().mockRejectedValue(new Error('offline'));
     expect(await fetchLiveCounts(env, ['A'], failing as unknown as typeof fetch)).toBeUndefined();
   });

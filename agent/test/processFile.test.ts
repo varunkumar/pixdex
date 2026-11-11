@@ -23,6 +23,7 @@ DESCRIPTION: A leopard in a tree.`;
 const config: AgentConfig = {
   CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
   INGEST_TOKEN: 'secret-token',
+  OWNER_EMAIL: 'Owner@Example.com',
   OLLAMA_BASE_URL: 'http://localhost:11434',
   OLLAMA_MODEL: 'qwen3.5:27b-mlx',
   ORIGINALS_PORT: 8787,
@@ -70,10 +71,24 @@ describe('processFile', () => {
     expect(calls).toEqual(['uploadThumbnail', 'ingestPhoto']);
     const payload = cloudflareClient.ingestPhoto.mock.calls[0][0];
     expect(payload.source).toBe('local');
+    expect(payload.ownerEmail).toBe('owner@example.com');
     expect(payload.path).toBe(filePath);
     expect(payload.driveFileId).toBeUndefined();
     expect(payload.modelProvider).toBe('ollama');
     expect(payload.subjects).toEqual(['leopard', 'big cat']);
+  });
+
+  it('refuses to index, before any model call, when OWNER_EMAIL is not set', async () => {
+    const cloudflareClient = { uploadThumbnail: vi.fn(), ingestPhoto: vi.fn() };
+    const ollamaClient = { chat: vi.fn() };
+    await expect(
+      processFile(
+        { localPath: filePath, contentHash: 'a'.repeat(64), source: 'local', filename: 'fixture.jpg' },
+        { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config: { ...config, OWNER_EMAIL: undefined } }
+      )
+    ).rejects.toThrow(/OWNER_EMAIL/);
+    expect(ollamaClient.chat).not.toHaveBeenCalled();
+    expect(cloudflareClient.ingestPhoto).not.toHaveBeenCalled();
   });
 
   it('sets driveFileId and omits path for a google_drive-source file', async () => {

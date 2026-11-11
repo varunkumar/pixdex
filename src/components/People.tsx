@@ -160,6 +160,7 @@ const People = () => {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 
+  // The Worker returns unassigned faces of albums the caller owns only (nothing for a pure viewer).
   const groups = (groupsQuery.data?.pages.flatMap((p) => p.groups) ?? []).filter(
     (g) => g.faces.length > 0 && !hidden.has(g.faces[0].id)
   );
@@ -245,7 +246,7 @@ const People = () => {
               <GroupCard
                 key={g.faces[0].id}
                 group={g}
-                people={people}
+                people={people.filter((p) => p.canEdit)}
                 onDone={(key) => setHidden((prev) => new Set(prev).add(key))}
               />
             ))}

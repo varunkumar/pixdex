@@ -21,7 +21,16 @@ describe('AlbumPhotos', () => {
     vi.clearAllMocks();
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto()], total: 1 });
     vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
-      albums: [{ name: 'Kanha', photoCount: 1, coverPhotoId: 'other', coverThumbnailUrl: null, latestDate: null }],
+      albums: [
+        {
+          name: 'Kanha',
+          photoCount: 1,
+          coverPhotoId: 'other',
+          coverThumbnailUrl: null,
+          latestDate: null,
+          role: 'owner',
+        },
+      ],
       total: 1,
     });
     vi.mocked(workerApiClient.setAlbumCover).mockResolvedValue();
@@ -79,5 +88,46 @@ describe('AlbumPhotos', () => {
       'href',
       '/albums?sort=rating&page=2'
     );
+  });
+
+  it('hides the cover picker and Share button for a shared-with-you album', async () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: [
+        {
+          name: 'Kanha',
+          photoCount: 1,
+          coverPhotoId: 'other',
+          coverThumbnailUrl: null,
+          latestDate: null,
+          role: 'viewer',
+        },
+      ],
+      total: 1,
+    });
+    renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
+    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect(await screen.findByText('Shared with you')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set as cover' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+  });
+
+  it('shows Share and the Shared badge to the owner of a shared album', async () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: [
+        {
+          name: 'Kanha',
+          photoCount: 1,
+          coverPhotoId: 'other',
+          coverThumbnailUrl: null,
+          latestDate: null,
+          role: 'owner',
+          sharedWith: ['a@example.com'],
+        },
+      ],
+      total: 1,
+    });
+    renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
+    expect(await screen.findByRole('button', { name: 'Share' })).toBeInTheDocument();
+    expect(screen.getByText('Shared')).toBeInTheDocument();
   });
 });

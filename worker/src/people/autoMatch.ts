@@ -1,6 +1,6 @@
 import { embeddingFromBytes, EMBEDDING_DIM } from './embedding';
 import { MAX_AUTO_MATCH_MACS, bestScore, classify, isMatchable } from './matching';
-import { loadReferencesCached } from './references';
+import { loadReferencesCached, type PersonReferences } from './references';
 
 /**
  * Attaches each given `unassigned` face to the best-scoring named person when
@@ -19,23 +19,42 @@ export async function autoMatchFaces(
 
   const { results: faces } = await db
     .prepare(
-      // CROSS JOIN pins the id list as the outer loop, so each face is a primary-key lookup; a plain
-      // IN (...) with the status filter made D1 scan every unassigned face (about 1,500 reads).
-      `SELECT f.id, f.embedding, f.det_score, f.bbox_w, f.bbox_h FROM json_each(?) j
-       CROSS JOIN faces f ON f.id = j.value WHERE f.assign_status = 'unassigned'`
+      // CROSS JOIN pins the id list as the outer loop, so each face is a primary-key lookup (then two more
+      // for its photo and album); a plain IN (...) with the status filter made D1 scan every unassigned face.
+      `SELECT f.id, f.embedding, f.det_score, f.bbox_w, f.bbox_h, a.owner_email AS owner FROM json_each(?) j
+       CROSS JOIN faces f ON f.id = j.value
+       JOIN photos ph ON ph.id = f.photo_id
+       JOIN albums a ON a.name = ph.album
+       WHERE f.assign_status = 'unassigned' AND a.owner_email IS NOT NULL`
     )
     .bind(ids)
-    .all<{ id: string; embedding: ArrayBuffer; det_score: number; bbox_w: number; bbox_h: number }>();
+    .all<{ id: string; embedding: ArrayBuffer; det_score: number; bbox_w: number; bbox_h: number; owner: string }>();
   const all = faces.filter((f) => isMatchable({ detScore: f.det_score, w: f.bbox_w, h: f.bbox_h }));
   if (all.length === 0) return { matched: 0, skipped: 0 };
 
-  const refs = await loadReferencesCached(db);
-  if (refs.length === 0) return { matched: 0, skipped: 0 };
+  // People are per owner: a face is only compared with the people of its album's owner.
+  const byOwner = new Map<string, typeof all>();
+  for (const f of all) byOwner.set(f.owner, [...(byOwner.get(f.owner) ?? []), f]);
+  const refsByOwner = new Map<string, PersonReferences[]>();
+  for (const owner of byOwner.keys()) refsByOwner.set(owner, await loadReferencesCached(db, owner));
 
-  const totalRefs = refs.reduce((n, r) => n + r.vectors.length, 0);
-  const budgetFaces = Math.max(1, Math.floor(MAX_AUTO_MATCH_MACS / (totalRefs * EMBEDDING_DIM)));
-  const candidates = all.slice(0, budgetFaces);
-  const skipped = all.length - candidates.length;
+  // One MAC budget for the whole call, spent owner by owner; at least one face is always scored.
+  let budget = MAX_AUTO_MATCH_MACS;
+  let scored = 0;
+  const candidates: { f: (typeof all)[number]; refs: PersonReferences[] }[] = [];
+  for (const [owner, list] of byOwner) {
+    const refs = refsByOwner.get(owner)!;
+    const totalRefs = refs.reduce((n, r) => n + r.vectors.length, 0);
+    if (totalRefs === 0) continue;
+    const perFace = totalRefs * EMBEDDING_DIM;
+    const take = Math.max(scored === 0 ? 1 : 0, Math.floor(budget / perFace));
+    for (const f of list.slice(0, take)) candidates.push({ f, refs });
+    budget -= Math.min(take, list.length) * perFace;
+    scored += Math.min(take, list.length);
+  }
+  const eligible = [...byOwner].reduce((n, [owner, l]) => n + ((refsByOwner.get(owner)?.length ?? 0) > 0 ? l.length : 0), 0);
+  const skipped = eligible - candidates.length;
+  if (candidates.length === 0) return { matched: 0, skipped: 0 };
 
   const { results: rejected } = await db
     .prepare('SELECT face_id, person_id FROM face_rejections WHERE face_id IN (SELECT value FROM json_each(?))')
@@ -44,7 +63,7 @@ export async function autoMatchFaces(
   const rejectedPairs = new Set(rejected.map((r) => `${r.face_id}|${r.person_id}`));
 
   const updates: { id: string; personId: string; score: number }[] = [];
-  for (const f of candidates) {
+  for (const { f, refs } of candidates) {
     const vec = embeddingFromBytes(f.embedding);
     let best: { personId: string; score: number } | undefined;
     for (const ref of refs) {

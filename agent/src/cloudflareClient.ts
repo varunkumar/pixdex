@@ -11,6 +11,8 @@ export interface FacePayload {
 
 export interface IngestPhotoPayload {
   id: string;
+  /** The album owner (lowercase); the Worker stamps it on the album when it is the first photo and rejects a different owner. */
+  ownerEmail: string;
   contentHash: string;
   source: 'local' | 'google_drive';
   path?: string;

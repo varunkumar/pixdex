@@ -1,17 +1,20 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { embeddingFromBytes } from '../src/people/embedding';
+import { readHeaders } from './helpers';
 
 const photo = {
   id: '123e4567-e89b-12d3-a456-426614174000',
   contentHash: 'hash-faces',
   source: 'local' as const,
   filename: 'group.jpg',
+  album: 'Groups',
   subjects: ['people'],
   tags: ['people'],
   description: 'A group photo.',
   modelProvider: 'ollama',
   modelName: 'qwen',
+  ownerEmail: 'owner@example.com',
 };
 const MODEL = 'buffalo_l';
 
@@ -256,7 +259,7 @@ describe('face ingest routes', () => {
   describe('face crops', () => {
     const bytes = new TextEncoder().encode('fake-jpeg-bytes');
     const readCrop = (faceId: string) =>
-      SELF.fetch(`https://example.com/faces/${faceId}/crop`, { headers: { Authorization: `Bearer ${env.READ_TOKEN}` } });
+      SELF.fetch(`https://example.com/faces/${faceId}/crop`, { headers: readHeaders() });
     const putCrop = (faceId: string, body: BodyInit = bytes, headers: Record<string, string> = ingestHeaders()) =>
       SELF.fetch(`https://example.com/ingest/faces/${faceId}/crop`, { method: 'PUT', headers, body });
     const scan = async (faces = [face()]) =>

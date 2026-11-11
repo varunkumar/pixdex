@@ -11,6 +11,7 @@ import type { AgentConfig } from '../src/config';
 const config: AgentConfig = {
   CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
   INGEST_TOKEN: 'secret-token',
+  OWNER_EMAIL: 'Owner@Example.com',
   OLLAMA_BASE_URL: 'http://localhost:11434',
   OLLAMA_MODEL: 'qwen3.5:27b-mlx',
   ORIGINALS_PORT: 8787,

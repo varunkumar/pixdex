@@ -1,5 +1,6 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { requireIngestToken, requireReadToken } from './auth';
+import { guardedWrites } from './access';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
 import { ingestFacesRoute, pendingFacesRoute, putFaceCropRoute, unscannedFacesRoute } from './routes/ingest-faces';
 import { ingestExifRoute } from './routes/ingest-exif';
@@ -22,9 +23,18 @@ import {
 import { searchRoute } from './routes/search';
 import { bucketsRoute, timelineRoute } from './routes/timeline';
 import { dailyPickRoute } from './routes/daily-pick';
+import { accessPhotoRoute, meRoute, putAlbumSharesRoute } from './routes/shares';
 import type { Env } from './types';
 
 const app = new Hono<{ Bindings: Env }>();
+
+type Handler = (c: Context<{ Bindings: Env }>) => Response | Promise<Response>;
+
+/** A write whose handler authorizes itself (albumRole, photo access or person ownership: 404 no access, 403 viewer). */
+function guardedWrite(method: 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, handler: Handler) {
+  guardedWrites.add(`${method} ${path}`);
+  app.on(method, path, handler);
+}
 
 app.onError((err, c) => {
   console.error(err);
@@ -59,30 +69,39 @@ app.get('/timeline/buckets', bucketsRoute);
 app.use('/photos/*', requireReadToken);
 app.get('/photos/:id', getPhotoRoute);
 app.get('/photos/:id/faces', photoFacesRoute);
-app.patch('/photos/:id', patchPhotoRoute);
+guardedWrite('PATCH', '/photos/:id', patchPhotoRoute);
 
 app.use('/people', requireReadToken);
 app.use('/people/*', requireReadToken);
 app.get('/people', listPeopleRoute);
-app.post('/people', createPersonRoute);
+guardedWrite('POST', '/people', createPersonRoute);
 app.get('/people/groups', groupsRoute);
-app.patch('/people/:id', renamePersonRoute);
-app.delete('/people/:id', deletePersonRoute);
-app.post('/people/:id/faces', assignFacesRoute);
-app.post('/people/:id/match', matchPersonRoute);
-app.post('/people/:id/cover', setPersonCoverRoute);
+guardedWrite('PATCH', '/people/:id', renamePersonRoute);
+guardedWrite('DELETE', '/people/:id', deletePersonRoute);
+guardedWrite('POST', '/people/:id/faces', assignFacesRoute);
+guardedWrite('POST', '/people/:id/match', matchPersonRoute);
+guardedWrite('POST', '/people/:id/cover', setPersonCoverRoute);
 
 app.use('/faces/*', requireReadToken);
 app.get('/faces/:id/crop', faceCropRoute);
-app.post('/faces/:id/assign', assignFaceRoute);
-app.post('/faces/:id/reject', rejectFaceRoute);
-app.post('/faces/:id/unassign', unassignFaceRoute);
+guardedWrite('POST', '/faces/:id/assign', assignFaceRoute);
+guardedWrite('POST', '/faces/:id/reject', rejectFaceRoute);
+guardedWrite('POST', '/faces/:id/unassign', unassignFaceRoute);
 
 app.use('/albums', requireReadToken);
 app.get('/albums', getAlbumsRoute);
 
 app.use('/albums/cover', requireReadToken);
-app.put('/albums/cover', putAlbumCoverRoute);
+guardedWrite('PUT', '/albums/cover', putAlbumCoverRoute);
+
+app.use('/albums/shares', requireReadToken);
+guardedWrite('PUT', '/albums/shares', putAlbumSharesRoute);
+
+app.use('/access/*', requireReadToken);
+app.get('/access/photo/:id', accessPhotoRoute);
+
+app.use('/me', requireReadToken);
+app.get('/me', meRoute);
 
 app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);

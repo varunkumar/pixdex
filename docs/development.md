@@ -60,7 +60,36 @@ Notes:
   - You can still apply one by hand beforehand with
     `cd worker && npx wrangler d1 migrations apply DB --remote`.
 - Migrations `0009_people.sql` (faces and people) and `0010_faces_person_status_created_idx.sql` (an index) are additive and auto-apply on merge.
+- Migration `0016_album_shares.sql` (`albums.owner_email`, `albums.shared_with`, `persons.owner_email`, lowercase triggers and the per-owner
+  unique person-name index) is additive and auto-applies on merge. It also drops the old global `idx_persons_name_lower`
+  (replaced by `idx_persons_owner_name_lower`); dropping an index is metadata-only, so no Time Travel bookmark is needed.
 - The agent is not deployed; it runs on your Mac.
+
+### Rollout order for album sharing
+
+There is no default owner: the Worker never reads `OWNER_EMAIL`. Pre-existing albums and people have no owner until you stamp
+them, and an album with no owner (like a photo with no album) is visible to nobody. The Worker still returns 401 without
+`X-Viewer-Email` and the Function 500 without its Access variables, by design (fail closed). So, in order:
+
+1. Before merging, set Pages variables `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (the Access application's audience tag), and
+   `OWNER_EMAIL` in `agent/.env`. Pages and the Worker no longer need `OWNER_EMAIL`; delete the Worker secret if you set
+   one (`cd worker && npx wrangler secret delete OWNER_EMAIL`) and the Pages variable.
+2. Merge and let the Worker (migration `0016`, then code) and Pages Function deploy. The two deploy independently: if the
+   Worker lands first, the old Function sends no `X-Viewer-Email` and the site answers 401 until the Pages deploy finishes (a
+   short window).
+3. Immediately run `cd worker && npm run backfill-owner` once. It reads `OWNER_EMAIL` from the environment or `agent/.env`,
+   validates and lowercases it, and runs `UPDATE albums ... WHERE owner_email IS NULL` and the same for `persons` on the
+   remote D1 through `wrangler d1 execute`. It is idempotent. `-- --dry-run` prints the SQL; `-- --local` targets the local
+   D1; any other argument is refused. Until it runs, the owner sees nothing (a short window).
+4. Update the agent and restart it: indexing now sends `ownerEmail` (it refuses to index without `OWNER_EMAIL`). An agent
+   that has not been updated sends no `ownerEmail`, so `/ingest/photo` answers 400 (it is required). A running
+   `serve-originals` breaks (its lookups get 401) until it is updated. `index-status` needs `OWNER_EMAIL` too.
+5. Only then change the Cloudflare Access policy to allow any Google account. Doing it earlier lets strangers reach
+   a Function that cannot yet verify them.
+
+Local dev: the Vite `/api` proxy sends `X-Viewer-Email` from `DEV_VIEWER_EMAIL`, falling back to `OWNER_EMAIL` in the root
+`.env`; set `DEV_VIEWER_EMAIL` to preview as a user an album is shared with. Run `cd worker && npm run backfill-owner -- --local`
+to own your local albums.
 
 ## D1 read budget
 
@@ -140,3 +169,61 @@ licence note in `agent/sidecar/README.md`.
 
 Requires Ollama running locally. See `README.md` for the batch indexer details,
 EXIF backfill, and originals tunnel setup.
+
+## Album sharing performance notes
+
+CPU and D1 usage cannot be measured locally (no D1 row meters, no Workers CPU clock); the figures below are from
+`EXPLAIN QUERY PLAN` (also asserted in `worker/test/query-plans.test.ts`) and reasoning, plus one Node timing for JWT
+verification. Measure in production with `cd worker && npx wrangler tail pixdex-worker --format json` (cpuTime per
+route) and `npx wrangler d1 insights pixdex --timePeriod 30d` (rows read per query), before and after the rollout.
+
+There are no fast paths: every read is scoped for every user, the owner included. What that costs per request:
+
+- Thumbnail (the hot path): one D1 read per request (was zero for the owner): `SEARCH p USING INDEX
+  sqlite_autoindex_photos_2 (content_hash=?)` then `SEARCH va USING PRIMARY KEY (name=?)`, about 2 rows read. The
+  response is `Cache-Control: private, max-age=31536000, immutable` (set by the Worker and the Function), so each browser
+  asks once per photo. This is the one change that raises a hot-path cost; measure it with `wrangler tail` (cpuTime on
+  `/thumbnails/:hash`) and `wrangler d1 insights`.
+- Original: one Worker subrequest per original (`GET /access/photo/:id`, the same two primary-key searches, about 2 rows
+  read) for the owner too.
+- Lists (search, timeline, buckets, albums, daily pick): `album IN visibleAlbumsSql` where the subquery is
+  `owner_email = ? OR EXISTS (json_each(shared_with))`. The OR means one pass over the small `albums` table (A rows,
+  materialised once as `LIST SUBQUERY`), not an index search; `canEditFor` (`owner_email = ?`) does use the partial index
+  (`SEARCH albums USING INDEX idx_albums_owner_email`), reading only the user's own albums. The `counters` total
+  shortcut is skipped (those requests `COUNT(*)`), and search ordered by `date_time` loses its early exit and reads and
+  sorts every visible row per page (see `TODO.todo`).
+- Single photo (`GET /photos/:id`, `/photos/:id/faces`, `/faces/:id/crop`, `GET /access/photo/:id`): the primary-key join
+  (`photoAccess`), about 2 rows read.
+- Daily pick: the already-picked check, then at most 200 candidate rows (`PICK_CANDIDATES`, ordered so recently picked
+  photos sort last) sorted in memory, for every user (the owner used to read the whole table here). One pick write, only
+  when the chosen photo is in an album the user owns.
+- Ingest: `POST /ingest/photo` adds one `albums` point read; the first photo of an album (or of an unowned one) adds one
+  single-row `UPDATE albums SET owner_email` write, later photos add no write.
+- People: `GET /people` scans the small `persons` table, with `idx_faces_person_status_created` per person and one photo
+  primary-key lookup per counted face (the cover query reads visible assigned faces once). Person routes cost 1 `persons`
+  primary-key read (plus, for a person you do not own, one bounded face probe) and the face routes one statement of three
+  primary-key lookups per face. Name uniqueness is an index search on `idx_persons_owner_name_lower`. `/people/groups` and
+  `/people/:id/match` candidate scans add two primary-key lookups per candidate face
+  (`SEARCH ph USING INDEX sqlite_autoindex_photos_1 (id=?)`, `SEARCH a USING COVERING INDEX idx_albums_owner_email`) and
+  keep rowid paging and the CPU budgets; groups short-circuits with one covering-index probe when the caller owns no
+  album. Ingest auto-match loads references per owner (cached 60 s per owner) and shares the same MAC budget.
+- `GET /me` is one request per session (`staleTime: Infinity`) with no D1 read.
+- PATCH photo, album cover and share writes each add one `albums` primary-key read (`albumRole`); `PUT /albums/shares`
+  also writes one `albums` row.
+- JWT verification in the Function: about 43 microseconds warm per request with a cached JWKS (Node, 2000
+  iterations); a cold isolate or the hourly expiry adds one certs fetch and key imports.
+
+If rows read on search or timeline rise noticeably after other users exist, a different search ordering for scoped
+requests or an `album_shares(email, album)` lookup table are the next steps.
+
+### Security notes (hardening deferred from review)
+
+- JWKS refetch has no negative cache: while the certs endpoint is failing, a forged-`kid` token can trigger a fetch
+  (rate limited to one per minute for unknown kids on the rotation path, not on a cold isolate).
+- The JWT `iss` claim is not checked (signature against the team JWKS plus `aud` already bind it to this app).
+- No stale-JWKS grace: if the certs endpoint is down after the cache expires, every request is 401.
+- The originals access subrequest to the Worker has no explicit timeout.
+- A removed share can still show bytes already cached in the viewer's browser (originals `max-age=3600`, thumbnails
+  immutable). Server-side access is revoked immediately.
+- The Vite dev proxy forwards a client `X-Viewer-Email` when neither `DEV_VIEWER_EMAIL` nor `OWNER_EMAIL` (root `.env`) is set
+  (dev only).

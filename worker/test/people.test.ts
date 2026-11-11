@@ -1,10 +1,15 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readHeaders } from './helpers';
 
-const readHeaders = () => ({ Authorization: `Bearer ${env.READ_TOKEN}`, 'Content-Type': 'application/json' });
 const PHOTO = '123e4567-e89b-12d3-a456-426614174000';
 
-const call = (method: string, path: string, body?: unknown, headers: Record<string, string> = readHeaders()) =>
+const call = (
+  method: string,
+  path: string,
+  body?: unknown,
+  headers: Record<string, string> = { ...readHeaders(), 'Content-Type': 'application/json' }
+) =>
   SELF.fetch(`https://example.com${path}`, {
     method,
     headers,
@@ -40,7 +45,7 @@ describe('people routes', () => {
       headers: { Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: PHOTO, contentHash: 'hash-people', source: 'local', filename: 'p.jpg', subjects: ['people'],
-        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen',
+        tags: ['people'], description: 'd', modelProvider: 'ollama', modelName: 'qwen', ownerEmail: 'owner@example.com', album: 'Group',
       }),
     });
     expect(res.status).toBe(201);

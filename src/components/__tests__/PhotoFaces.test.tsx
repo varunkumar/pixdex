@@ -8,6 +8,7 @@ import PhotoFaces from '../PhotoFaces';
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
     getPhotoFaces: vi.fn(),
+    getMe: vi.fn(),
     getPeople: vi.fn(),
     createPerson: vi.fn(),
     assignFace: vi.fn(),
@@ -35,15 +36,16 @@ function face(overrides: Partial<SerializedFace> = {}): SerializedFace {
 }
 
 const people = [
-  { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 3, cover: null },
-  { id: 'pe2', name: 'Ravi', faceCount: 1, photoCount: 1, cover: null },
+  { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 3, canEdit: true, cover: null },
+  { id: 'pe2', name: 'Ravi', faceCount: 1, photoCount: 1, canEdit: true, cover: null },
 ];
 
-const show = () => renderWithProviders(<PhotoFaces photoId="p1" />);
+const show = (canEdit = true) => renderWithProviders(<PhotoFaces photoId="p1" canEdit={canEdit} />);
 
 describe('PhotoFaces', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com' });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
     vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
@@ -223,5 +225,20 @@ describe('PhotoFaces', () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Remove name' }));
     expect(await screen.findByText('Something went wrong, try again')).toBeInTheDocument();
+  });
+
+  it('hides assign, reject, unassign and new person controls when the photo is not editable', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face(),
+      face({ id: 'f2', personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
+    ]);
+    show(false);
+    expect((await screen.findAllByText('Asha')).length).toBeGreaterThan(0);
+    for (const name of [/^Not /, 'Remove name', 'New person', 'Set as cover']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole('textbox', { name: 'Existing person' })).not.toBeInTheDocument();
+    // The name comes from the faces response; the people list (management only) is never requested.
+    expect(workerApiClient.getPeople).not.toHaveBeenCalled();
   });
 });

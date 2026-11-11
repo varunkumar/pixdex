@@ -10,11 +10,42 @@ never leave local disk or Google Drive.
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`);
   the `/ai-search` page (Chrome Prompt API only, client side): page in `src/components/AiSearch.tsx`, logic in
   `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`
+- Frontend gating (hidden, never disabled): photo review controls and the photo's face-naming controls use
+  `photo.canEdit` (the user owns the album); album cover and Share use the album's `role === 'owner'` (the album page reads it from
+  its `album-summary` query); rename, delete, matching and covers on a person use that person's `canEdit` (the user created it).
+  `useMe()` (`src/hooks/useMe.ts`, `GET /me`, `staleTime: Infinity`) returns only `{ email, loading }`. The share dialog is
+  `src/components/ShareAlbumModal.tsx`.
+- Access model: there is no default owner and no special user. `albums.owner_email` is the album owner; `albums.shared_with` is a
+  JSON array of lowercase emails or NULL. An album with a NULL owner belongs to nobody and is invisible to everyone until the
+  one-time backfill (`cd worker && npm run backfill-owner`) stamps it; photos with no album are likewise visible to nobody.
+  Emails are always stored lowercase and compared exactly (triggers in migration 0016 abort any other write), so queries never
+  wrap them in lower(). A user sees their own albums and albums shared with them. Role on an album: owner, viewer, or none
+  (`albumRole`). Invisible is 404, a viewer's write is 403. There are no fast paths: every read is always scoped
+  (`scopeFor`, `photoAccess`, `canEditFor`), so each request pays the scope (a thumbnail is one D1 read). Worker routes:
+  `GET /me` (`{ email }`, no D1), `PUT /albums/shares` (owner only, max 50 emails), `GET /access/photo/:id` (204 or 404,
+  called by the Function with READ_TOKEN for every original, the album owner's included). Every Worker read and write needs
+  `X-Viewer-Email` as well as READ_TOKEN (else 401). The Worker never reads `OWNER_EMAIL`: it lives only in `agent/.env` (sent as
+  `ownerEmail` on `POST /ingest/photo` and as the viewer on originals and `index-status` reads). Pages needs `ACCESS_TEAM_DOMAIN` and
+  `ACCESS_AUD`; if either is unset every `/api` call returns 500. Rollout order is in `docs/development.md`.
+- People are per owner: `persons.owner_email` is the creator. Rename, delete, cover, assign, match and name uniqueness
+  (`idx_persons_owner_name_lower`, case-insensitive per owner) are owner-only (404 not visible, 403 visible but not theirs). Face
+  assign, reject, unassign and adding faces need the face's album to be the caller's (`faceRoles`) and the named person to be theirs.
+  `GET /people` lists the caller's people plus other owners' people with a confirmed or auto face in a photo the caller can see
+  (`canEdit` marks the caller's own); `GET /people/groups` returns unassigned faces in albums the caller owns. Auto-match at ingest and
+  `POST /people/:id/match` only compare people and faces of the same owner (`loadReferences({ owner })`, cached per owner).
+- Write authorization (worker): every non-ingest write authorizes itself in its handler (`albumRole`, `faceRoles`, `personRole`)
+  and is registered with `guardedWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails
+  otherwise. `POST /ingest/photo` requires `ownerEmail` (trimmed, lowercased email): it returns 409 for an album owned by another
+  user and stamps the owner on an unowned album once (one extra single-row write). `shared_with` is only ever written as valid
+  JSON or NULL.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
-  include `GET timeline` and `GET timeline/buckets`; also
-  forwards the browser writes: `PUT albums/cover`, `PATCH photos/:id`,
+  include `GET timeline`, `GET timeline/buckets` and `GET me`; also
+  forwards the browser writes: `PUT albums/cover`, `PUT albums/shares`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, and `POST` to `people`, `people/:id/faces`,
-  `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`)
+  `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`). It first verifies the Cloudflare Access
+  JWT (`functions/_lib/access.ts`) and forwards the verified email as `X-Viewer-Email`; for `GET originals/:id` it first calls the
+  Worker `GET /access/photo/:id` (READ_TOKEN, not in the browser allowlist) for every user
+- `functions/_lib/` - shared Function code: Access JWT verification (`access.ts`, JWKS cached in module memory)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI, originals server, and the `move-album` script
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
@@ -59,7 +90,9 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - DB changes go in a new numbered file in `worker/migrations/`.
 - `albums` and `counters` are derived by triggers (`worker/migrations/albums.ts` generates
   `0015_albums.sql` via `cd worker && npm run gen:albums-migration`). Never write them from route code; change
-  the generator and add a new numbered migration.
+  the generator and add a new numbered migration. Exception: the owner-edited `albums.owner_email` and
+  `albums.shared_with` (migration `0016`) are not derived; only `PUT /albums/shares`, the first-photo stamp in
+  `POST /ingest/photo` and the one-time `worker/scripts/backfill-owner.mjs` write them.
 - After every feature or change, update `README.md` and this file (and `docs/`
   if architecture, config or workflow changed) in the same commit.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.

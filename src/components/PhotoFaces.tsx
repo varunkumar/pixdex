@@ -17,12 +17,14 @@ const FaceRow = ({
   face,
   index,
   people,
+  canManage,
   onNamed,
   onChanged,
 }: {
   face: SerializedFace;
   index: number;
   people: PersonSummary[];
+  canManage: boolean;
   onNamed: (personId: string) => Promise<void>;
   onChanged: () => void;
 }) => {
@@ -78,7 +80,11 @@ const FaceRow = ({
           {STATUS_LABEL[face.status]}
         </Text>
 
-        {named ? (
+        {!canManage ? (
+          named ? (
+            <Text size="sm">{face.personName}</Text>
+          ) : null
+        ) : named ? (
           <Group gap="xs">
             <Button
               size="xs"
@@ -160,15 +166,17 @@ const FaceRow = ({
 };
 
 /** People found in a photo, with controls to name them and correct automatic matches. */
-const PhotoFaces = ({ photoId }: { photoId: string }) => {
+const PhotoFaces = ({ photoId, canEdit }: { photoId: string; canEdit: boolean }) => {
   const queryClient = useQueryClient();
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
   });
+  // The people list only feeds the naming controls, which only the album owner sees.
   const { data: people = [] } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
+    enabled: canEdit,
   });
 
   const refresh = () => {
@@ -199,7 +207,15 @@ const PhotoFaces = ({ photoId }: { photoId: string }) => {
         <Title order={5}>People</Title>
         <Stack gap="md">
           {faces.map((f, i) => (
-            <FaceRow key={f.id} face={f} index={i} people={people} onNamed={onNamed} onChanged={refresh} />
+            <FaceRow
+              key={f.id}
+              face={f}
+              index={i}
+              people={people.filter((p) => p.canEdit)}
+              canManage={canEdit}
+              onNamed={onNamed}
+              onChanged={refresh}
+            />
           ))}
         </Stack>
       </Stack>

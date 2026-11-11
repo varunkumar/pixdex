@@ -1,15 +1,22 @@
 import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import type { Env } from '../types';
+import { albumRole, userOf } from '../access';
+import { canEditPhoto, photoAccess, visibleAlbumsSql } from '../db/visibility';
 import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
-  const row = await c.env.DB.prepare('SELECT * FROM photos WHERE id = ?').bind(id).first<PhotoRow>();
+  const user = userOf(c);
+  // The album comes from a primary-key join (photoAccess) that also yields canEdit: no albums scan, no second query.
+  const access = photoAccess(user, 'p');
+  const row = await c.env.DB.prepare(`SELECT p.*, va.owner_email AS va_owner_email FROM photos p${access.join} WHERE p.id = ?${access.where}`)
+    .bind(id, ...access.params)
+    .first<PhotoRow & { va_owner_email: string | null }>();
   if (!row) {
     return c.text('Not Found', 404);
   }
-  return c.json(serializePhoto(row));
+  return c.json(serializePhoto(row, canEditPhoto(user, row.album, row.va_owner_email)));
 }
 
 interface AlbumRow {
@@ -18,6 +25,8 @@ interface AlbumRow {
   cover_photo_id: string;
   content_hash: string | null;
   latest_date: string | null;
+  owner_email: string | null;
+  shared_with: string | null;
 }
 
 // Whitelisted ORDER BY clauses; the sort query param never reaches SQL directly.
@@ -44,6 +53,16 @@ const reviewBody = z
 
 const coverBody = z.object({ album: z.string().check(z.minLength(1)), photoId: z.string().check(z.minLength(1)) });
 
+function parseShared(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 const dedupe = (items: string[]) => [...new Map(items.map((i) => [i.toLowerCase(), i])).values()];
 
 /** Human review of one photo: star rating and overrides for title, subjects and tags. */
@@ -55,6 +74,9 @@ export async function patchPhotoRoute(c: Context<{ Bindings: Env }>) {
   const id = c.req.param('id');
   const row = await c.env.DB.prepare('SELECT * FROM photos WHERE id = ?').bind(id).first<PhotoRow>();
   if (!row) return c.text('Not Found', 404);
+  const role = await albumRole(c.env.DB, userOf(c), row.album ?? null);
+  if (role === null) return c.text('Not Found', 404);
+  if (role !== 'owner') return c.text('Forbidden', 403);
 
   if ('userRating' in edit) row.user_rating = edit.userRating ?? null;
   if ('caption' in edit) row.user_caption = edit.caption || null;
@@ -70,13 +92,17 @@ export async function patchPhotoRoute(c: Context<{ Bindings: Env }>) {
   )
     .bind(row.user_rating ?? null, row.user_caption ?? null, row.user_subjects ?? null, row.user_tags ?? null, row.search_text, row.search_primary, id)
     .run();
-  return c.json(serializePhoto(row));
+  return c.json(serializePhoto(row, true));
 }
 
 export async function putAlbumCoverRoute(c: Context<{ Bindings: Env }>) {
   const parsed = coverBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: 'album and photoId are required' }, 400);
   const { album, photoId } = parsed.data;
+
+  const role = await albumRole(c.env.DB, userOf(c), album);
+  if (role === null) return c.text('Not Found', 404);
+  if (role !== 'owner') return c.text('Forbidden', 403);
 
   const photo = await c.env.DB.prepare('SELECT album FROM photos WHERE id = ?')
     .bind(photoId)
@@ -95,9 +121,14 @@ export async function putAlbumCoverRoute(c: Context<{ Bindings: Env }>) {
 export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // The rich, paginated shape is opt-in (limit or offset present). A bare request
   // keeps the original list of names so an older cached frontend does not break.
+  const user = userOf(c);
+  const v = visibleAlbumsSql(user);
+  const filter = { where: ` WHERE name IN ${v.sql}`, and: ` AND name IN ${v.sql}`, params: v.params };
   const wantsPage = c.req.query('limit') !== undefined || c.req.query('offset') !== undefined;
   if (c.req.query('names') === '1' || !wantsPage) {
-    const result = await c.env.DB.prepare('SELECT name FROM albums ORDER BY name').all<{ name: string }>();
+    const result = await c.env.DB.prepare(`SELECT name FROM albums${filter.where} ORDER BY name`)
+      .bind(...filter.params)
+      .all<{ name: string }>();
     return c.json({ albums: result.results.map((r) => r.name) });
   }
 
@@ -111,23 +142,30 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // are already worked out per album, so a page reads at most one row per album and never touches photos.
   const [rows, totalRow] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT name, photo_count, cover_photo_id, content_hash, latest_date FROM albums
-       ${only ? 'WHERE name = ?' : ''} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
+      `SELECT name, photo_count, cover_photo_id, content_hash, latest_date, owner_email, shared_with FROM albums
+       ${only ? 'WHERE name = ?' : ''}${only ? filter.and : filter.where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
     )
-      .bind(...(only ? [only] : []), limit, offset)
+      .bind(...(only ? [only] : []), ...filter.params, limit, offset)
       .all<AlbumRow>(),
-    // Counts every album, not just a filtered one.
-    c.env.DB.prepare('SELECT COUNT(*) AS total FROM albums').first<{ total: number }>(),
+    // Counts every visible album, not just a filtered one.
+    c.env.DB.prepare(`SELECT COUNT(*) AS total FROM albums${filter.where}`)
+      .bind(...filter.params)
+      .first<{ total: number }>(),
   ]);
 
   return c.json({
-    albums: rows.results.map((r) => ({
-      name: r.name,
-      photoCount: r.photo_count,
-      coverPhotoId: r.cover_photo_id,
-      coverThumbnailUrl: r.content_hash ? `/thumbnails/${r.content_hash}` : null,
-      latestDate: r.latest_date ?? null,
-    })),
+    albums: rows.results.map((r) => {
+      const owns = r.owner_email === user.email;
+      return {
+        name: r.name,
+        photoCount: r.photo_count,
+        coverPhotoId: r.cover_photo_id,
+        coverThumbnailUrl: r.content_hash ? `/thumbnails/${r.content_hash}` : null,
+        latestDate: r.latest_date ?? null,
+        role: owns ? ('owner' as const) : ('viewer' as const),
+        ...(owns ? { sharedWith: parseShared(r.shared_with) } : {}),
+      };
+    }),
     total: totalRow?.total ?? 0,
   });
 }

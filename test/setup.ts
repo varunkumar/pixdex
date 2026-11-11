@@ -1,29 +1,33 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
-// Mantine reads matchMedia and ResizeObserver; jsdom has neither.
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+// Browser stubs apply only to the jsdom environment; Pages Function tests opt
+// into the node environment, where there is no window.
+if (typeof window !== 'undefined') {
+  // Mantine reads matchMedia and ResizeObserver; jsdom has neither.
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+  window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+
+  // Mantine's Select scrolls the active option into view; jsdom has no scrollIntoView.
+  Element.prototype.scrollIntoView = vi.fn();
 }
-window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
-
-window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
-
-// Mantine's Select scrolls the active option into view; jsdom has no scrollIntoView.
-Element.prototype.scrollIntoView = vi.fn();
