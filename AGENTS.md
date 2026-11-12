@@ -108,6 +108,9 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - `POST /ingest/faces` accepts an optional `known: { id, score }` per face (agent-computed known-personality match); ids missing from
   `known_people` are dropped (one `json_each` lookup, only when a face has `known`). It is stored in `faces.known_id`/`known_score`,
   independent of `person_id`/`assign_status`; a kept confirmed face keeps its own values.
+- `GET /people/known` (`worker/src/routes/known.ts`, READ_TOKEN plus `X-Viewer-Email`, not yet in the Pages proxy allowlist) lists known
+  personalities with at least one matched face in a photo the viewer can see (`scopeFor`), `photoCount` = distinct visible photos. One
+  grouped aggregate over `idx_faces_known_photo` (faces pinned as outer table with CROSS JOIN) plus one `json_each` name lookup.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.
 
 ## Performance review is mandatory (CPU and DB)
