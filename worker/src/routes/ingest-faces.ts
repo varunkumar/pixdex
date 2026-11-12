@@ -27,6 +27,8 @@ const faceSchema = z.object({
   bbox: z.object({ x: unit, y: unit, w: unit, h: unit }),
   detScore: z.number().check(z.minimum(0), z.maximum(1)),
   embedding: z.string().check(z.minLength(1)),
+  // Best known-personality match computed by the agent; only stored when the id exists in known_people.
+  known: z.optional(z.object({ id: z.string().check(z.minLength(1)), score: unit })),
 });
 
 // z.object strips unknown keys, so person_id / assign_status in a body are dropped.
@@ -142,6 +144,16 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
     .first<{ id: string }>();
   if (!photo) return c.json({ error: 'Unknown content hash' }, 404);
 
+  // One set-based lookup (only when some face carries a match) drops ids that are not in known_people.
+  const knownIds = new Set<string>();
+  const wanted = [...new Set(faces.flatMap((f) => (f.known ? [f.known.id] : [])))];
+  if (wanted.length > 0) {
+    const found = await c.env.DB.prepare('SELECT id FROM known_people WHERE id IN (SELECT value FROM json_each(?))')
+      .bind(JSON.stringify(wanted))
+      .all<{ id: string }>();
+    for (const r of found.results) knownIds.add(r.id);
+  }
+
   const confirmed = await c.env.DB.prepare(
     "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces WHERE photo_id = ? AND +assign_status = 'confirmed'"
   )
@@ -188,6 +200,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
       return;
     }
     stored++;
+    const known = f.known && knownIds.has(f.known.id) ? f.known : null;
     const faceId = crypto.randomUUID();
     newIds.push(faceId);
     faceIds.push(faceId);
@@ -199,11 +212,11 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
     statements.push(
       c.env.DB.prepare(
         `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score,
-           embedding, embedding_model, person_id, assign_status, match_score, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'unassigned', NULL, ?)`
+           embedding, embedding_model, person_id, assign_status, match_score, known_id, known_score, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'unassigned', NULL, ?, ?, ?)`
       ).bind(
         faceId, photo.id, f.bbox.x, f.bbox.y, f.bbox.w, f.bbox.h, f.detScore,
-        blobs[i].buffer, model, now
+        blobs[i].buffer, model, known?.id ?? null, known?.score ?? null, now
       )
     );
   });

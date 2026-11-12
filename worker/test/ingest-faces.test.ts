@@ -233,6 +233,62 @@ describe('face ingest routes', () => {
     expect(results[0].assign_status).toBe('unassigned');
   });
 
+  describe('known matches', () => {
+    const addKnown = (id: string) =>
+      env.DB.prepare("INSERT OR REPLACE INTO known_people (id, name, aliases, created_at) VALUES (?, 'Someone', '[]', 'now')")
+        .bind(id)
+        .run();
+    beforeEach(async () => {
+      await env.DB.prepare('DELETE FROM known_people').run();
+      await addKnown('Q1');
+    });
+
+    it('stores a valid known id and score, leaving person fields untouched', async () => {
+      const f = { ...face(0.1, 1), known: { id: 'Q1', score: 0.62 }, person_id: 'p1' };
+      const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [f] });
+      expect(res.status).toBe(200);
+      const { results } = await faceRows();
+      expect(results[0]).toMatchObject({ known_id: 'Q1', known_score: 0.62, person_id: null, assign_status: 'unassigned' });
+    });
+
+    it('drops an unknown id silently and still succeeds', async () => {
+      const faces = [{ ...face(0.1, 1), known: { id: 'Q999', score: 0.5 } }, { ...face(0.6, 2), known: { id: 'Q1', score: 0.7 } }];
+      const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces });
+      expect(res.status).toBe(200);
+      const { results } = await faceRows();
+      expect(results[0]).toMatchObject({ known_id: null, known_score: null });
+      expect(results[1]).toMatchObject({ known_id: 'Q1', known_score: 0.7 });
+    });
+
+    it('400 for a malformed known value', async () => {
+      const f = { ...face(), known: { id: '', score: 2 } };
+      expect((await post('', { contentHash: photo.contentHash, model: MODEL, faces: [f] })).status).toBe(400);
+    });
+
+    it('keeps a confirmed face known_id when an overlapping face carries a match', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(0.1, 1), known: { id: 'Q1', score: 0.6 } }] });
+      await env.DB.prepare("UPDATE faces SET assign_status = 'confirmed', person_id = 'p1'").run();
+      await addKnown('Q2');
+      const res = await post('', {
+        contentHash: photo.contentHash,
+        model: MODEL,
+        faces: [{ ...face(0.12, 1), known: { id: 'Q2', score: 0.9 } }],
+      });
+      expect(await res.json()).toMatchObject({ stored: 0, kept: 1 });
+      const { results } = await faceRows();
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ known_id: 'Q1', known_score: 0.6, assign_status: 'confirmed' });
+    });
+
+    it('re-posting without known leaves the replaced faces with null known', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(0.1, 1), known: { id: 'Q1', score: 0.6 } }] });
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [face(0.1, 1)] });
+      const { results } = await faceRows();
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ known_id: null, known_score: null });
+    });
+  });
+
   it('400 for an embedding of the wrong length', async () => {
     const bad = { ...face(), embedding: btoa('too short') };
     const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [bad] });

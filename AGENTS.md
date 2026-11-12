@@ -105,6 +105,9 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
   `POST /ingest/photo` and the one-time `worker/scripts/backfill-owner.mjs` write them.
 - After every feature or change, update `README.md` and this file (and `docs/`
   if architecture, config or workflow changed) in the same commit.
+- `POST /ingest/faces` accepts an optional `known: { id, score }` per face (agent-computed known-personality match); ids missing from
+  `known_people` are dropped (one `json_each` lookup, only when a face has `known`). It is stored in `faces.known_id`/`known_score`,
+  independent of `person_id`/`assign_status`; a kept confirmed face keeps its own values.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.
 
 ## Performance review is mandatory (CPU and DB)
