@@ -153,7 +153,7 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
   and `k:<id>` known, groups "Your people" then "Known personalities in your photos", own entries blue and known violet with a "known"
   marker so colour is not the only signal; `renderPill` styles picked tags). It loads `['people']` and `['known-people']` itself
   (staleTime 5 minutes, so one extra `GET /people/known` per page load), matches locally with `matchesQuery` over name plus aliases
-  (no request per keystroke; typing alone never filters; minimum 1 character here, so one or two letters find own people as before, while the
+  (no request per keystroke; typing alone never filters; each typed word matches anywhere inside a name word, so "esh" finds "Ganesh"; minimum 1 character here, so one or two letters find own people as before, while the
   3 character minimum of `matchesQuery` is for the future omnibox chips; a list that has not loaded yet has its ids carried through unchanged), shows when either list is non-empty, caps at 5 combined and drops ids in neither
   list. URL params `people` and `known` are parsed by `src/services/peopleSelection.ts`; changing either resets the Search page.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.

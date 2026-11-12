@@ -82,7 +82,8 @@ describe('PeopleFilter', () => {
     expect(await screen.findByRole('option', { name: /Mani/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Zed/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Rahman/ })).not.toBeInTheDocument();
+    // A letter matches anywhere inside a word ("Rahman" contains an m), like the old substring filter.
+    expect(screen.getByRole('option', { name: /Rahman/ })).toBeInTheDocument();
   });
 
   it('a punctuation-only query matches nothing', async () => {

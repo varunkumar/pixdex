@@ -227,7 +227,7 @@ ratings and the daily pick. The search page has a "Sort by" control (best match
 by default) and a "People" filter (up to 5 values in total; photos containing all
 selected people). The same box on Search and Timeline lists "Your people" (blue) and "Known personalities in
 your photos" (violet, with a "known" marker); both are always shown, even for the same real person.
-Typing only narrows the list (word-prefix, accents and aliases ignored, 3+ characters); picking an option filters. The description and suggested caption are not editable.
+Typing only narrows the list (matches anywhere inside a word, so "esh" finds "Ganesh"; case and accents ignored; aliases included); picking an option filters. The description and suggested caption are not editable.
 
 ### Sharing albums
 

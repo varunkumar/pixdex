@@ -27,10 +27,16 @@ describe('matchesQuery', () => {
     expect(matchesQuery('beyonce', ['Beyoncé'])).toBe(true);
     expect(matchesQuery('BEYO', ['beyoncé'])).toBe(true);
   });
-  it('does not match unrelated, infix or fuzzy queries', () => {
+  it('matches inside a word, not only at its start', () => {
+    expect(matchesQuery('esh', ['Ganesh'])).toBe(true);
+    expect(matchesQuery('hon', ['MS Dhoni'])).toBe(true);
+    expect(matchesQuery('esh kum', ['Ganesh Kumar'])).toBe(true);
+    expect(matchesQuery('ESH', ['Ganesh'])).toBe(true);
+  });
+  it('does not match unrelated or fuzzy queries', () => {
     expect(matchesQuery('xyz', ['MS Dhoni'])).toBe(false);
-    expect(matchesQuery('hon', ['MS Dhoni'])).toBe(false);
     expect(matchesQuery('dhoin', ['MS Dhoni'])).toBe(false);
+    expect(matchesQuery('esh', ['Ganapathi'])).toBe(false);
     expect(matchesQuery('virat dhoni', ['Virat Kohli'])).toBe(false);
   });
   it('lists everything only for an empty or blank query', () => {

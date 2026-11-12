@@ -108,8 +108,8 @@ existing capability stays.
   non-empty (today it hides with no named people). Your own names rank above known ones on a tie.
 - Evaluate as the user types, debounced at 150 ms, minimum 3 characters per span. The lists are fetched once and
   cached, so matching is local and there is no per-keystroke request.
-- Case and accent insensitive. Every typed word must start a word of the name or an alias ("dho", "virat k",
-  "kohli virat", "msd", "srk"). No fuzzy matching.
+- Case and accent insensitive. Every typed word must appear inside a word of the name or an alias, anywhere in the word
+  (owner's decision after review: "esh" must find "Ganesh"; "dho", "virat k", "kohli virat", "msd", "srk"). No fuzzy matching.
 - Typed words are split into spans, each naming a different person (longest span wins, a person is never used twice,
   unmatched words stay caption text). "virat dhoni" gives two chips joined by AND plus an "Add both" chip showing the
   real count of photos with both.

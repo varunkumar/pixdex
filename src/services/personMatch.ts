@@ -10,7 +10,7 @@ export function normalizeName(s: string): string {
 }
 
 /**
- * Words a query word may be a prefix of. Besides the plain words, each run of consecutive single-letter words
+ * Words a query word may occur in. Besides the plain words, each run of consecutive single-letter words
  * (initials) is also offered joined, so "A. R. Rahman" ("a r rahman") offers "ar" and the query "ar rahman" matches.
  */
 function nameWords(name: string): string[] {
@@ -28,8 +28,8 @@ function nameWords(name: string): string[] {
 }
 
 /**
- * Typeahead match: case and accent insensitive, no fuzziness. Every word of the query must be a prefix of some word
- * of some name or alias. An empty or blank raw query matches everything (list all); any other query that normalises
+ * Typeahead match: case and accent insensitive, no fuzziness. Every word of the query must appear inside some word
+ * of some name or alias (anywhere in the word, so "esh" finds "Ganesh"). An empty or blank raw query matches everything (list all); any other query that normalises
  * to fewer than `min` characters (including punctuation only, such as "." or "-") matches nothing.
  * Cost: a few string ops per name per keystroke, no allocation beyond the word lists; fine for hundreds of names.
  */
@@ -39,5 +39,5 @@ export function matchesQuery(query: string, names: string[], min = 3): boolean {
   if (q.length < min) return false;
   const qWords = q.split(' ');
   const pool = names.flatMap(nameWords);
-  return qWords.every((qw) => pool.some((w) => w.startsWith(qw)));
+  return qWords.every((qw) => pool.some((w) => w.includes(qw)));
 }
