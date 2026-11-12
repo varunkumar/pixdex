@@ -19,6 +19,7 @@ import { buildGallery } from './known/buildGallery';
 import { GALLERY_PATH, loadGallery, saveGallery, type Gallery, type KnownPerson } from './known/gallery';
 import { galleryChanged, pullGallery, pushGallery, restoreFromR2 } from './known/galleryBackup';
 import { WikimediaClient } from './known/wikimedia';
+import { wikimediaContact } from './known/userAgent';
 import { checkList, entityProblems, fetchCandidates, loadList, PersonSchema, saveList, searchWikidata } from './known/list';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
 
@@ -59,21 +60,24 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
         }
       }
     }
+    const { contact, warning } = wikimediaContact();
+    if (warning) console.warn(warning);
+    if (contact) console.log('contact: set');
+    else {
+      console.log(
+        'WIKIMEDIA_CONTACT is not set: Wikimedia limits unidentified clients to 10 requests per minute, so this build will be slow. Set WIKIMEDIA_CONTACT in agent/.env (an email or URL) to be allowed 200 per minute.'
+      );
+    }
+    const wikimedia = new WikimediaClient(fetch, { contact });
+    wikimedia.onRateLimit = (seconds) => console.log(`  Wikimedia asked to slow down: waiting ${seconds}s`);
     const { gallery, report } = await buildGallery({
       people,
       existing,
       rebuild,
       retryExcluded,
-      wikimedia: new WikimediaClient(),
+      wikimedia,
       sidecar,
-      download: async (url) => {
-        const response = await fetch(url, {
-          headers: { 'User-Agent': 'face-gallery-builder/0.1' },
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (!response.ok) throw new Error(`download failed: ${response.status}`);
-        return Buffer.from(await response.arrayBuffer());
-      },
+      download: (url) => wikimedia.download(url),
       onProgress: (message) => console.log(message),
       onCheckpoint: (g) => saveGallery(GALLERY_PATH, g),
     });

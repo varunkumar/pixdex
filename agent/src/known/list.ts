@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import { z } from 'zod';
 import type { KnownPerson } from './gallery';
+import { userAgentFor, wikimediaContact } from './userAgent';
 
-const USER_AGENT = 'face-gallery-builder/0.1';
 const WIKIDATA_API = 'https://www.wikidata.org/w/api.php';
 const BATCH = 50;
 const HUMAN = 'Q5';
@@ -34,6 +34,8 @@ interface Deps {
   fetchFn?: typeof fetch;
   /** Minimum delay between Wikidata requests; tests pass 0. */
   delayMs?: number;
+  /** WIKIMEDIA_CONTACT; defaults to the environment. Sent in the User-Agent, never logged. */
+  contact?: string;
 }
 
 interface Entity {
@@ -68,7 +70,8 @@ class WikidataApi {
   private last = 0;
   constructor(
     private readonly fetchFn: typeof fetch,
-    private readonly delayMs: number
+    private readonly delayMs: number,
+    private readonly userAgent: string = userAgentFor()
   ) {}
 
   async get<T>(params: Record<string, string>): Promise<T> {
@@ -78,7 +81,7 @@ class WikidataApi {
       if (wait > 0) await sleep(wait);
       this.last = Date.now();
       const response = await this.fetchFn(url, {
-        headers: { 'User-Agent': USER_AGENT },
+        headers: { 'User-Agent': this.userAgent },
         signal: AbortSignal.timeout(30_000),
       });
       if (response.status === 429 && attempt < 3) {
@@ -126,7 +129,7 @@ function toCandidate(id: string, entity: Entity): Candidate {
 
 /** Humans first, then by number of Wikipedia sitelinks (a rough popularity signal). */
 export async function searchWikidata(query: string, deps: Deps = {}): Promise<Candidate[]> {
-  const api = new WikidataApi(deps.fetchFn ?? fetch, deps.delayMs ?? 1000);
+  const api = new WikidataApi(deps.fetchFn ?? fetch, deps.delayMs ?? 1000, userAgentFor(deps.contact ?? wikimediaContact().contact));
   const found = await api.get<{ search?: { id: string }[] }>({
     action: 'wbsearchentities',
     search: query,
@@ -145,7 +148,7 @@ export async function searchWikidata(query: string, deps: Deps = {}): Promise<Ca
 
 /** Fetches the entity details for ids, in batches of 50. Used by known-add and known-check. */
 export async function fetchCandidates(ids: string[], deps: Deps = {}): Promise<Map<string, Candidate | undefined>> {
-  const api = new WikidataApi(deps.fetchFn ?? fetch, deps.delayMs ?? 1000);
+  const api = new WikidataApi(deps.fetchFn ?? fetch, deps.delayMs ?? 1000, userAgentFor(deps.contact ?? wikimediaContact().contact));
   const result = new Map<string, Candidate | undefined>();
   for (let i = 0; i < ids.length; i += BATCH) {
     const batch = ids.slice(i, i + BATCH);
@@ -225,14 +228,14 @@ export function entityProblems(person: KnownPerson, candidate: Candidate | undef
 
 export async function checkList(
   people: KnownPerson[],
-  opts: { online: boolean; fetchFn?: typeof fetch; delayMs?: number }
+  opts: { online: boolean; fetchFn?: typeof fetch; delayMs?: number; contact?: string }
 ): Promise<CheckIssue[]> {
   const issues = offlineIssues(people);
   if (!opts.online) return issues;
   const valid = people.filter((p) => PersonSchema.safeParse(p).success);
   const details = await fetchCandidates(
     [...new Set(valid.map((p) => p.id))],
-    { fetchFn: opts.fetchFn, delayMs: opts.delayMs }
+    { fetchFn: opts.fetchFn, delayMs: opts.delayMs, contact: opts.contact }
   );
   for (const p of valid) {
     for (const problem of entityProblems(p, details.get(p.id))) {
