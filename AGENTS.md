@@ -58,6 +58,9 @@ never leave local disk or Google Drive.
 - `functions/_lib/` - shared Function code: Access JWT verification (`access.ts`, JWKS cached in module memory)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
 - `agent/` - local Node/TS indexing CLI, originals server, and the `move-album` script
+- `agent/known/people.json` - curated known-people list (Wikidata ids, sorted by name, one object per line, at least 200
+  entries); manage it only through the CLI (`known-search`, `known-add`, `known-check [--offline]`, logic in
+  `agent/src/known/list.ts`), never type ids from memory; process in `agent/known/README.md`
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
 - `docs/` - internal docs, plus `superpowers/` plans and specs and `screenshots/`
   (README images made from dummy data: gradient placeholders, no real photos or people)

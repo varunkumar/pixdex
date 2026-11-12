@@ -276,6 +276,13 @@ best rated or alphabetical.
   `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover` and
   `faces/:id/assign|reject|unassign`, all through the Pages proxy.
 
+### Known people list (agent)
+
+`agent/known/people.json` is a curated list of public figures (405 entries, India first) that
+`build-known-gallery` turns into reference faces from openly licensed Commons photos. Manage it
+from `agent/` with `known-search "<name>"`, `known-add --id <Q...> [--name <n>] [--alias <a>]...`
+and `known-check [--offline]` (exits 1 on issues). The full process is in `agent/known/README.md`.
+
 ## AI Search
 
 The `/ai-search` page turns a phrase such as "photos for a Diwali greeting" into

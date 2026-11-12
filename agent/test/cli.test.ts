@@ -200,4 +200,105 @@ describe('runCli', () => {
       err.mockRestore();
     });
   });
+
+  describe('known list commands', () => {
+    const entity = (id: string, over: { human?: boolean; portrait?: boolean; label?: string } = {}) => ({
+      id,
+      labels: { en: { value: over.label ?? 'New Person' } },
+      descriptions: { en: { value: 'd' } },
+      claims: {
+        P31: [{ mainsnak: { datavalue: { value: { id: over.human === false ? 'Q43229' : 'Q5' } } } }],
+        ...(over.portrait === false ? {} : { P18: [{ mainsnak: { datavalue: { value: 'X.jpg' } } }] }),
+      },
+      sitelinks: { enwiki: {} },
+    });
+
+    async function setup(initial: unknown[]) {
+      const fsp = await import('node:fs/promises');
+      const os = await import('node:os');
+      const dir = await fsp.mkdtemp(`${os.tmpdir()}/known-cli-`);
+      const file = `${dir}/people.json`;
+      await fsp.writeFile(file, JSON.stringify(initial));
+      process.env.KNOWN_PEOPLE_PATH = file;
+      return file;
+    }
+    const read = async (file: string) => (await import('node:fs/promises')).readFile(file, 'utf8');
+
+    function stubFetch(entities: Record<string, unknown>) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (input: string) => {
+          const url = new URL(String(input));
+          if (url.searchParams.get('action') === 'wbsearchentities') {
+            return new Response(JSON.stringify({ search: Object.keys(entities).map((id) => ({ id })) }));
+          }
+          const out: Record<string, unknown> = {};
+          for (const id of (url.searchParams.get('ids') ?? '').split('|')) out[id] = entities[id] ?? { id, missing: '' };
+          return new Response(JSON.stringify({ entities: out }));
+        })
+      );
+    }
+
+    it('known-add refuses a duplicate id and a non-human, appends a valid one sorted and stable', async () => {
+      const file = await setup([{ id: 'Q1', name: 'Zed', aliases: [] }]);
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      stubFetch({ Q1: entity('Q1', { label: 'Zed' }), Q2: entity('Q2', { human: false }), Q3: entity('Q3') });
+
+      expect(await runCli(['known-add', '--id', 'Q1'])).toBe(1);
+      expect(await runCli(['known-add', '--id', 'Q2'])).toBe(1);
+      expect(JSON.parse(await read(file))).toHaveLength(1);
+
+      expect(await runCli(['known-add', '--id', 'Q3', '--alias', 'NP', '--alias', 'Newbie'])).toBe(0);
+      const first = await read(file);
+      expect(JSON.parse(first)).toEqual([
+        { id: 'Q3', name: 'New Person', aliases: ['NP', 'Newbie'] },
+        { id: 'Q1', name: 'Zed', aliases: [] },
+      ]);
+      expect(await runCli(['known-add', '--id', 'Q3', '--alias', 'NP', '--alias', 'Newbie'])).toBe(1);
+      expect(await read(file)).toBe(first);
+      err.mockRestore();
+      log.mockRestore();
+    });
+
+    it('known-add refuses an id with neither portrait nor category and honors --name', async () => {
+      const file = await setup([]);
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      stubFetch({ Q5: entity('Q5', { portrait: false }), Q6: entity('Q6', { label: 'Other Label' }) });
+      expect(await runCli(['known-add', '--id', 'Q5'])).toBe(1);
+      expect(await runCli(['known-add', '--id', 'Q6', '--name', 'Other Label'])).toBe(0);
+      expect(JSON.parse(await read(file))[0].name).toBe('Other Label');
+      err.mockRestore();
+      log.mockRestore();
+    });
+
+    it('known-check exits 1 with issues and 0 without; --offline makes no network calls', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await setup([{ id: 'Q1', name: 'Zed', aliases: [] }]);
+      stubFetch({ Q1: entity('Q1', { label: 'Zed' }) });
+      expect(await runCli(['known-check'])).toBe(0);
+      await setup([
+        { id: 'Q1', name: 'Zed', aliases: [] },
+        { id: 'Q1', name: 'Amy', aliases: [] },
+      ]);
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      expect(await runCli(['known-check', '--offline'])).toBe(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+      log.mockRestore();
+    });
+
+    it('known-search prints candidates and needs a query', async () => {
+      await setup([]);
+      stubFetch({ Q9: entity('Q9', { label: 'Found One' }) });
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(await runCli(['known-search', 'found'])).toBe(0);
+      expect(log.mock.calls.map((c) => String(c[0])).join('\n')).toContain('Q9');
+      expect(await runCli(['known-search'])).toBe(1);
+      log.mockRestore();
+      err.mockRestore();
+    });
+  });
 });

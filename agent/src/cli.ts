@@ -16,11 +16,13 @@ import fs from 'node:fs/promises';
 import { buildGallery } from './known/buildGallery';
 import { GALLERY_PATH, loadGallery, saveGallery, type KnownPerson } from './known/gallery';
 import { WikimediaClient } from './known/wikimedia';
+import { checkList, entityProblems, fetchCandidates, loadList, saveList, searchWikidata } from './known/list';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
 
 const UPSERT_BATCH = 500;
 const PeopleSchema = z.array(z.object({ id: z.string().min(1), name: z.string().min(1), aliases: z.array(z.string()) }));
-const PEOPLE_PATH = fileURLToPath(new URL('../known/people.json', import.meta.url));
+const DEFAULT_PEOPLE_PATH = fileURLToPath(new URL('../known/people.json', import.meta.url));
+const peoplePath = () => process.env.KNOWN_PEOPLE_PATH || DEFAULT_PEOPLE_PATH;
 
 async function runBuildKnownGallery(args: string[]): Promise<number> {
   try {
@@ -36,7 +38,7 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
       console.error('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
       return 1;
     }
-    const people = PeopleSchema.parse(JSON.parse(await fs.readFile(PEOPLE_PATH, 'utf8'))) as KnownPerson[];
+    const people = PeopleSchema.parse(JSON.parse(await fs.readFile(peoplePath(), 'utf8'))) as KnownPerson[];
     const existing = full ? undefined : await loadGallery(GALLERY_PATH);
     const { gallery, report } = await buildGallery({
       people,
@@ -80,6 +82,86 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
   }
 }
 
+function flagValues(args: string[], flag: string): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag && i + 1 < args.length) values.push(args[++i]);
+  }
+  return values;
+}
+
+async function runKnownSearch(args: string[]): Promise<number> {
+  const query = args.join(' ').trim();
+  if (!query) {
+    console.error('Usage: pixdex-agent known-search "<name>"');
+    return 1;
+  }
+  try {
+    const candidates = await searchWikidata(query, {});
+    if (candidates.length === 0) console.log('No candidates.');
+    for (const c of candidates) {
+      const flags = [c.isHuman ? 'human' : 'NOT HUMAN', c.hasPortrait ? 'portrait' : '', c.hasCategory ? 'category' : '']
+        .filter(Boolean)
+        .join(', ');
+      console.log(`${c.id}  ${c.label}  (${c.description}) sitelinks ${c.sitelinks} [${flags}]`);
+    }
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
+async function runKnownAdd(args: string[]): Promise<number> {
+  try {
+    const id = flagValues(args, '--id')[0];
+    if (!id || !/^Q\d+$/.test(id)) {
+      console.error('Usage: pixdex-agent known-add --id <Q...> [--name "<display name>"] [--alias <a>]...');
+      return 1;
+    }
+    const file = peoplePath();
+    const people = await loadList(file);
+    if (people.some((p) => p.id === id)) {
+      console.error(`Error: ${id} is already in the list`);
+      return 1;
+    }
+    const candidate = (await fetchCandidates([id], {})).get(id);
+    const name = flagValues(args, '--name')[0] ?? candidate?.label ?? '';
+    const aliases = flagValues(args, '--alias');
+    const entry = { id, name, aliases };
+    const lowerName = name.trim().toLowerCase();
+    const problems = [
+      ...entityProblems(entry, candidate),
+      ...(people.some((p) => p.name.trim().toLowerCase() === lowerName) ? ['duplicate name'] : []),
+      ...(aliases.some((a) => a.trim().toLowerCase() === lowerName) ? ['alias equals the name'] : []),
+    ];
+    if (!name) problems.push('no name (pass --name)');
+    if (problems.length > 0) {
+      console.error(`Error: refusing to add ${id} ${name}: ${problems.join('; ')}`);
+      return 1;
+    }
+    await saveList(file, [...people, entry]);
+    console.log(`Added ${id} ${name}`);
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
+async function runKnownCheck(args: string[]): Promise<number> {
+  try {
+    const people = await loadList(peoplePath());
+    const issues = await checkList(people, { online: !args.includes('--offline') });
+    for (const i of issues) console.log(`${i.id} ${i.name}: ${i.problem}`);
+    console.log(issues.length === 0 ? `OK: ${people.length} people, no issues` : `${issues.length} issue(s)`);
+    return issues.length > 0 ? 1 : 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
 export async function runCli(argv: string[]): Promise<number> {
   const [command, folder] = argv;
 
@@ -94,6 +176,10 @@ export async function runCli(argv: string[]): Promise<number> {
   if (command === 'build-known-gallery') {
     return runBuildKnownGallery(argv.slice(1));
   }
+
+  if (command === 'known-search') return runKnownSearch(argv.slice(1));
+  if (command === 'known-add') return runKnownAdd(argv.slice(1));
+  if (command === 'known-check') return runKnownCheck(argv.slice(1));
 
   if (command === 'index-status') {
     return runIndexStatus(argv.slice(1));
@@ -177,7 +263,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--full]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--full]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }
