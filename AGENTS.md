@@ -62,6 +62,23 @@ never leave local disk or Google Drive.
   entries); manage it only through the CLI (`known-search`, `known-add`, `known-check [--offline]`, logic in
   `agent/src/known/list.ts`), never type ids from memory; process in `agent/known/README.md`
 - Known matching: `scanFaces` matches each kept face's embedding against the local gallery (`agent/.index-state/known-gallery.json`, loaded once per command by `src/known/loadKnownGallery.ts` and passed down as `gallery` / `knownGallery`; missing or corrupt means no matching, the corrupt case warns once) and posts `known: {id, score}` only for a confident match. A gallery built with a different face model than the detection warns once per run and posts no `known`; a face with an undecodable embedding is skipped. Cost is about 3.3 ms per face on the agent machine (405 people x 10 refs), local only.
+- Known agent commands (run from `agent/`): `known-search`, `known-add`, `known-check [--offline]`, `build-known-gallery [--rebuild <id>]`
+  (writes `agent/.index-state/known-gallery.json`, uncommitted; people with fewer than 3 usable openly licensed photos are excluded),
+  `backfill-known [--dry-run] [--rescore]` (pages stored embeddings through `POST /ingest/faces/embeddings`, matches locally, writes via
+  `POST /ingest/faces/known`; `--rescore` also clears matches that no longer hold). `KNOWN_THRESHOLD` 0.5 and `KNOWN_MARGIN` 0.05
+  (`agent/src/known/matcher.ts`) are initial guesses: tune them from `backfill-known --dry-run` before the real run. The seed list
+  is 405 people; how many reach the gallery is reported by the first `build-known-gallery` and is not yet known.
+- Known personalities performance review (phase 1; none of the Worker costs can be measured locally, see `docs/development.md`):
+  matching is agent-side only (about 3.3 ms per face, measured with a synthetic 405 x 10 gallery). Rows read and written per request:
+  `POST /ingest/known-people` 0 read, up to 500 written; `POST /ingest/faces` adds one `json_each` lookup only when a face has `known`;
+  `POST /ingest/faces/known` at most 200 primary-key reads on `known_people` plus at most 200 `faces` rows read and written
+  (a rescore clears non-matching faces with `null`, which still writes each row: about 8K writes per full rescore until the clear path
+  gets `WHERE known_id IS NOT NULL`); `POST /ingest/faces/embeddings` at most `limit` (100) rows plus one `max(rowid)`, scanning at most
+  5000 rowids, 0 written; `GET /people/known` 2 statements, 0 written, one index row plus one `photos` key lookup per known-matched face
+  (scales with the global count of matched faces); the `known=` filter is one more subquery on `idx_faces_known_photo`. UNMEASURED: the
+  embeddings route CPU and the D1 BLOB decode (D1 may return a number[]; `limit` at most 100 is the knob), and the backfill time, estimated
+  at 1 to 3 minutes for about 5K photos: measure both with `wrangler tail` after deploy.
+- Known personalities UI status: verified only in jsdom; the colour and dark-mode look of `PeopleFilter` is not yet checked in a browser.
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
 - `docs/` - internal docs, plus `superpowers/` plans and specs and `screenshots/`
   (README images made from dummy data: gradient placeholders, no real photos or people)
@@ -109,15 +126,24 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
   `POST /ingest/photo` and the one-time `worker/scripts/backfill-owner.mjs` write them.
 - After every feature or change, update `README.md` and this file (and `docs/`
   if architecture, config or workflow changed) in the same commit.
-- `POST /ingest/faces` accepts an optional `known: { id, score }` per face (agent-computed known-personality match); ids missing from
-  `known_people` are dropped (one `json_each` lookup, only when a face has `known`). It is stored in `faces.known_id`/`known_score`,
-  independent of `person_id`/`assign_status`; a kept confirmed face keeps its own values.
-- `GET /people/known` (`worker/src/routes/known.ts`, READ_TOKEN plus `X-Viewer-Email`, not yet in the Pages proxy allowlist) lists known
+- Known personalities (phase 1, migration `0018_known_people.sql`: table `known_people (id Wikidata Q-id, name, aliases JSON, created_at)`,
+  `faces.known_id`, `faces.known_score`, partial index `idx_faces_known_photo (known_id, photo_id) WHERE known_id IS NOT NULL`). A known
+  match is a suggestion ("looks like"), never a claim of identity: it never sets `person_id` or `assign_status`, is independent of them,
+  and a kept confirmed face keeps its own values. Matching runs only on the agent (cosine against the local gallery); the Worker never
+  loops over embeddings to match. Worker routes: `POST /ingest/known-people` (agent upsert, 1 to 500 people, one `json_each` statement),
+  `POST /ingest/faces/known` (set or clear up to 200 matches, `knownId: null` clears, unknown id is a 400 for the whole request),
+  `POST /ingest/faces/embeddings` (backfill page of raw embedding bytes, `limit` at most 100, scan window of 5000 rowids, follow the
+  `X-Next-Cursor` header), all ingest-token only and out of the proxy allowlist.
+- `POST /ingest/faces` accepts a nullable, optional `known: { id, score }` per face (agent-computed match; null or absent means no
+  match); ids missing from `known_people` are dropped (one `json_each` lookup, only when a face has `known`). Stored in
+  `faces.known_id`/`known_score`.
+- `GET /people/known` (`worker/src/routes/known.ts`, READ_TOKEN plus `X-Viewer-Email`, in the Pages proxy allowlist) lists known
   personalities with at least one matched face in a photo the viewer can see (`scopeFor`), `photoCount` = distinct visible photos. One
-  grouped aggregate over `idx_faces_known_photo` (faces pinned as outer table with CROSS JOIN) plus one `json_each` name lookup.
+  grouped aggregate over `idx_faces_known_photo` (faces pinned as outer table with CROSS JOIN) plus one `json_each` name lookup. Its
+  read cost scales with the global count of known-matched faces (index walk, scope filtered after), not with the viewer's photos.
 - `known=<Q1,Q2>` on `/search`, `/timeline` and `/timeline/buckets` (`worker/src/db/known.ts`: `parseKnown`, `knownFilterSql`) is an AND
   filter: the photo needs a face matched to every id (with or without a person). It shares the cap of 5 with `people` (people take slots
-  first, extra known ids are silently dropped), ids are bound, and the subquery walks `idx_faces_known_photo`; an unknown id is just zero results.
+  first, extra known ids are silently dropped, never a 400), ids are bound, and the subquery walks `idx_faces_known_photo`; an unknown id is just zero results.
 - Frontend People filter: Search and Timeline both render `src/components/PeopleFilter.tsx` (one Mantine `MultiSelect`, values `p:<id>` own
   and `k:<id>` known, groups "Your people" then "Known personalities in your photos", own entries blue and known violet with a "known"
   marker so colour is not the only signal; `renderPill` styles picked tags). It loads `['people']` and `['known-people']` itself

@@ -296,6 +296,24 @@ invocation):
   relying on these constants, measure on a deployed preview (`wrangler tail` or
   the dashboard) and tune them. This is a to-do for the owner at merge.
 
+### Known personalities (phase 1)
+
+Data: migration `0018_known_people.sql` adds `known_people` (Wikidata id, name, aliases JSON), `faces.known_id`, `faces.known_score`
+and the partial index `idx_faces_known_photo (known_id, photo_id) WHERE known_id IS NOT NULL`. All additive.
+
+Flow: the agent builds a local gallery of reference embeddings from openly licensed Commons photos
+(`build-known-gallery`, `agent/.index-state/known-gallery.json`, uncommitted) and syncs the people list to the Worker
+(`POST /ingest/known-people`). Matching is cosine similarity on the agent only (threshold 0.5, margin 0.05 over the runner-up, both
+initial guesses); the Worker never loops over embeddings. New faces carry `known: {id, score}` (nullable) on `POST /ingest/faces`.
+Existing faces are matched by `backfill-known`, which pages stored embeddings (`POST /ingest/faces/embeddings`, raw bytes, keyset by
+rowid, `limit` at most 100 within a 5000-rowid window) and writes matches back in batches of up to 200 (`POST /ingest/faces/known`,
+`knownId: null` clears). A match is a "looks like" suggestion: it never sets `person_id` or `assign_status`.
+
+Read side: `GET /people/known` lists known people with a matched face in a photo the viewer can see; `known=<Qid>,...` on `/search`,
+`/timeline` and `/timeline/buckets` is an AND filter sharing the cap of 5 with `people` (people first, extras silently dropped). The
+People filter on Search and Timeline shows "Your people" (blue) and "Known personalities in your photos" (violet, with a "known"
+marker). Cost and measurement notes: `AGENTS.md` (performance review) and `docs/development.md`.
+
 Known limits: matching ignores `faces.embedding_model`. After a face model
 change, faces must be re-scanned and re-confirmed (phase A does not mix models).
 "Remove name" in the UI is soft: it only unassigns a confirmed face (an `auto`

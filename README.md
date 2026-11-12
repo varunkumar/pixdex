@@ -285,7 +285,17 @@ best rated or alphabetical.
 from `agent/` with `known-search "<name>"`, `known-add --id <Q...> [--name <n>] [--alias <a>]...`
 and `known-check [--offline]` (exits 1 on issues). The full process is in `agent/known/README.md`.
 
-When `agent/.index-state/known-gallery.json` exists, `index-local`, `index-drive`, `index-batch` and `backfill-faces` match each detected face against it and send the match with the face; without the file nothing changes.
+When `agent/.index-state/known-gallery.json` exists, `index-local`, `index-drive`, `index-batch` and `backfill-faces` match each detected face against it and send the match with the face; without the file nothing changes. Matches are suggestions ("looks like"), never a claim of identity, and never name or assign a face.
+
+Commands (from `agent/`): `known-search`, `known-add`, `known-check [--offline]`, `build-known-gallery [--rebuild <id>]`
+(writes `agent/.index-state/known-gallery.json`, never committed) and `backfill-known [--dry-run] [--rescore]` (matches already
+indexed faces from their stored embeddings). Thresholds `KNOWN_THRESHOLD` 0.5 and `KNOWN_MARGIN` 0.05 in
+`agent/src/known/matcher.ts` are initial guesses to tune from the `--dry-run` output. People with fewer than 3 usable photos are left
+out of the gallery, so fewer than the 405 listed will be recognized (the first build reports how many).
+
+Rollout: merging applies migration `0018` before the Worker deploys. Then on your machine: `known-check`, `build-known-gallery`,
+`backfill-known --dry-run`, tune the thresholds, `backfill-known`. Backfill is estimated at 1 to 3 minutes for about 5K photos
+(not yet measured). See `docs/development.md` for the steps and how to measure.
 
 ## AI Search
 

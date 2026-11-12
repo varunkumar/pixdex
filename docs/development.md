@@ -93,6 +93,22 @@ Local dev: the Vite `/api` proxy sends `X-Viewer-Email` from `DEV_VIEWER_EMAIL`,
 `.env`; set `DEV_VIEWER_EMAIL` to preview as a user an album is shared with. Run `cd worker && npm run backfill-owner -- --local`
 to own your local albums.
 
+### Rollout order for known personalities (phase 1)
+
+1. Merge. The Worker build applies migration `0018_known_people.sql` (additive: one table, two nullable `faces` columns, one partial
+   index) before the Worker deploys; the Pages Function deploys independently (it only adds the `people/known` read route).
+2. On the owner's machine, from `agent/`: `known-check`, then `build-known-gallery` (reports how many people reach the gallery, at least
+   3 openly licensed photos each), then `backfill-known --dry-run` (writes nothing; counts, per-person top 20, score histogram, sample
+   face ids). Tune `KNOWN_THRESHOLD` (0.5) and `KNOWN_MARGIN` (0.05) in `agent/src/known/matcher.ts` from that output, then run
+   `backfill-known`. Use `--rescore` only after a threshold change (about 8K row writes on a library this size, since non-matching
+   faces are cleared with a write each).
+3. Measure (all of this is unmeasured locally): start `cd worker && npx wrangler tail pixdex-worker --format json` before step 2 and
+   watch `cpuTime` on `POST /ingest/faces/embeddings` (BLOB decode; lower the page `limit`, at most 100, if it nears 10 ms) and
+   `POST /ingest/faces/known`; time the whole backfill (estimate 1 to 3 minutes for about 5K photos); afterwards run
+   `cd worker && npx wrangler d1 insights pixdex --timePeriod 1d --sort-type sum --sort-by reads --limit 12 --json` and check
+   `GET /people/known` (its reads scale with the global count of known-matched faces) and the `known=` filter queries.
+4. In a browser, check the People filter on Search and Timeline in light and dark mode (tests only ran in jsdom).
+
 ## D1 read budget
 
 The free tier allows 5M rows read per day and every route past the limit returns 500 (`D1_ERROR: ... exceeded
