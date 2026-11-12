@@ -11,6 +11,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     getTimeline: vi.fn(),
     getAlbums: vi.fn(),
     getPeople: vi.fn(),
+    getKnownPeople: vi.fn(),
     getTimelineBuckets: vi.fn(),
     thumbnailUrl: vi.fn((p: { thumbnailUrl?: string }) => `/api${p.thumbnailUrl}`),
   },
@@ -60,6 +61,12 @@ const renderAt = (url: string) => renderWithRouter([{ path: '/timeline', element
 const search = (router: { state: { location: { search: string } } }) =>
   new URLSearchParams(router.state.location.search);
 
+async function typeInPeople(text: string) {
+  const input = (await screen.findAllByLabelText('People'))[0];
+  fireEvent.click(input);
+  fireEvent.change(input, { target: { value: text } });
+}
+
 describe('Timeline', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,6 +75,9 @@ describe('Timeline', () => {
     vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, canEdit: true, cover: null },
+    ]);
+    vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue([
+      { id: 'ms', name: 'MS Dhoni', aliases: [], photoCount: 4 },
     ]);
     vi.mocked(workerApiClient.getTimeline).mockResolvedValue(monthPage);
     vi.mocked(workerApiClient.getTimelineBuckets).mockResolvedValue({
@@ -413,5 +423,31 @@ describe('Timeline', () => {
     const content = await screen.findByTestId('timeline-content');
     expect(content.className).toMatch(/mantine-Stack-root/);
     expect(document.documentElement.innerHTML).toMatch(/min-width: 62em\)\{\.[^{]*\{padding-right:[^;]*4rem/);
+  });
+
+  it('shows the People box with only known people and sends known to timeline and buckets', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([]);
+    renderAt('/timeline?known=ms');
+    expect((await screen.findAllByLabelText('People'))[0]).toBeInTheDocument();
+    await waitFor(() =>
+      expect(workerApiClient.getTimeline).toHaveBeenCalledWith(expect.objectContaining({ known: ['ms'] }))
+    );
+    expect(workerApiClient.getTimelineBuckets).toHaveBeenCalledWith({ known: ['ms'] });
+  });
+
+  it('picking a known person writes known to the URL', async () => {
+    const { router } = renderAt('/timeline');
+    await typeInPeople('dho');
+    fireEvent.click(await screen.findByRole('option', { name: /MS Dhoni/ }));
+    await waitFor(() => expect(search(router).get('known')).toBe('ms'));
+  });
+
+  it('hides the People box when both lists are empty', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([]);
+    vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue([]);
+    renderAt('/timeline');
+    await screen.findByLabelText('Select photo album');
+    await waitFor(() => expect(workerApiClient.getKnownPeople).toHaveBeenCalled());
+    expect(screen.queryAllByLabelText('People')).toHaveLength(0);
   });
 });

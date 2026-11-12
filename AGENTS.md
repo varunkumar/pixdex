@@ -118,6 +118,12 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - `known=<Q1,Q2>` on `/search`, `/timeline` and `/timeline/buckets` (`worker/src/db/known.ts`: `parseKnown`, `knownFilterSql`) is an AND
   filter: the photo needs a face matched to every id (with or without a person). It shares the cap of 5 with `people` (people take slots
   first, extra known ids are silently dropped), ids are bound, and the subquery walks `idx_faces_known_photo`; an unknown id is just zero results.
+- Frontend People filter: Search and Timeline both render `src/components/PeopleFilter.tsx` (one Mantine `MultiSelect`, values `p:<id>` own
+  and `k:<id>` known, groups "Your people" then "Known personalities in your photos", own entries blue and known violet with a "known"
+  marker so colour is not the only signal; `renderPill` styles picked tags). It loads `['people']` and `['known-people']` itself
+  (staleTime 5 minutes, so one extra `GET /people/known` per page load), matches locally with `matchesQuery` over name plus aliases
+  (no request per keystroke; typing alone never filters), shows when either list is non-empty, caps at 5 combined and drops ids in neither
+  list. URL params `people` and `known` are parsed by `src/services/peopleSelection.ts`; changing either resets the Search page.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.
 
 ## Performance review is mandatory (CPU and DB)

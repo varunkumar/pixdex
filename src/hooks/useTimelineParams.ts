@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
+import { parsePeopleSelection } from '../services/peopleSelection';
 import type { TimelineZoom } from '../types/api';
 
 export const ZOOMS: readonly TimelineZoom[] = ['day', 'month', 'year'];
@@ -6,6 +7,7 @@ export const ZOOMS: readonly TimelineZoom[] = ['day', 'month', 'year'];
 interface FilterPatch {
   album?: string;
   people?: string[];
+  known?: string[];
   to?: string;
 }
 
@@ -28,7 +30,7 @@ export function useTimelineParams() {
   const requested = params.get('zoom');
   const zoom: TimelineZoom = ZOOMS.find((z) => z === requested) ?? 'month';
   const album = params.get('album') ?? '';
-  const people = (params.get('people') ?? '').split(',').filter(Boolean).slice(0, 5);
+  const { people, known } = parsePeopleSelection(params.get('people'), params.get('known'));
   const to = params.get('to') ?? '';
 
   const write = (patch: Record<string, string | null>, replace = false) => {
@@ -56,6 +58,7 @@ export function useTimelineParams() {
     write({
       ...(patch.album !== undefined && { album: patch.album }),
       ...(patch.people !== undefined && { people: patch.people.join(',') }),
+      ...(patch.known !== undefined && { known: patch.known.join(',') }),
       ...(patch.to !== undefined && { to: patch.to }),
     });
 
@@ -66,5 +69,5 @@ export function useTimelineParams() {
     if (end) write({ to: end }, true);
   };
 
-  return { zoom, album, people, to, setZoom, setFilters, jumpTo };
+  return { zoom, album, people, known, to, setZoom, setFilters, jumpTo };
 }
