@@ -137,14 +137,16 @@ describe('runCli', () => {
 
   describe('build-known-gallery', () => {
     const upsertMock = vi.fn();
+    const statusMock = vi.fn();
     const gallery = { model: 'm1', people: [{ id: 'Q1', name: 'A', aliases: ['x'], refs: [new Float32Array(512)] }] };
 
     beforeEach(async () => {
       const { CloudflareClient } = await import('../src/cloudflareClient');
       vi.mocked(CloudflareClient).mockImplementation(function () {
-        return { upsertKnownPeople: upsertMock };
+        return { upsertKnownPeople: upsertMock, knownGalleryStatus: statusMock };
       } as never);
       upsertMock.mockReset().mockResolvedValue(1);
+      statusMock.mockReset().mockResolvedValue({ exists: true, size: 100 });
       loadGalleryMock.mockReset().mockResolvedValue(undefined);
       saveGalleryMock.mockReset().mockResolvedValue(undefined);
       restoreMock.mockReset().mockResolvedValue(undefined);
@@ -272,6 +274,51 @@ describe('runCli', () => {
       loadGalleryMock.mockResolvedValue(gallery);
       expect(await runCli(['build-known-gallery'])).toBe(0);
       expect(pushMock).not.toHaveBeenCalled();
+      log.mockRestore();
+    });
+
+    it('an unchanged build still pushes when R2 has no backup (existing local gallery, first run)', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      loadGalleryMock.mockResolvedValue(gallery);
+      statusMock.mockResolvedValue({ exists: false, size: null });
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(pushMock).toHaveBeenCalledTimes(1);
+      log.mockRestore();
+    });
+
+    it('an unchanged build with an existing backup does not push and says it is up to date', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      loadGalleryMock.mockResolvedValue(gallery);
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(log.mock.calls.map((c) => String(c[0])).join('\n')).toContain('R2 backup is up to date');
+      log.mockRestore();
+    });
+
+    it('a failing status call only warns; it pushes only if the gallery changed', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      statusMock.mockRejectedValue(new Error('status failed: 500'));
+      loadGalleryMock.mockResolvedValue(gallery);
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(pushMock).not.toHaveBeenCalled();
+      expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toContain('status failed: 500');
+      loadGalleryMock.mockResolvedValue(undefined);
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(pushMock).toHaveBeenCalledTimes(1);
+      log.mockRestore();
+      warn.mockRestore();
+    });
+
+    it('a restored gallery of another model is handed to the build, which ignores it; the rebuilt gallery replaces the file', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const stale = { model: 'old-model', people: gallery.people };
+      restoreMock.mockResolvedValue(stale);
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(buildGalleryMock.mock.calls[0][0].existing).toBe(stale);
+      // the build returns a gallery of the current model: it is saved over the restored file and pushed (changed)
+      expect(saveGalleryMock).toHaveBeenLastCalledWith('/tmp/known-gallery.json', gallery);
+      expect(pushMock).toHaveBeenCalledTimes(1);
       log.mockRestore();
     });
 

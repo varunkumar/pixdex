@@ -9,21 +9,18 @@ export interface GalleryBackupClient {
 }
 
 /**
- * Tiny integrity check before upload: the bytes must be a JSON object with a model string and a people
- * array, so a corrupt local file can never overwrite a good backup. Embeddings are never printed.
+ * Full validation shared by push and restore: the file must pass loadGallery (every embedding decodes) and have a
+ * model string and at least one person, so a corrupt or empty file can never replace a good backup or a good local file.
  */
-function assertGalleryShape(bytes: Buffer): void {
-  let json: unknown;
-  try {
-    json = JSON.parse(bytes.toString('utf8'));
-  } catch {
-    throw new Error('not valid JSON');
-  }
-  const g = json as { model?: unknown; people?: unknown } | null;
-  if (!g || typeof g.model !== 'string' || !Array.isArray(g.people)) throw new Error('not a gallery file');
+async function loadValidated(file: string): Promise<Gallery> {
+  const gallery = await loadGallery(file);
+  if (!gallery) throw new Error('file is missing');
+  if (typeof gallery.model !== 'string' || gallery.model === '') throw new Error('no model');
+  if (gallery.people.length === 0) throw new Error('no people');
+  return gallery;
 }
 
-/** Pushes the saved gallery file to R2. Throws when the file is missing or malformed, or the upload fails. */
+/** Pushes the saved gallery file to R2. Throws when the file is missing or invalid, or the upload fails. */
 export async function pushGallery(client: GalleryBackupClient, file: string): Promise<number> {
   let bytes: Buffer;
   try {
@@ -33,7 +30,7 @@ export async function pushGallery(client: GalleryBackupClient, file: string): Pr
     throw err;
   }
   try {
-    assertGalleryShape(bytes);
+    await loadValidated(file);
   } catch (err) {
     throw new Error(`refusing to push ${file}: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -54,20 +51,31 @@ export async function restoreFromR2(
   if (!bytes) return undefined;
   const temp = `${file}.restore.tmp`;
   try {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(temp, bytes);
-    assertGalleryShape(bytes);
-    const gallery = await loadGallery(temp);
-    if (!gallery) throw new Error('empty');
-    await fs.rename(temp, file);
+    try {
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(temp, bytes);
+    } catch (err) {
+      warn(`Could not write the restored gallery to ${file} (${err instanceof Error ? err.message : String(err)}); ignoring the R2 backup.`);
+      return undefined;
+    }
+    let gallery: Gallery;
+    try {
+      gallery = await loadValidated(temp);
+    } catch (err) {
+      warn(
+        `The known gallery in R2 is unreadable (${err instanceof Error ? err.message : String(err)}); ignoring it. Rebuild with build-known-gallery --full, which replaces it.`
+      );
+      return undefined;
+    }
+    try {
+      await fs.rename(temp, file);
+    } catch (err) {
+      warn(`Could not write the restored gallery to ${file} (${err instanceof Error ? err.message : String(err)}); ignoring the R2 backup.`);
+      return undefined;
+    }
     return gallery;
-  } catch (err) {
-    warn(
-      `The known gallery in R2 is unreadable (${err instanceof Error ? err.message : String(err)}); ignoring it. Rebuild with build-known-gallery --full, which replaces it.`
-    );
-    return undefined;
   } finally {
-    await fs.rm(temp, { force: true });
+    await fs.rm(temp, { force: true }).catch(() => undefined);
   }
 }
 

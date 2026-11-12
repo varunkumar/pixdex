@@ -164,11 +164,11 @@ describe('Pages Function identity', () => {
   });
 
   describe('known gallery backup', () => {
-    it('does not proxy GET or PUT /api/ingest/known-gallery', async () => {
-      const got = await get('/api/ingest/known-gallery', 'friend@example.com');
+    it.each(['/api/ingest/known-gallery', '/api/ingest/known-gallery/status'])('does not proxy GET or PUT %s', async (path) => {
+      const got = await get(path, 'friend@example.com');
       expect(got.status).toBe(404);
       const put = await onRequestPut({
-        request: new Request('https://pixdex.example.dev/api/ingest/known-gallery', {
+        request: new Request(`https://pixdex.example.dev${path}`, {
           method: 'PUT',
           headers: {
             'content-type': 'application/json',
@@ -178,7 +178,7 @@ describe('Pages Function identity', () => {
         }),
         env,
       });
-      expect([404, 405]).toContain(put.status);
+      expect(put.status).toBe(404);
       expect(upstreamCalls()).toHaveLength(0);
     });
   });

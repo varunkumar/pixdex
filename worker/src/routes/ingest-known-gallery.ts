@@ -29,6 +29,12 @@ export async function putKnownGalleryRoute(c: Context<{ Bindings: Env }>) {
   return c.text('created', 201);
 }
 
+/** Existence and size of the backup via one R2 head (no body download, no D1, no parsing). */
+export async function knownGalleryStatusRoute(c: Context<{ Bindings: Env }>) {
+  const head = await c.env.THUMBNAILS.head(GALLERY_KEY);
+  return c.json({ exists: head !== null, size: head ? head.size : null });
+}
+
 export async function getKnownGalleryRoute(c: Context<{ Bindings: Env }>) {
   const object = await c.env.THUMBNAILS.get(GALLERY_KEY);
   if (!object) return c.text('Not Found', 404);

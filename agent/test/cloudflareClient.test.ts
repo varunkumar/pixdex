@@ -303,4 +303,17 @@ describe('CloudflareClient known gallery backup', () => {
     fetchMock.mockResolvedValueOnce(new Response('x', { status: 500 }));
     await expect(client.getKnownGallery()).rejects.toThrow(/500/);
   });
+
+  it('knownGalleryStatus returns exists and size, and throws with the status on failure', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ exists: true, size: 42 }), { status: 200 }));
+    expect(await client.knownGalleryStatus()).toEqual({ exists: true, size: 42 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/known-gallery/status');
+    expect(init.headers.Authorization).toBe('Bearer secret-token');
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ exists: false, size: null }), { status: 200 }));
+    expect(await client.knownGalleryStatus()).toEqual({ exists: false, size: null });
+    fetchMock.mockResolvedValueOnce(new Response('x', { status: 401 }));
+    await expect(client.knownGalleryStatus()).rejects.toThrow(/401/);
+  });
 });

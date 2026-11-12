@@ -48,4 +48,44 @@ describe('/ingest/known-gallery', () => {
     expect(res.status).toBe(413);
     expect(await env.THUMBNAILS.head('known/gallery.json')).toBeNull();
   });
+
+  it('accepts a chunked upload without content-length', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"chunk":'));
+        controller.enqueue(new TextEncoder().encode('1}'));
+        controller.close();
+      },
+    });
+    const res = await SELF.fetch(URL_, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...auth() },
+      body: stream,
+      // @ts-expect-error duplex is required for stream bodies
+      duplex: 'half',
+    });
+    expect(res.status).toBe(201);
+    expect(await (await get()).text()).toBe('{"chunk":1}');
+  });
+});
+
+describe('GET /ingest/known-gallery/status', () => {
+  const status = (headers: Record<string, string> = auth()) => SELF.fetch(`${URL_}/status`, { headers });
+
+  it('reports absent', async () => {
+    await env.THUMBNAILS.delete('known/gallery.json');
+    const res = await status();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ exists: false, size: null });
+  });
+
+  it('reports present with the byte size', async () => {
+    await put('{"abc":123}');
+    expect(await (await status()).json()).toEqual({ exists: true, size: 11 });
+  });
+
+  it('requires the ingest token', async () => {
+    expect((await status({})).status).toBe(401);
+    expect((await status(auth('wrong'))).status).toBe(401);
+  });
 });

@@ -58,6 +58,16 @@ describe('pushGallery', () => {
     expect(client.put).not.toHaveBeenCalled();
   });
 
+  it('refuses a file that loads but has no people, or no model string', async () => {
+    const file = path.join(dir, 'g.json');
+    const client = fakeClient();
+    await fs.writeFile(file, JSON.stringify({ model: 'm', people: [] }));
+    await expect(pushGallery(client, file)).rejects.toThrow(/refusing to push/);
+    await fs.writeFile(file, JSON.stringify({ model: 1, people: [{ id: 'p', name: 'P', aliases: [], refs: [] }] }));
+    await expect(pushGallery(client, file)).rejects.toThrow(/refusing to push/);
+    expect(client.put).not.toHaveBeenCalled();
+  });
+
   it('propagates an upload failure', async () => {
     const file = path.join(dir, 'g.json');
     await saveGallery(file, gallery);
@@ -104,6 +114,17 @@ describe('restoreFromR2', () => {
     expect(String(warn.mock.calls[0][0])).toContain('unreadable');
     expect(await fs.readFile(file, 'utf8')).toBe('keep me');
     expect((await fs.readdir(dir)).sort()).toEqual(['g.json', 'src.json']);
+  });
+
+  it('does not blame R2 for a local filesystem failure', async () => {
+    const stored = await fs.readFile(source);
+    const blocker = path.join(dir, 'blocker');
+    await fs.writeFile(blocker, 'a file, not a directory');
+    const warn = vi.fn();
+    expect(await restoreFromR2(fakeClient(stored), path.join(blocker, 'g.json'), warn)).toBeUndefined();
+    const message = String(warn.mock.calls[0][0]);
+    expect(message).toContain('Could not write');
+    expect(message).not.toContain('in R2 is unreadable');
   });
 
   it('propagates a failing R2 read', async () => {

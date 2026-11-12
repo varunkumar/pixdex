@@ -181,6 +181,17 @@ export class CloudflareClient {
     }
   }
 
+  /** Whether the R2 backup exists and its size (one R2 head on the Worker, no body). */
+  async knownGalleryStatus(): Promise<{ exists: boolean; size: number | null }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-gallery/status`, {
+      headers: { Authorization: `Bearer ${this.config.INGEST_TOKEN}` },
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/known-gallery status failed: ${response.status}`);
+    }
+    return (await response.json()) as { exists: boolean; size: number | null };
+  }
+
   /** The backed-up known gallery bytes, or undefined when none is stored (404). */
   async getKnownGallery(): Promise<Buffer | undefined> {
     const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-gallery`, {

@@ -86,7 +86,19 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
     console.log(
       `Gallery saved: ${report.included.length} people included, ${report.excluded.length} excluded, average refs per person ${report.averageRefs.toFixed(1)}, upserted ${upserted}`
     );
-    if (full || galleryChanged(existing, gallery)) {
+    // Push when the gallery changed, or when R2 has no backup yet (the owner's existing local gallery, first run).
+    // A failing status call only warns and then pushes only on change.
+    let push = full || galleryChanged(existing, gallery);
+    let backupMissing = false;
+    if (!push) {
+      try {
+        backupMissing = !(await client.knownGalleryStatus()).exists;
+      } catch (error) {
+        console.warn(`Warning: could not check the R2 backup (${error instanceof Error ? error.message : String(error)}); not pushing an unchanged gallery.`);
+      }
+      push = backupMissing;
+    }
+    if (push) {
       try {
         const size = await pushGallery(client, GALLERY_PATH);
         console.log(`Gallery backed up to R2 (${(size / 1024 / 1024).toFixed(1)} MB)`);
@@ -96,7 +108,7 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
         );
       }
     } else {
-      console.log('Gallery unchanged, R2 backup not refreshed (run known-gallery-push to force it).');
+      console.log('Gallery unchanged and the R2 backup is up to date.');
     }
     if (report.failed.length > 0) {
       console.log(`Failed on Wikimedia errors (not stored, retried next run): ${report.failed.length}`);
