@@ -27,8 +27,8 @@ const faceSchema = z.object({
   bbox: z.object({ x: unit, y: unit, w: unit, h: unit }),
   detScore: z.number().check(z.minimum(0), z.maximum(1)),
   embedding: z.string().check(z.minLength(1)),
-  // Best known-personality match computed by the agent; only stored when the id exists in known_people.
-  known: z.optional(z.object({ id: z.string().check(z.minLength(1)), score: unit })),
+  // Best known-personality match computed by the agent; only stored when the id exists in known_people; null or absent means no match.
+  known: z.nullish(z.object({ id: z.string().check(z.minLength(1)), score: unit })),
 });
 
 // z.object strips unknown keys, so person_id / assign_status in a body are dropped.

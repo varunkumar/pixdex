@@ -287,6 +287,33 @@ describe('face ingest routes', () => {
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({ known_id: null, known_score: null });
     });
+
+    it('re-posting with a different known id overwrites it (last write wins)', async () => {
+      await addKnown('Q2');
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(0.1, 1), known: { id: 'Q1', score: 0.6 } }] });
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(0.1, 1), known: { id: 'Q2', score: 0.8 } }] });
+      const { results } = await faceRows();
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ known_id: 'Q2', known_score: 0.8 });
+    });
+
+    it('accepts known: null and stores nulls, clearing an earlier match', async () => {
+      await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(0.1, 1), known: { id: 'Q1', score: 0.6 } }] });
+      const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(0.1, 1), known: null }] });
+      expect(res.status).toBe(200);
+      const { results } = await faceRows();
+      expect(results[0]).toMatchObject({ known_id: null, known_score: null });
+    });
+
+    it('accepts scores 0 and 1 and rejects -0.1', async () => {
+      for (const score of [0, 1]) {
+        const res = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(), known: { id: 'Q1', score } }] });
+        expect(res.status).toBe(200);
+        expect((await faceRows()).results[0].known_score).toBe(score);
+      }
+      const bad = await post('', { contentHash: photo.contentHash, model: MODEL, faces: [{ ...face(), known: { id: 'Q1', score: -0.1 } }] });
+      expect(bad.status).toBe(400);
+    });
   });
 
   it('400 for an embedding of the wrong length', async () => {
