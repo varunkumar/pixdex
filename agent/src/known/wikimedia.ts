@@ -18,6 +18,8 @@ export const API_REQUESTS_PER_PERSON = 4;
 export const MAX_DELAY_MS = 8_000;
 export const MAX_ATTEMPTS = 6;
 const BATCH = 50;
+/** Cap on the encoded `|`-joined value of one batched parameter, keeping the whole URL well under common 8 KB limits (414). */
+export const MAX_QUERY_CHARS = 6_000;
 const MAX_RETRY_AFTER_MS = 120_000;
 const BACKOFF_START_MS = 5_000;
 const DECAY_AFTER_SUCCESSES = 20;
@@ -29,6 +31,25 @@ export class RateLimitedError extends Error {
     super(`Wikimedia rate limited the request (HTTP ${status}) after ${MAX_ATTEMPTS} attempts`);
     this.name = 'RateLimitedError';
   }
+}
+
+/** Splits items into batches of at most `max` items whose encoded `|`-joined length stays within MAX_QUERY_CHARS. */
+export function chunkForUrl(items: string[], max = BATCH): string[][] {
+  const chunks: string[][] = [];
+  let cur: string[] = [];
+  let len = 0;
+  for (const item of items) {
+    const cost = encodeURIComponent(item).length + 3; // '|' encodes as %7C
+    if (cur.length > 0 && (cur.length >= max || len + cost > MAX_QUERY_CHARS)) {
+      chunks.push(cur);
+      cur = [];
+      len = 0;
+    }
+    cur.push(item);
+    len += cost;
+  }
+  if (cur.length > 0) chunks.push(cur);
+  return chunks;
 }
 
 /** Only raster photos can hold a usable face; audio, video, svg, pdf and tiff files are never crawled. */
@@ -169,8 +190,7 @@ export class WikimediaClient {
    */
   async prefetch(qids: string[]): Promise<void> {
     const todo = [...new Set(qids)].filter((q) => !this.entities.has(q) && !this.entityErrors.has(q));
-    for (let i = 0; i < todo.length; i += BATCH) {
-      const batch = todo.slice(i, i + BATCH);
+    for (const batch of chunkForUrl(todo)) {
       try {
         const data = await this.getJson<{ entities?: Record<string, Entity & { missing?: string }> }>(WIKIDATA_API, {
           action: 'wbgetentities',
@@ -260,8 +280,7 @@ export class WikimediaClient {
   /** Thumbnail URL and license for many Commons files, 50 titles per request. Missing or non-image titles map to undefined. */
   async fileInfos(titles: string[]): Promise<Map<string, FileInfo | undefined>> {
     const todo = [...new Set(titles)].filter((t) => !this.infos.has(t));
-    for (let i = 0; i < todo.length; i += BATCH) {
-      const batch = todo.slice(i, i + BATCH);
+    for (const batch of chunkForUrl(todo)) {
       const data = await this.getJson<{
         query?: {
           normalized?: { from: string; to: string }[];

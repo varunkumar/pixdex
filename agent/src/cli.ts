@@ -88,7 +88,7 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
       upserted += await client.upsertKnownPeople(included.slice(i, i + UPSERT_BATCH));
     }
     console.log(
-      `Gallery saved: ${report.included.length} people included, ${report.excluded.length} excluded, average refs per person ${report.averageRefs.toFixed(1)}, upserted ${upserted}`
+      `Gallery saved: ${report.included.length} people included, ${report.excluded.length} excluded, average refs per person ${report.averageRefs.toFixed(1)} (${report.groupRefs} from group photos), upserted ${upserted}`
     );
     // Push when the gallery changed, or when R2 has no backup yet (the owner's existing local gallery, first run).
     // A failing status call only warns and then pushes only on change.

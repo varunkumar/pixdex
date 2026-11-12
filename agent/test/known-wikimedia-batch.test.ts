@@ -4,6 +4,7 @@ import { wikimediaContact } from '../src/known/userAgent';
 import {
   API_REQUESTS_PER_PERSON,
   IDENTIFIED_DELAY_MS,
+  MAX_QUERY_CHARS,
   RateLimitedError,
   UNIDENTIFIED_DELAY_MS,
   WikimediaClient,
@@ -225,5 +226,38 @@ describe('batching', () => {
     await c.fileInfos([portrait!, ...files]);
     expect(n - afterPrefetch).toBe(API_REQUESTS_PER_PERSON);
     expect(API_REQUESTS_PER_PERSON).toBe(4);
+  });
+});
+
+describe('URL length cap', () => {
+  it('chunks long fileInfos titles so no request URL exceeds the cap, and all titles resolve', async () => {
+    const urls: URL[] = [];
+    const c = new WikimediaClient(wikiFetch({ onUrl: (u) => urls.push(u) }), { delayMs: 0 });
+    const titles = Array.from({ length: 50 }, (_, i) => `File:${'\u00e9 long title '.repeat(10)}${i}.jpg`);
+    const infos = await c.fileInfos(titles);
+    expect(urls.length).toBeGreaterThan(1);
+    for (const u of urls) {
+      expect(u.search.length).toBeLessThanOrEqual(MAX_QUERY_CHARS + 200);
+      expect((u.searchParams.get('titles') ?? '').split('|').length).toBeLessThanOrEqual(50);
+    }
+    expect(infos.size).toBe(50);
+    for (const t of titles) expect(infos.get(t)?.thumbUrl).toBe(`https://upload/${t}`);
+  });
+
+  it('still uses one request for 50 short titles', async () => {
+    const urls: URL[] = [];
+    const c = new WikimediaClient(wikiFetch({ onUrl: (u) => urls.push(u) }), { delayMs: 0 });
+    await c.fileInfos(Array.from({ length: 50 }, (_, i) => `File:s${i}.jpg`));
+    expect(urls).toHaveLength(1);
+  });
+
+  it('chunks prefetch ids by length too', async () => {
+    const urls: URL[] = [];
+    const c = new WikimediaClient(wikiFetch({ onUrl: (u) => urls.push(u) }), { delayMs: 0 });
+    const ids = Array.from({ length: 50 }, (_, i) => `Q${'1'.repeat(300)}${i}`);
+    await c.prefetch(ids);
+    expect(urls.length).toBeGreaterThan(1);
+    for (const u of urls) expect(u.search.length).toBeLessThanOrEqual(MAX_QUERY_CHARS + 200);
+    expect(await c.portrait(ids[49])).toBe(`File:${ids[49]}.jpg`);
   });
 });
