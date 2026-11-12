@@ -11,7 +11,7 @@ All commands run from `agent/` as `npx tsx --env-file=.env src/cli.ts <command>`
 3. Add it: `known-add --id Q123 [--name "Display Name"] [--alias "Other Name"]...`. It refuses duplicates, non-humans and ids with neither a portrait nor a Commons category, and keeps the file sorted.
 4. Verify the list: `known-check` (online, in batches of 50 ids) or `known-check --offline`. It prints issues and exits 1 when there are any.
 5. Build references: `build-known-gallery`. It is incremental, fetches only the new people, and reports reference counts. People with fewer than 3 usable photos are excluded and listed.
-6. Match existing photos: `backfill-known` fills faces that have no known match yet. Use `--rescore` only after threshold changes, because a face already matched to someone else is not reconsidered.
+6. Match existing photos: run `backfill-known --dry-run` first (writes nothing, prints counts, per-person top 20, a score histogram and 10 sample face ids), then `backfill-known`. It fills faces that have no known match yet. Use `--rescore` only after threshold changes, because a face already matched to someone else is not reconsidered.
 
 ## Remove a person
 

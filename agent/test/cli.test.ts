@@ -5,6 +5,7 @@ const indexLocalFolderMock = vi.fn();
 const runIndexDriveMock = vi.fn();
 const runServeOriginalsMock = vi.fn();
 const backfillFacesMock = vi.fn();
+const backfillKnownMock = vi.fn();
 const buildGalleryMock = vi.fn();
 const loadGalleryMock = vi.fn();
 const saveGalleryMock = vi.fn();
@@ -15,6 +16,7 @@ vi.mock('../src/cloudflareClient', () => ({ CloudflareClient: vi.fn() }));
 vi.mock('../src/ollama/client', () => ({ OllamaClient: vi.fn() }));
 vi.mock('../src/driveCli', () => ({ runIndexDrive: runIndexDriveMock }));
 vi.mock('../src/backfillFaces', () => ({ backfillFaces: backfillFacesMock }));
+vi.mock('../src/backfillKnown', () => ({ backfillKnown: backfillKnownMock }));
 vi.mock('../src/faces/sidecarClient', () => ({
   FaceSidecarClient: vi.fn(),
   createFaceSidecar: (config: { FACE_SIDECAR_URL?: string }) => (config.FACE_SIDECAR_URL ? {} : undefined),
@@ -197,6 +199,56 @@ describe('runCli', () => {
       expect(await runCli(['build-known-gallery'])).toBe(1);
       expect(err).toHaveBeenCalledWith('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
       expect(buildGalleryMock).not.toHaveBeenCalled();
+      err.mockRestore();
+    });
+  });
+
+  describe('backfill-known', () => {
+    const gallery = { model: 'm1', people: [] };
+    const result = {
+      scanned: 5,
+      skipped: 0,
+      matched: 2,
+      cleared: 0,
+      written: 0,
+      perPerson: [{ id: 'Q1', name: 'Alice', count: 2 }],
+      scoreBuckets: { '0.55': 2 },
+      samples: [{ faceId: 'face-1', knownId: 'Q1', score: 0.57 }],
+    };
+
+    beforeEach(() => {
+      backfillKnownMock.mockReset().mockResolvedValue(result);
+      loadGalleryMock.mockReset().mockResolvedValue(gallery);
+    });
+
+    it('refuses when the gallery is missing, pointing at build-known-gallery', async () => {
+      loadGalleryMock.mockResolvedValue(undefined);
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(await runCli(['backfill-known'])).toBe(1);
+      expect(String(err.mock.calls[0][0])).toContain('build-known-gallery');
+      expect(backfillKnownMock).not.toHaveBeenCalled();
+      err.mockRestore();
+    });
+
+    it('passes flags and gallery.model, needs no sidecar, and prints the dry run report', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      expect(await runCli(['backfill-known', '--dry-run', '--rescore'])).toBe(0);
+      expect(backfillKnownMock).toHaveBeenCalledWith(
+        expect.objectContaining({ gallery, model: 'm1', dryRun: true, rescore: true })
+      );
+      const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(out).toContain('Alice');
+      expect(out).toContain('face-1');
+      expect(out).toContain('0.55');
+      expect(out).toContain('Dry run: nothing was written.');
+      log.mockRestore();
+    });
+
+    it('exits 1 with the error message when the backfill throws', async () => {
+      backfillKnownMock.mockRejectedValue(new Error('boom'));
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(await runCli(['backfill-known'])).toBe(1);
+      expect(err).toHaveBeenCalledWith('Error: boom');
       err.mockRestore();
     });
   });

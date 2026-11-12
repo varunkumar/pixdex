@@ -11,6 +11,7 @@ import { runServeOriginals } from './originalsCli';
 import { backfillRatings } from './backfillRatings';
 import { backfillExif } from './backfillExif';
 import { backfillFaces } from './backfillFaces';
+import { backfillKnown } from './backfillKnown';
 import { loadKnownGallery } from './known/loadKnownGallery';
 import { createFaceSidecar } from './faces/sidecarClient';
 import fs from 'node:fs/promises';
@@ -163,6 +164,47 @@ async function runKnownCheck(args: string[]): Promise<number> {
   }
 }
 
+async function runBackfillKnown(args: string[]): Promise<number> {
+  const dryRun = args.includes('--dry-run');
+  const rescore = args.includes('--rescore');
+  try {
+    const gallery = await loadGallery(GALLERY_PATH);
+    if (!gallery) {
+      console.error('Error: no known gallery found; run build-known-gallery first');
+      return 1;
+    }
+    // The gallery was built with the sidecar's model, which is also what the Worker stores embeddings under,
+    // so the sidecar does not need to be running.
+    const result = await backfillKnown({
+      cloudflareClient: new CloudflareClient(loadConfig()),
+      gallery,
+      model: gallery.model,
+      dryRun,
+      rescore,
+      onProgress: (message) => console.log(message),
+    });
+    console.log(
+      `Done. Scanned: ${result.scanned}, Matched: ${result.matched}, Cleared: ${result.cleared}, Skipped (bad embedding): ${result.skipped}, Written: ${result.written}`
+    );
+    if (result.scanned === 0) {
+      console.log(
+        `No faces were found for model "${gallery.model}". If faces exist, they were scanned with a different model: rebuild the gallery with build-known-gallery --full.`
+      );
+    }
+    console.log('Top people:');
+    for (const p of result.perPerson.slice(0, 20)) console.log(`  ${p.name} (${p.id}): ${p.count}`);
+    console.log('Score histogram (0.05 buckets):');
+    for (const key of Object.keys(result.scoreBuckets).sort()) console.log(`  ${key}: ${result.scoreBuckets[key]}`);
+    console.log('Samples:');
+    for (const s of result.samples) console.log(`  face ${s.faceId} -> ${s.knownId} (${s.score.toFixed(3)})`);
+    if (dryRun) console.log('Dry run: nothing was written.');
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
 export async function runCli(argv: string[]): Promise<number> {
   const [command, folder] = argv;
 
@@ -178,6 +220,7 @@ export async function runCli(argv: string[]): Promise<number> {
     return runBuildKnownGallery(argv.slice(1));
   }
 
+  if (command === 'backfill-known') return runBackfillKnown(argv.slice(1));
   if (command === 'known-search') return runKnownSearch(argv.slice(1));
   if (command === 'known-add') return runKnownAdd(argv.slice(1));
   if (command === 'known-check') return runKnownCheck(argv.slice(1));
@@ -265,7 +308,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--full]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }
