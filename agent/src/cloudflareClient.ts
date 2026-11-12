@@ -169,6 +169,30 @@ export class CloudflareClient {
     return ((await response.json()) as { upserted: number }).upserted;
   }
 
+  /** Backs up the known gallery file's bytes as one R2 object (the Worker never parses it). */
+  async putKnownGallery(bytes: Buffer | Uint8Array): Promise<void> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-gallery`, {
+      method: 'PUT',
+      headers: this.authHeaders('application/json'),
+      body: bytes,
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/known-gallery put failed: ${response.status}`);
+    }
+  }
+
+  /** The backed-up known gallery bytes, or undefined when none is stored (404). */
+  async getKnownGallery(): Promise<Buffer | undefined> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-gallery`, {
+      headers: { Authorization: `Bearer ${this.config.INGEST_TOKEN}` },
+    });
+    if (response.status === 404) return undefined;
+    if (!response.ok) {
+      throw new Error(`ingest/known-gallery get failed: ${response.status}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
   /**
    * One page of stored face embeddings (binary: per face 36 ASCII id bytes then 2048 float32 bytes).
    * Follow nextCursor (the X-Next-Cursor header), never the body length: an empty page can carry a cursor.

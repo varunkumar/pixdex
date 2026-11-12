@@ -295,6 +295,8 @@ machine without the gallery file resets known matches on rescanned faces; run `b
 `agent/src/known/matcher.ts` are initial guesses to tune from the `--dry-run` output. People with fewer than 3 usable photos are left
 out of the gallery, so fewer than the 405 listed will be recognized (the first build reports how many).
 
+Backup: the gallery is built from public openly licensed photos and is also kept as one object (`known/gallery.json`) in your private R2 bucket, so a new machine does not repeat the multi-hour Wikimedia crawl. Only the agent can read or write it (ingest token); the Worker never parses it. `build-known-gallery` (unless `--full`) uses the local file, else restores the R2 copy, builds incrementally, and pushes the result when it changed (a failed push only warns). `known-gallery-push` and `known-gallery-pull [--force]` do it explicitly; pull will not overwrite an existing local file without `--force`. `backfill-known` also restores from R2 if the local file is missing. Scan commands stay local-only, so on a new machine run `known-gallery-pull` (or `build-known-gallery`) once before indexing. Cost: one R2 put per changed build (about 11 MB), one get per restore, no D1, no Worker JSON work.
+
 Rollout: merging applies migration `0018` before the Worker deploys. Then on your machine: `known-check`, `build-known-gallery`,
 `backfill-known --dry-run`, tune the thresholds, `backfill-known`. Backfill is estimated at 1 to 3 minutes for about 5K photos
 (not yet measured). See `docs/development.md` for the steps and how to measure.

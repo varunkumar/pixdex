@@ -9,6 +9,9 @@ const backfillKnownMock = vi.fn();
 const buildGalleryMock = vi.fn();
 const loadGalleryMock = vi.fn();
 const saveGalleryMock = vi.fn();
+const restoreMock = vi.fn();
+const pushMock = vi.fn();
+const pullMock = vi.fn();
 
 vi.mock('../src/config', () => ({ loadConfig: loadConfigMock }));
 vi.mock('../src/indexLocalFolder', () => ({ indexLocalFolder: indexLocalFolderMock }));
@@ -27,6 +30,12 @@ vi.mock('../src/known/gallery', () => ({
   GALLERY_PATH: '/tmp/known-gallery.json',
   loadGallery: loadGalleryMock,
   saveGallery: saveGalleryMock,
+}));
+vi.mock('../src/known/galleryBackup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/known/galleryBackup')>()),
+  restoreFromR2: restoreMock,
+  pushGallery: pushMock,
+  pullGallery: pullMock,
 }));
 vi.mock('../src/originalsCli', () => ({ runServeOriginals: runServeOriginalsMock }));
 
@@ -138,6 +147,8 @@ describe('runCli', () => {
       upsertMock.mockReset().mockResolvedValue(1);
       loadGalleryMock.mockReset().mockResolvedValue(undefined);
       saveGalleryMock.mockReset().mockResolvedValue(undefined);
+      restoreMock.mockReset().mockResolvedValue(undefined);
+      pushMock.mockReset().mockResolvedValue(11 * 1024 * 1024);
       buildGalleryMock.mockReset().mockResolvedValue({
         gallery,
         report: {
@@ -197,6 +208,94 @@ describe('runCli', () => {
       log.mockRestore();
     });
 
+    it('restores from R2 when the local file is missing and builds incrementally from it', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      restoreMock.mockResolvedValue(gallery);
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(restoreMock).toHaveBeenCalledTimes(1);
+      expect(restoreMock.mock.calls[0][1]).toBe('/tmp/known-gallery.json');
+      expect(buildGalleryMock.mock.calls[0][0].existing).toBe(gallery);
+      const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(out).toContain('Restored the known gallery from R2: 1 people, model m1');
+      log.mockRestore();
+    });
+
+    it('local wins when it loads: no R2 download', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      loadGalleryMock.mockResolvedValue(gallery);
+      await runCli(['build-known-gallery']);
+      expect(restoreMock).not.toHaveBeenCalled();
+      expect(buildGalleryMock.mock.calls[0][0].existing).toBe(gallery);
+      log.mockRestore();
+    });
+
+    it('an unreadable local file warns and falls back to R2', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      loadGalleryMock.mockRejectedValue(new Error('bad json'));
+      restoreMock.mockResolvedValue(gallery);
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(String(warn.mock.calls[0][0])).toContain('bad json');
+      expect(buildGalleryMock.mock.calls[0][0].existing).toBe(gallery);
+      log.mockRestore();
+      warn.mockRestore();
+    });
+
+    it('builds from scratch when neither local nor R2 has a gallery (a corrupt R2 object restores as undefined)', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(buildGalleryMock.mock.calls[0][0].existing).toBeUndefined();
+      log.mockRestore();
+    });
+
+    it('--full skips both the local file and the R2 restore, and still pushes', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      loadGalleryMock.mockResolvedValue(gallery);
+      expect(await runCli(['build-known-gallery', '--full'])).toBe(0);
+      expect(restoreMock).not.toHaveBeenCalled();
+      expect(loadGalleryMock).not.toHaveBeenCalled();
+      expect(pushMock).toHaveBeenCalledTimes(1);
+      log.mockRestore();
+    });
+
+    it('pushes the saved file after a changed build, once, at the end', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(pushMock).toHaveBeenCalledTimes(1);
+      expect(pushMock.mock.calls[0][1]).toBe('/tmp/known-gallery.json');
+      expect(saveGalleryMock.mock.invocationCallOrder[0]).toBeLessThan(pushMock.mock.invocationCallOrder[0]);
+      log.mockRestore();
+    });
+
+    it('skips the push when nothing changed', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      loadGalleryMock.mockResolvedValue(gallery);
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(pushMock).not.toHaveBeenCalled();
+      log.mockRestore();
+    });
+
+    it('a failed push warns and still exits 0', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      pushMock.mockRejectedValue(new Error('ingest/known-gallery put failed: 500'));
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      const out = warn.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(out).toContain('could not back up');
+      expect(out).toContain('500');
+      expect(out).toContain('local file is saved');
+      log.mockRestore();
+      warn.mockRestore();
+    });
+
+    it('exits 1 when the R2 check itself fails (no blind multi-hour crawl)', async () => {
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      restoreMock.mockRejectedValue(new Error('ingest/known-gallery get failed: 500'));
+      expect(await runCli(['build-known-gallery'])).toBe(1);
+      expect(buildGalleryMock).not.toHaveBeenCalled();
+      err.mockRestore();
+    });
+
     it('exits 1 when FACE_SIDECAR_URL is not set', async () => {
       const err = vi.spyOn(console, 'error').mockImplementation(() => {});
       loadConfigMock.mockReturnValue({ CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev', INGEST_TOKEN: 't' });
@@ -223,6 +322,24 @@ describe('runCli', () => {
     beforeEach(() => {
       backfillKnownMock.mockReset().mockResolvedValue(result);
       loadGalleryMock.mockReset().mockResolvedValue(gallery);
+      restoreMock.mockReset().mockResolvedValue(undefined);
+    });
+
+    it('restores the gallery from R2 when the local file is missing', async () => {
+      loadGalleryMock.mockResolvedValue(undefined);
+      restoreMock.mockResolvedValue(gallery);
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      expect(await runCli(['backfill-known'])).toBe(0);
+      expect(restoreMock).toHaveBeenCalledTimes(1);
+      expect(backfillKnownMock).toHaveBeenCalledWith(expect.objectContaining({ gallery, model: 'm1' }));
+      log.mockRestore();
+    });
+
+    it('does not touch R2 when the local file exists', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await runCli(['backfill-known']);
+      expect(restoreMock).not.toHaveBeenCalled();
+      log.mockRestore();
     });
 
     it('refuses when the gallery is missing, pointing at build-known-gallery', async () => {
@@ -266,6 +383,50 @@ describe('runCli', () => {
       const err = vi.spyOn(console, 'error').mockImplementation(() => {});
       expect(await runCli(['backfill-known'])).toBe(1);
       expect(err).toHaveBeenCalledWith('Error: boom');
+      err.mockRestore();
+    });
+  });
+
+  describe('known-gallery-push and known-gallery-pull', () => {
+    const gallery = { model: 'm1', people: [{ id: 'Q1' }, { id: 'Q2' }] };
+    beforeEach(() => {
+      pushMock.mockReset().mockResolvedValue(2 * 1024 * 1024);
+      pullMock.mockReset();
+    });
+
+    it('push uploads the local file and exits 0; a failure exits 1', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(await runCli(['known-gallery-push'])).toBe(0);
+      expect(pushMock.mock.calls[0][1]).toBe('/tmp/known-gallery.json');
+      pushMock.mockRejectedValue(new Error('no gallery file at /tmp/known-gallery.json'));
+      expect(await runCli(['known-gallery-push'])).toBe(1);
+      log.mockRestore();
+      err.mockRestore();
+    });
+
+    it('pull refuses to overwrite an existing file without --force', async () => {
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      pullMock.mockResolvedValue({ status: 'exists' });
+      expect(await runCli(['known-gallery-pull'])).toBe(1);
+      expect(pullMock.mock.calls[0][2]).toMatchObject({ force: false });
+      expect(String(err.mock.calls[0][0])).toContain('--force');
+      err.mockRestore();
+    });
+
+    it('pull --force passes force and reports the restored gallery', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      pullMock.mockResolvedValue({ status: 'pulled', gallery });
+      expect(await runCli(['known-gallery-pull', '--force'])).toBe(0);
+      expect(pullMock.mock.calls[0][2]).toMatchObject({ force: true });
+      expect(String(log.mock.calls[0][0])).toContain('2 people, model m1');
+      log.mockRestore();
+    });
+
+    it('pull exits 1 when R2 has no usable gallery', async () => {
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      pullMock.mockResolvedValue({ status: 'absent' });
+      expect(await runCli(['known-gallery-pull'])).toBe(1);
       err.mockRestore();
     });
   });

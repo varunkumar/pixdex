@@ -266,3 +266,41 @@ describe('CloudflareClient known-people methods', () => {
     await expect(client.setFaceKnown([{ faceId: 'f', knownId: null }])).rejects.toThrow(/500/);
   });
 });
+
+describe('CloudflareClient known gallery backup', () => {
+  const mk = () => {
+    const fetchMock = vi.fn();
+    return { fetchMock, client: new CloudflareClient(config, fetchMock as unknown as typeof fetch) };
+  };
+
+  it('putKnownGallery PUTs the bytes as json with the bearer token', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response('created', { status: 201 }));
+    await client.putKnownGallery(Buffer.from('{"a":1}'));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/known-gallery');
+    expect(init.method).toBe('PUT');
+    expect(init.headers.Authorization).toBe('Bearer secret-token');
+    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(Buffer.from(init.body).toString()).toBe('{"a":1}');
+  });
+
+  it('putKnownGallery throws with the status on failure', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response('x', { status: 413 }));
+    await expect(client.putKnownGallery(Buffer.from('{}'))).rejects.toThrow(/413/);
+  });
+
+  it('getKnownGallery returns the bytes, undefined on 404 and throws with the status otherwise', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response('hello', { status: 200 }));
+    expect((await client.getKnownGallery())?.toString()).toBe('hello');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/known-gallery');
+    expect(init.headers.Authorization).toBe('Bearer secret-token');
+    fetchMock.mockResolvedValueOnce(new Response('nf', { status: 404 }));
+    expect(await client.getKnownGallery()).toBeUndefined();
+    fetchMock.mockResolvedValueOnce(new Response('x', { status: 500 }));
+    await expect(client.getKnownGallery()).rejects.toThrow(/500/);
+  });
+});

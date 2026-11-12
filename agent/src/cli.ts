@@ -16,7 +16,8 @@ import { loadKnownGallery } from './known/loadKnownGallery';
 import { createFaceSidecar } from './faces/sidecarClient';
 import fs from 'node:fs/promises';
 import { buildGallery } from './known/buildGallery';
-import { GALLERY_PATH, loadGallery, saveGallery, type KnownPerson } from './known/gallery';
+import { GALLERY_PATH, loadGallery, saveGallery, type Gallery, type KnownPerson } from './known/gallery';
+import { galleryChanged, pullGallery, pushGallery, restoreFromR2 } from './known/galleryBackup';
 import { WikimediaClient } from './known/wikimedia';
 import { checkList, entityProblems, fetchCandidates, loadList, PersonSchema, saveList, searchWikidata } from './known/list';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
@@ -42,7 +43,22 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
       return 1;
     }
     const people = PeopleSchema.parse(JSON.parse(await fs.readFile(peoplePath(), 'utf8'))) as KnownPerson[];
-    const existing = full ? undefined : await loadGallery(GALLERY_PATH);
+    const client = new CloudflareClient(config);
+    // Starting point (unless --full): the local file, else the R2 backup (a multi-hour crawl is not repeated), else scratch.
+    let existing: Gallery | undefined;
+    if (!full) {
+      try {
+        existing = await loadGallery(GALLERY_PATH);
+      } catch (error) {
+        console.warn(`Local gallery ${GALLERY_PATH} is unreadable (${error instanceof Error ? error.message : String(error)}); trying the R2 backup.`);
+      }
+      if (!existing) {
+        existing = await restoreFromR2(client, GALLERY_PATH);
+        if (existing) {
+          console.log(`Restored the known gallery from R2: ${existing.people.length} people, model ${existing.model}`);
+        }
+      }
+    }
     const { gallery, report } = await buildGallery({
       people,
       existing,
@@ -62,7 +78,6 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
       onCheckpoint: (g) => saveGallery(GALLERY_PATH, g),
     });
     await saveGallery(GALLERY_PATH, gallery);
-    const client = new CloudflareClient(config);
     const included = gallery.people.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases }));
     let upserted = 0;
     for (let i = 0; i < included.length; i += UPSERT_BATCH) {
@@ -71,6 +86,18 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
     console.log(
       `Gallery saved: ${report.included.length} people included, ${report.excluded.length} excluded, average refs per person ${report.averageRefs.toFixed(1)}, upserted ${upserted}`
     );
+    if (full || galleryChanged(existing, gallery)) {
+      try {
+        const size = await pushGallery(client, GALLERY_PATH);
+        console.log(`Gallery backed up to R2 (${(size / 1024 / 1024).toFixed(1)} MB)`);
+      } catch (error) {
+        console.warn(
+          `Warning: could not back up the gallery to R2 (${error instanceof Error ? error.message : String(error)}). The local file is saved; run known-gallery-push to retry.`
+        );
+      }
+    } else {
+      console.log('Gallery unchanged, R2 backup not refreshed (run known-gallery-push to force it).');
+    }
     if (report.failed.length > 0) {
       console.log(`Failed on Wikimedia errors (not stored, retried next run): ${report.failed.length}`);
       for (const p of report.failed) console.log(`  ${p.id} ${p.name}: ${p.error}`);
@@ -180,7 +207,13 @@ async function runBackfillKnown(args: string[]): Promise<number> {
     }
   }
   try {
-    const gallery = await loadGallery(GALLERY_PATH);
+    const config = loadConfig();
+    const client = new CloudflareClient(config);
+    let gallery = await loadGallery(GALLERY_PATH);
+    if (!gallery) {
+      gallery = await restoreFromR2(client, GALLERY_PATH);
+      if (gallery) console.log(`Restored the known gallery from R2: ${gallery.people.length} people, model ${gallery.model}`);
+    }
     if (!gallery) {
       console.error('Error: no known gallery found; run build-known-gallery first');
       return 1;
@@ -188,7 +221,7 @@ async function runBackfillKnown(args: string[]): Promise<number> {
     // The gallery was built with the sidecar's model, which is also what the Worker stores embeddings under,
     // so the sidecar does not need to be running.
     const result = await backfillKnown({
-      cloudflareClient: new CloudflareClient(loadConfig()),
+      cloudflareClient: client,
       gallery,
       model: gallery.model,
       dryRun,
@@ -218,6 +251,36 @@ async function runBackfillKnown(args: string[]): Promise<number> {
   }
 }
 
+async function runKnownGalleryPush(): Promise<number> {
+  try {
+    const size = await pushGallery(new CloudflareClient(loadConfig()), GALLERY_PATH);
+    console.log(`Gallery backed up to R2 (${(size / 1024 / 1024).toFixed(1)} MB)`);
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
+async function runKnownGalleryPull(args: string[]): Promise<number> {
+  try {
+    const result = await pullGallery(new CloudflareClient(loadConfig()), GALLERY_PATH, { force: args.includes('--force') });
+    if (result.status === 'exists') {
+      console.error(`Error: ${GALLERY_PATH} already exists; pass --force to overwrite it with the R2 backup`);
+      return 1;
+    }
+    if (result.status === 'absent') {
+      console.error('Error: no usable gallery backup in R2; run build-known-gallery');
+      return 1;
+    }
+    console.log(`Restored the known gallery from R2: ${result.gallery.people.length} people, model ${result.gallery.model}`);
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
 export async function runCli(argv: string[]): Promise<number> {
   const [command, folder] = argv;
 
@@ -234,6 +297,8 @@ export async function runCli(argv: string[]): Promise<number> {
   }
 
   if (command === 'backfill-known') return runBackfillKnown(argv.slice(1));
+  if (command === 'known-gallery-push') return runKnownGalleryPush();
+  if (command === 'known-gallery-pull') return runKnownGalleryPull(argv.slice(1));
   if (command === 'known-search') return runKnownSearch(argv.slice(1));
   if (command === 'known-add') return runKnownAdd(argv.slice(1));
   if (command === 'known-check') return runKnownCheck(argv.slice(1));
@@ -321,7 +386,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore] [--page-size <n>]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore] [--page-size <n>]\n       pixdex-agent known-gallery-push\n       pixdex-agent known-gallery-pull [--force]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }

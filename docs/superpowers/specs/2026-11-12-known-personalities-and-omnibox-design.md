@@ -22,7 +22,7 @@ existing capability stays.
 
 ## Non-goals
 
-- No photo, thumbnail or embedding leaves the owner's machine for recognition; no cloud celebrity API.
+- No photo, thumbnail or embedding of the owner's photos leaves the owner's machine for recognition; no cloud celebrity API. The reference gallery, built from public openly licensed photos, is backed up in the owner's private R2 (`known/gallery.json`, agent-only via the ingest token); the owner's own photo embeddings are not involved.
 - No promoting a known match into the viewer's own People, no aliases for the viewer's own people (my call).
 - No auto-run of the AI model, no multi-album filter, no new result layouts.
 - Not a claim of identity: a match is a suggestion that reads "looks like".
