@@ -355,6 +355,40 @@ describe('buildGallery', () => {
     expect(checkpoints[0].people.map((p) => p.id)).toEqual(['Q0']);
   });
 
+  it('prefetches only the people to crawl, uses batched fileInfos, and prints a request estimate', async () => {
+    const { deps } = setup({ Q1: many(4), Q2: many(4, 3) });
+    const wm = deps.wikimedia as unknown as Record<string, unknown>;
+    const orig = wm.fileInfo as (t: string) => Promise<unknown>;
+    const prefetched: string[][] = [];
+    const batches: string[][] = [];
+    wm.prefetch = async (ids: string[]) => {
+      prefetched.push(ids);
+    };
+    wm.fileInfos = async (titles: string[]) => {
+      batches.push(titles);
+      return new Map(await Promise.all(titles.map(async (t) => [t, await orig(t)] as const)));
+    };
+    wm.paceMs = 6500;
+    const { gallery: prior } = await buildGallery({ ...setup({ Q1: many(4) }).deps, people: [person('Q1')] });
+    const messages: string[] = [];
+    await buildGallery({ ...deps, people: [person('Q1'), person('Q2')], existing: prior, onProgress: (m) => messages.push(m) });
+    expect(prefetched).toEqual([['Q2']]);
+    expect(batches).toHaveLength(1);
+    expect(messages.some((m) => /Crawling 1 people: about 5 Wikimedia API requests, at least 1 min/.test(m))).toBe(true);
+  });
+
+  it('a person whose Wikidata batch failed is failed, not excluded', async () => {
+    const { deps } = setup({ Q1: many(4) });
+    const wm = deps.wikimedia as unknown as Record<string, unknown>;
+    wm.prefetch = async () => {};
+    wm.portrait = async () => {
+      throw new RateLimitedError(429);
+    };
+    const res = await buildGallery({ ...deps, people: [person('Q1')] });
+    expect(res.report.failed.map((f) => f.id)).toEqual(['Q1']);
+    expect(res.report.excluded).toEqual([]);
+  });
+
   it('a success in between resets the rate limit streak', async () => {
     const { deps } = setup({ Q3: many(4) });
     const wikimedia = deps.wikimedia as unknown as { portrait: (q: string) => Promise<unknown> };

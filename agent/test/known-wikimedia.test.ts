@@ -29,12 +29,12 @@ describe('WikimediaClient', () => {
     const f = (async (url: string, init?: RequestInit) => {
       urls.push(url);
       expect((init?.headers as Record<string, string>)['User-Agent']).toBe('face-gallery-builder/0.1');
-      return jsonResponse({ claims: { P18: [{ mainsnak: { datavalue: { value: 'A b.jpg' } } }] } });
+      return jsonResponse({ entities: { Q1: { claims: { P18: [{ mainsnak: { datavalue: { value: 'A b.jpg' } } }] } } } });
     }) as unknown as typeof fetch;
     const c = new WikimediaClient(f, { delayMs: 0 });
     expect(await c.portrait('Q1')).toBe('File:A b.jpg');
     expect(urls[0]).toContain('wikidata.org');
-    expect(urls[0]).toContain('P18');
+    expect(urls[0]).toContain('wbgetentities');
   });
 
   it('portrait is undefined without P18', async () => {
@@ -51,12 +51,13 @@ describe('WikimediaClient', () => {
     return (async (url: string) => {
       const u = new URL(url);
       if (u.hostname === 'www.wikidata.org') {
-        return jsonResponse({ claims: { P373: [{ mainsnak: { datavalue: { value: 'Root' } } }] } });
+        return jsonResponse({ entities: { Q1: { claims: { P373: [{ mainsnak: { datavalue: { value: 'Root' } } }] } } } });
       }
-      const title = u.searchParams.get('cmtitle')!;
-      const type = u.searchParams.get('cmtype');
-      const node = tree[title];
-      const members = (type === 'file' ? node.files : node.subs).map((t) => ({ title: t }));
+      const node = tree[u.searchParams.get('cmtitle')!];
+      const members = [
+        ...(u.searchParams.get('cmtype')!.includes('subcat') ? node.subs.map((title) => ({ title, type: 'subcat' })) : []),
+        ...node.files.map((title) => ({ title, type: 'file' })),
+      ];
       return jsonResponse({ query: { categorymembers: members } });
     }) as unknown as typeof fetch;
   }
@@ -88,6 +89,7 @@ describe('WikimediaClient', () => {
         query: {
           pages: {
             '1': {
+              title: 'File:x.jpg',
               imageinfo: [
                 { thumburl: 'https://upload/x.jpg', extmetadata: { LicenseShortName: { value: 'CC BY-SA 4.0' } } },
               ],
@@ -101,13 +103,13 @@ describe('WikimediaClient', () => {
 
   it('fileInfo is undefined when there is no thumburl (never falls back to the original)', async () => {
     const f = (async () =>
-      jsonResponse({ query: { pages: { '1': { imageinfo: [{ url: 'https://upload/orig.tif' }] } } } })) as unknown as typeof fetch;
+      jsonResponse({ query: { pages: { '1': { title: 'File:x.tif', imageinfo: [{ url: 'https://upload/orig.tif' }] } } } })) as unknown as typeof fetch;
     expect(await new WikimediaClient(f, { delayMs: 0 }).fileInfo('File:x.tif')).toBeUndefined();
   });
 
   it('fileInfo is undefined when the page has no imageinfo', async () => {
     const c = new WikimediaClient(
-      (async () => jsonResponse({ query: { pages: { '-1': {} } } })) as unknown as typeof fetch,
+      (async () => jsonResponse({ query: { pages: { '-1': { title: 'File:x.jpg', missing: '' } } } })) as unknown as typeof fetch,
       { delayMs: 0 }
     );
     expect(await c.fileInfo('File:x.jpg')).toBeUndefined();
@@ -181,11 +183,11 @@ describe('rate limiting', () => {
     const f = (async () => (limited-- > 0 ? rl(429, '1') : jsonResponse({ claims: {} }))) as unknown as typeof fetch;
     const c = new WikimediaClient(f, { delayMs: 1500, ...clock });
     expect(c.paceMs).toBe(1500);
-    await c.portrait('Q1');
+    await c.fileInfo('File:first.jpg');
     expect(c.paceMs).toBe(8000);
-    for (let i = 0; i < 20; i++) await c.portrait('Q1');
+    for (let i = 0; i < 20; i++) await c.fileInfo(`File:a${i}.jpg`);
     expect(c.paceMs).toBe(4000);
-    for (let i = 0; i < 60; i++) await c.portrait('Q1');
+    for (let i = 0; i < 60; i++) await c.fileInfo(`File:b${i}.jpg`);
     expect(c.paceMs).toBe(1500);
   });
 
@@ -195,8 +197,8 @@ describe('rate limiting', () => {
       delayMs: 1500,
       ...clock,
     });
-    await c.portrait('Q1');
-    await c.portrait('Q1');
+    await c.fileInfo('File:x1.jpg');
+    await c.fileInfo('File:x2.jpg');
     expect(clock.waits).toEqual([1500]);
   });
 
@@ -217,12 +219,11 @@ describe('raster filter', () => {
     const f = (async (url: string) => {
       const u = new URL(url);
       if (u.hostname === 'www.wikidata.org') {
-        const prop = u.searchParams.get('property');
-        const value = prop === 'P18' ? 'Voice.OGG' : 'Root';
-        return jsonResponse({ claims: { [prop!]: [{ mainsnak: { datavalue: { value } } }] } });
+        const claim = (value: string) => [{ mainsnak: { datavalue: { value } } }];
+        return jsonResponse({ entities: { Q1: { claims: { P18: claim('Voice.OGG'), P373: claim('Root') } } } });
       }
       const files = ['File:a.JPG', 'File:b.ogg', 'File:c.svg', 'File:d.pdf', 'File:e.tif', 'File:f.webm', 'File:g.PNG', 'File:h.jpeg', 'File:i.webp'];
-      return jsonResponse({ query: { categorymembers: u.searchParams.get('cmtype') === 'file' ? files.map((title) => ({ title })) : [] } });
+      return jsonResponse({ query: { categorymembers: files.map((title) => ({ title, type: 'file' })) } });
     }) as unknown as typeof fetch;
     const c = new WikimediaClient(f, { delayMs: 0 });
     expect(await c.portrait('Q1')).toBeUndefined();

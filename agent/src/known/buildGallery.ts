@@ -1,6 +1,6 @@
 import type { FaceSidecarClient } from '../faces/sidecarClient';
 import { decodeEmbedding, type ExcludedPerson, type Gallery, type GalleryPerson, type KnownPerson } from './gallery';
-import { isRasterTitle, RateLimitedError, type WikimediaClient } from './wikimedia';
+import { API_REQUESTS_PER_PERSON, isRasterTitle, RateLimitedError, type WikimediaClient } from './wikimedia';
 
 export const MAX_REFS = 10;
 export const MIN_REFS = 3;
@@ -85,10 +85,12 @@ async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise
     if (isRasterTitle(title) && !candidates.includes(title)) candidates.push(title);
   }
 
+  // One request for up to 50 titles; the loop below stops early once enough faces are in hand.
+  const infos = wikimedia.fileInfos ? await wikimedia.fileInfos(candidates) : undefined;
   const refs: Float32Array[] = [];
   for (const title of candidates) {
     if (refs.length >= COLLECT_LIMIT) break;
-    const info = await wikimedia.fileInfo(title);
+    const info = infos ? infos.get(title) : await wikimedia.fileInfo(title);
     if (!info) {
       onProgress?.(`  skip ${title}: no thumbnail`);
       continue;
@@ -179,6 +181,19 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
     };
   };
 
+  const crawl = deps.people.filter((p) => {
+    if (kept.has(p.id) && !rebuild.has(p.id)) return false;
+    return !(!kept.has(p.id) && keptExcluded.has(p.id) && !rebuild.has(p.id) && !deps.retryExcluded);
+  });
+  if (crawl.length > 0 && typeof deps.wikimedia.paceMs === 'number') {
+    const requests = crawl.length * API_REQUESTS_PER_PERSON + Math.ceil(crawl.length / 50);
+    const minutes = Math.ceil((requests * deps.wikimedia.paceMs) / 60_000);
+    deps.onProgress?.(
+      `Crawling ${crawl.length} people: about ${requests} Wikimedia API requests, at least ${minutes} min at the current pace (${(deps.wikimedia.paceMs / 1000).toFixed(1)} s between requests), plus image downloads`
+    );
+  }
+  // Wikidata claims for everyone to crawl, 50 ids per request, before the per-person loop.
+  await deps.wikimedia.prefetch?.(crawl.map((p) => p.id));
   let rateLimitedInARow = 0;
   for (const [index, person] of deps.people.entries()) {
     const prior = kept.get(person.id);
