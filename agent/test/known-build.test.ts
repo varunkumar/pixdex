@@ -115,6 +115,63 @@ describe('buildGallery', () => {
     expect(res.report.included.map((i) => i.id)).toEqual(['Q1', 'Q2']);
   });
 
+  describe('excluded people', () => {
+    const two = [person('Q1'), person('Q2')];
+    const firstBuild = async () => {
+      const first = setup({ Q1: many(2), Q2: many(4, 3) });
+      return (await buildGallery({ ...first.deps, people: two })).gallery;
+    };
+
+    it('records excluded people with their ref count', async () => {
+      const gallery = await firstBuild();
+      expect(gallery.people.map((p) => p.id)).toEqual(['Q2']);
+      expect(gallery.excluded).toEqual([{ id: 'Q1', refs: 2 }]);
+    });
+
+    it('a second run does not refetch an excluded person but still reports them', async () => {
+      const gallery = await firstBuild();
+      const second = setup({ Q1: many(2), Q2: many(4, 3) });
+      const res = await buildGallery({ ...second.deps, people: two, existing: gallery });
+      expect(second.fetched).toEqual([]);
+      expect(res.gallery.excluded).toEqual([{ id: 'Q1', refs: 2 }]);
+      expect(res.report.excluded).toEqual([{ id: 'Q1', name: 'Name Q1', refs: 2 }]);
+    });
+
+    it('--rebuild and retryExcluded refetch them, and a person who now qualifies leaves the record', async () => {
+      const gallery = await firstBuild();
+      const a = setup({ Q1: many(4), Q2: many(4, 3) });
+      const viaRebuild = await buildGallery({ ...a.deps, people: two, existing: gallery, rebuild: ['Q1'] });
+      expect(a.fetched).toEqual(['Q1']);
+      expect(viaRebuild.gallery.people.map((p) => p.id)).toEqual(['Q1', 'Q2']);
+      expect(viaRebuild.gallery.excluded).toBeUndefined();
+      const b = setup({ Q1: many(2), Q2: many(4, 3) });
+      const viaRetry = await buildGallery({ ...b.deps, people: two, existing: gallery, retryExcluded: true });
+      expect(b.fetched).toEqual(['Q1']);
+      expect(viaRetry.gallery.excluded).toEqual([{ id: 'Q1', refs: 2 }]);
+    });
+
+    it('drops the record when the person leaves the list', async () => {
+      const gallery = await firstBuild();
+      const next = setup({ Q2: many(4, 3) });
+      const res = await buildGallery({ ...next.deps, people: [person('Q2')], existing: gallery });
+      expect(res.gallery.excluded).toBeUndefined();
+    });
+
+    it('a failed person is retried and a failed retry keeps the excluded record', async () => {
+      const gallery = await firstBuild();
+      const failing = setup({ Q1: many(4), Q2: many(4, 3) });
+      const boom = { ...(failing.deps.wikimedia as object), portrait: async () => { throw new Error('429'); } };
+      const res = await buildGallery({ ...failing.deps, wikimedia: boom as never, people: two, existing: gallery, rebuild: ['Q1'] });
+      expect(res.report.failed.map((f) => f.id)).toEqual(['Q1']);
+      expect(res.gallery.excluded).toEqual([{ id: 'Q1', refs: 2 }]);
+      const fresh = setup({ Q1: many(4) });
+      const failNew = { ...(fresh.deps.wikimedia as object), portrait: async () => { throw new Error('429'); } };
+      const r2 = await buildGallery({ ...fresh.deps, wikimedia: failNew as never, people: [person('Q1')] });
+      expect(r2.gallery.excluded).toBeUndefined();
+      expect(r2.gallery.people).toEqual([]);
+    });
+  });
+
   it('rebuild refetches just the named id', async () => {
     const first = setup({ Q1: many(4), Q2: many(4, 3) });
     const { gallery } = await buildGallery({ ...first.deps, people: [person('Q1'), person('Q2')] });

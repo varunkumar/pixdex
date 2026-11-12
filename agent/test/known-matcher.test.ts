@@ -48,4 +48,14 @@ describe('matchKnown', () => {
     expect(matchKnown(unit(1), { model: 'm', people: [person('a', unit(1))] })?.id).toBe('a');
     expect(matchKnown(unit(1), { model: 'm', people: [] })).toBeNull();
   });
+
+  it('clamps the posted score to at most 1 (float32 cosine can exceed 1) without changing decisions', () => {
+    const ref = new Float32Array(512).fill(0.0441942);
+    const g: Gallery = { model: 'm', people: [person('a', ref)] };
+    const emb = new Float32Array(512).fill(0.0441943); // dot product slightly above 1
+    const m = matchKnown(emb, g);
+    expect(m?.id).toBe('a');
+    expect(m?.score).toBeLessThanOrEqual(1);
+    expect(m?.score).toBe(1);
+  });
 });

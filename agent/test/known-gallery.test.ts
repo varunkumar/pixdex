@@ -28,6 +28,18 @@ describe('gallery file', () => {
     expect(GALLERY_PATH.endsWith(path.join('.index-state', 'known-gallery.json'))).toBe(true);
   });
 
+  it('round-trips the excluded record and loads an old file without it', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'gallery-'));
+    const file = path.join(dir, 'g.json');
+    await saveGallery(file, { model: 'm', people: [], excluded: [{ id: 'Q9', refs: 2 }] });
+    expect((await loadGallery(file))?.excluded).toEqual([{ id: 'Q9', refs: 2 }]);
+    const old = path.join(dir, 'old.json');
+    await fs.writeFile(old, JSON.stringify({ model: 'm', people: [{ id: 'p', name: 'P', aliases: [], refs: [b64(Array.from({ length: 512 }, () => 1))] }] }));
+    const g = await loadGallery(old);
+    expect(g?.people).toHaveLength(1);
+    expect(g?.excluded).toBeUndefined();
+  });
+
   it('round-trips refs', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'gallery-'));
     const file = path.join(dir, 'sub', 'g.json');

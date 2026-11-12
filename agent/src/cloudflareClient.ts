@@ -175,7 +175,7 @@ export class CloudflareClient {
    */
   async faceEmbeddingsPage(
     model: string,
-    opts: { cursor?: number; rescore?: boolean } = {}
+    opts: { cursor?: number; rescore?: boolean; limit?: number } = {}
   ): Promise<{ faces: { id: string; embedding: Float32Array }[]; nextCursor?: number }> {
     const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces/embeddings`, {
       method: 'POST',

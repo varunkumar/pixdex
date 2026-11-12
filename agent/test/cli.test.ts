@@ -188,8 +188,12 @@ describe('runCli', () => {
       loadGalleryMock.mockResolvedValue(gallery);
       await runCli(['build-known-gallery', '--rebuild', 'Q1', 'Q9']);
       expect(buildGalleryMock.mock.calls[0][0]).toMatchObject({ existing: gallery, rebuild: ['Q1', 'Q9'] });
+      expect(buildGalleryMock.mock.calls[0][0].retryExcluded).toBe(false);
+      await runCli(['build-known-gallery', '--retry-excluded']);
+      expect(buildGalleryMock.mock.calls[1][0].retryExcluded).toBe(true);
+      buildGalleryMock.mockClear();
       await runCli(['build-known-gallery', '--full']);
-      expect(buildGalleryMock.mock.calls[1][0].existing).toBeUndefined();
+      expect(buildGalleryMock.mock.calls[0][0].existing).toBeUndefined();
       log.mockRestore();
     });
 
@@ -242,6 +246,19 @@ describe('runCli', () => {
       expect(out).toContain('0.55');
       expect(out).toContain('Dry run: nothing was written.');
       log.mockRestore();
+    });
+
+    it('passes --page-size and rejects values outside 1 to 100', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(await runCli(['backfill-known', '--page-size', '25'])).toBe(0);
+      expect(backfillKnownMock).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 25 }));
+      backfillKnownMock.mockClear();
+      for (const bad of ['0', '101', 'abc', '2.5']) expect(await runCli(['backfill-known', '--page-size', bad])).toBe(1);
+      expect(await runCli(['backfill-known', '--page-size'])).toBe(1);
+      expect(backfillKnownMock).not.toHaveBeenCalled();
+      log.mockRestore();
+      err.mockRestore();
     });
 
     it('exits 1 with the error message when the backfill throws', async () => {

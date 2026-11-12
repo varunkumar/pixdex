@@ -10,8 +10,10 @@ All commands run from `agent/` as `npx tsx --env-file=.env src/cli.ts <command>`
 2. Find the Wikidata id: `known-search "<name>"`. Humans are listed first, then by popularity. Check the description and the portrait/category flags, and beware of namesakes.
 3. Add it: `known-add --id Q123 [--name "Display Name"] [--alias "Other Name"]...`. It refuses duplicates, non-humans and ids with neither a portrait nor a Commons category, and keeps the file sorted.
 4. Verify the list: `known-check` (online, in batches of 50 ids) or `known-check --offline`. It prints issues and exits 1 when there are any.
-5. Build references: `build-known-gallery`. It is incremental, fetches only the new people, and reports reference counts. People with fewer than 3 usable photos are excluded and listed.
-6. Match existing photos: run `backfill-known --dry-run` first (writes nothing, prints counts, per-person top 20, a score histogram and 10 sample face ids), then `backfill-known`. It fills faces that have no known match yet. Use `--rescore` only after threshold changes, because a face already matched to someone else is not reconsidered.
+5. Build references: `build-known-gallery`. It is incremental, fetches only the new people, and reports reference counts. People with fewer than 3 usable photos are excluded, listed, and remembered in the gallery file, so later runs skip them. Retry them with `--retry-excluded` (all) or `--rebuild <id>` (one); `--full` ignores the existing file and rebuilds everyone. Wikimedia errors are not remembered: those people are retried on every run.
+6. Match existing photos: run `backfill-known --dry-run` first (writes nothing, prints counts, per-person top 20, a score histogram and 10 sample face ids), then `backfill-known`. It fills faces that have no known match yet. A face already matched to someone is not reconsidered, so use `--rescore` after threshold changes, after removing a person or after `--rebuild` of one (the Worker writes only rows that change). If the Worker's embeddings route is slow, lower the page size with `--page-size <n>` (1 to 100). Entries must fit the Worker's limits (name up to 200 characters, up to 20 aliases of up to 100 characters); `known-check` reports violations.
+
+Note: a rescan (`index-*`, `backfill-faces --recrop`) on a machine without the gallery file resets known matches on the rescanned unassigned and auto faces; a normal `backfill-known` restores them.
 
 ## Remove a person
 

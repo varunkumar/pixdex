@@ -221,6 +221,16 @@ describe('CloudflareClient known-people methods', () => {
     expect(JSON.parse(init.body)).toEqual({ model: 'buffalo_l', cursor: 7, rescore: true });
   });
 
+  it('faceEmbeddingsPage sends limit only when given', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(0), { status: 200 }));
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(0), { status: 200 }));
+    await client.faceEmbeddingsPage('m', { limit: 25 });
+    await client.faceEmbeddingsPage('m', {});
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ model: 'm', limit: 25 });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ model: 'm' });
+  });
+
   it('faceEmbeddingsPage handles an empty body with a cursor and a last page without one', async () => {
     const { fetchMock, client } = mk();
     fetchMock.mockResolvedValueOnce(

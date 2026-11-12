@@ -18,17 +18,18 @@ import fs from 'node:fs/promises';
 import { buildGallery } from './known/buildGallery';
 import { GALLERY_PATH, loadGallery, saveGallery, type KnownPerson } from './known/gallery';
 import { WikimediaClient } from './known/wikimedia';
-import { checkList, entityProblems, fetchCandidates, loadList, saveList, searchWikidata } from './known/list';
+import { checkList, entityProblems, fetchCandidates, loadList, PersonSchema, saveList, searchWikidata } from './known/list';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
 
 const UPSERT_BATCH = 500;
-const PeopleSchema = z.array(z.object({ id: z.string().min(1), name: z.string().min(1), aliases: z.array(z.string()) }));
+const PeopleSchema = z.array(PersonSchema);
 const DEFAULT_PEOPLE_PATH = fileURLToPath(new URL('../known/people.json', import.meta.url));
 const peoplePath = () => process.env.KNOWN_PEOPLE_PATH || DEFAULT_PEOPLE_PATH;
 
 async function runBuildKnownGallery(args: string[]): Promise<number> {
   try {
     const full = args.includes('--full');
+    const retryExcluded = args.includes('--retry-excluded');
     const rebuild: string[] = [];
     for (let i = 0; i < args.length; i++) {
       if (args[i] !== '--rebuild') continue;
@@ -46,6 +47,7 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
       people,
       existing,
       rebuild,
+      retryExcluded,
       wikimedia: new WikimediaClient(),
       sidecar,
       download: async (url) => {
@@ -167,6 +169,16 @@ async function runKnownCheck(args: string[]): Promise<number> {
 async function runBackfillKnown(args: string[]): Promise<number> {
   const dryRun = args.includes('--dry-run');
   const rescore = args.includes('--rescore');
+  let pageSize: number | undefined;
+  const sizeIdx = args.indexOf('--page-size');
+  if (sizeIdx !== -1) {
+    const raw = args[sizeIdx + 1];
+    pageSize = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : NaN;
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      console.error('Error: --page-size must be an integer from 1 to 100');
+      return 1;
+    }
+  }
   try {
     const gallery = await loadGallery(GALLERY_PATH);
     if (!gallery) {
@@ -181,10 +193,11 @@ async function runBackfillKnown(args: string[]): Promise<number> {
       model: gallery.model,
       dryRun,
       rescore,
+      ...(pageSize !== undefined ? { pageSize } : {}),
       onProgress: (message) => console.log(message),
     });
     console.log(
-      `Done. Scanned: ${result.scanned}, Matched: ${result.matched}, Cleared: ${result.cleared}, Skipped (bad embedding): ${result.skipped}, Written: ${result.written}`
+      `Done. Scanned: ${result.scanned}, Matched: ${result.matched}, Cleared: ${result.cleared}, Skipped (bad embedding): ${result.skipped}, Changed (rows written): ${result.written}`
     );
     if (result.scanned === 0) {
       console.log(
@@ -308,7 +321,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore] [--page-size <n>]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }

@@ -72,6 +72,20 @@ describe('checkList', () => {
     expect(text).toMatch(/schema/);
   });
 
+  it('flags entries the Worker would reject: long name, long alias, more than 20 aliases', async () => {
+    const issues = await checkList(
+      [
+        { id: 'Q1', name: 'x'.repeat(201), aliases: [] },
+        { id: 'Q2', name: 'Ok Two', aliases: ['a'.repeat(101)] },
+        { id: 'Q3', name: 'Ok Three', aliases: Array.from({ length: 21 }, (_, i) => `alias ${i}`) },
+        { id: 'Q4', name: 'x'.repeat(200), aliases: ['a'.repeat(100), ...Array.from({ length: 19 }, (_, i) => `alias ${i}`)] },
+      ],
+      { online: false }
+    );
+    expect(issues.map((i) => i.id).sort()).toEqual(['Q1', 'Q2', 'Q3']);
+    expect(issues.every((i) => i.problem.startsWith('schema'))).toBe(true);
+  });
+
   it('flags a non-human, a label mismatch, a missing entity and no portrait or category online', async () => {
     const people = [
       { id: 'Q10', name: 'Some Company', aliases: [] },

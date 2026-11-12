@@ -7,10 +7,11 @@ const WIKIDATA_API = 'https://www.wikidata.org/w/api.php';
 const BATCH = 50;
 const HUMAN = 'Q5';
 
-const PersonSchema = z.object({
+/** Same limits as the Worker's POST /ingest/known-people (name 1..200, up to 20 aliases of 1..100 characters). */
+export const PersonSchema = z.object({
   id: z.string().regex(/^Q\d+$/),
-  name: z.string().min(1),
-  aliases: z.array(z.string().min(1)),
+  name: z.string().min(1).max(200),
+  aliases: z.array(z.string().min(1).max(100)).max(20),
 });
 
 export interface Candidate {

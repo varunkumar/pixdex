@@ -9,7 +9,7 @@ export interface BackfillKnownResult {
   matched: number;
   /** Rescore only: faces sent with knownId null because they no longer match anyone. */
   cleared: number;
-  /** Rows the Worker reports as updated (always 0 in a dry run). */
+  /** Rows the Worker reports as changed (unchanged rows are not written; always 0 in a dry run). */
   written: number;
   perPerson: { id: string; name: string; count: number }[];
   /** Score histogram of matches in 0.05 buckets, keyed by the lower bound with two decimals ("0.55"). */
@@ -48,9 +48,11 @@ export async function backfillKnown(deps: {
   model: string;
   dryRun?: boolean;
   rescore?: boolean;
+  /** Faces per Worker page (the Worker accepts 1 to 100, default 100). Lower it if the embeddings route nears 10 ms CPU. */
+  pageSize?: number;
   onProgress?: (message: string) => void;
 }): Promise<BackfillKnownResult> {
-  const { cloudflareClient, gallery, model, dryRun = false, rescore = false, onProgress } = deps;
+  const { cloudflareClient, gallery, model, dryRun = false, rescore = false, pageSize, onProgress } = deps;
   if (model !== gallery.model) {
     throw new Error(
       `Face model "${model}" does not match the gallery model "${gallery.model}". Rebuild the gallery with build-known-gallery --full using the current sidecar.`
@@ -94,7 +96,7 @@ export async function backfillKnown(deps: {
   let cursor: number | undefined;
   let pages = 0;
   do {
-    const page = await cloudflareClient.faceEmbeddingsPage(model, { cursor, rescore });
+    const page = await cloudflareClient.faceEmbeddingsPage(model, { cursor, rescore, ...(pageSize !== undefined ? { limit: pageSize } : {}) });
     pages++;
     for (const face of page.faces) {
       result.scanned++;
@@ -120,7 +122,7 @@ export async function backfillKnown(deps: {
       if (pending.length >= WRITE_BATCH) await flush();
     }
     onProgress?.(
-      `Page ${pages}: scanned ${result.scanned}, matched ${result.matched}${rescore ? `, cleared ${result.cleared}` : ''}${result.skipped ? `, skipped ${result.skipped}` : ''}${dryRun ? ' (dry run)' : `, written ${result.written}`}`
+      `Page ${pages}: scanned ${result.scanned}, matched ${result.matched}${rescore ? `, cleared ${result.cleared}` : ''}${result.skipped ? `, skipped ${result.skipped}` : ''}${dryRun ? ' (dry run)' : `, changed ${result.written}`}`
     );
 
     const next = page.nextCursor;

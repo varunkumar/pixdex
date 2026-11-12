@@ -68,6 +68,15 @@ describe('backfillKnown', () => {
     expect(r.matched).toBe(250);
   });
 
+  it('passes pageSize to every page as limit', async () => {
+    const s = setup([{ faces: [], nextCursor: 5 }, { faces: [] }]);
+    await backfillKnown({ cloudflareClient: s.cloudflareClient, gallery, model: 'm1', pageSize: 25 });
+    expect(s.faceEmbeddingsPage.mock.calls.map((c) => c[1])).toEqual([
+      { cursor: undefined, rescore: false, limit: 25 },
+      { cursor: 5, rescore: false, limit: 25 },
+    ]);
+  });
+
   it('rescore passes rescore and clears faces that no longer match', async () => {
     const s = setup([{ faces: [face('f1', 0), face('f2', 7)] }]);
     const r = await backfillKnown({ cloudflareClient: s.cloudflareClient, gallery, model: 'm1', rescore: true });

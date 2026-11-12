@@ -32,5 +32,6 @@ export function matchKnown(embedding: Float32Array, gallery: Gallery): { id: str
   if (!best || best.score < KNOWN_THRESHOLD) return null;
   // Small epsilon: float32 rounding must not flip an exact-margin case.
   if (best.score - second < KNOWN_MARGIN - 1e-9) return null;
-  return best;
+  // Two float32 vectors can give a cosine a hair above 1; the Worker rejects a score above 1.
+  return { id: best.id, score: Math.min(1, Math.max(0, best.score)) };
 }

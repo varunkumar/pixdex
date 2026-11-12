@@ -12,9 +12,17 @@ export interface GalleryPerson extends KnownPerson {
   refs: Float32Array[];
 }
 
+/** A listed person who had too few usable references at build time. Remembered so later builds do not re-crawl them. */
+export interface ExcludedPerson {
+  id: string;
+  refs: number;
+}
+
 export interface Gallery {
   model: string;
   people: GalleryPerson[];
+  /** Optional (absent in older files); excluded people are never matched. Same model as `model`. */
+  excluded?: ExcludedPerson[];
 }
 
 export const EMBEDDING_DIM = 512;
@@ -54,6 +62,7 @@ export async function saveGallery(file: string, g: Gallery): Promise<void> {
   const json = {
     model: g.model,
     people: g.people.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases, refs: p.refs.map(encodeEmbedding) })),
+    ...(g.excluded && g.excluded.length > 0 ? { excluded: g.excluded.map((e) => ({ id: e.id, refs: e.refs })) } : {}),
   };
   await fs.writeFile(file, JSON.stringify(json));
 }
@@ -69,9 +78,14 @@ export async function loadGallery(file: string): Promise<Gallery | undefined> {
   const json = JSON.parse(raw) as {
     model: string;
     people: { id: string; name: string; aliases: string[]; refs: string[] }[];
+    excluded?: { id: string; refs: number }[];
   };
+  const excluded = Array.isArray(json.excluded)
+    ? json.excluded.filter((e) => typeof e?.id === 'string' && typeof e.refs === 'number').map((e) => ({ id: e.id, refs: e.refs }))
+    : [];
   return {
     model: json.model,
+    ...(excluded.length > 0 ? { excluded } : {}),
     people: json.people.map((p) => ({
       id: p.id,
       name: p.name,
