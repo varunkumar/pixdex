@@ -111,6 +111,9 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - `GET /people/known` (`worker/src/routes/known.ts`, READ_TOKEN plus `X-Viewer-Email`, not yet in the Pages proxy allowlist) lists known
   personalities with at least one matched face in a photo the viewer can see (`scopeFor`), `photoCount` = distinct visible photos. One
   grouped aggregate over `idx_faces_known_photo` (faces pinned as outer table with CROSS JOIN) plus one `json_each` name lookup.
+- `known=<Q1,Q2>` on `/search`, `/timeline` and `/timeline/buckets` (`worker/src/db/known.ts`: `parseKnown`, `knownFilterSql`) is an AND
+  filter: the photo needs a face matched to every id (with or without a person). It shares the cap of 5 with `people` (people take slots
+  first, extra known ids are silently dropped), ids are bound, and the subquery walks `idx_faces_known_photo`; an unknown id is just zero results.
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.
 
 ## Performance review is mandatory (CPU and DB)

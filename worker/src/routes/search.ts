@@ -5,6 +5,7 @@ import { COMBINED_SCORE_SQL } from '../db/rating';
 import { dateFilterSql, parseDateFilter } from '../db/dateFilter';
 import { userOf } from '../access';
 import { canEditFor, scopeFor } from '../db/visibility';
+import { knownFilterSql, MAX_FILTER_PEOPLE, parseKnown } from '../db/known';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 export async function searchRoute(c: Context<{ Bindings: Env }>) {
@@ -20,7 +21,9 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
         .map((id) => id.trim())
         .filter(Boolean)
     ),
-  ].slice(0, 5);
+  ].slice(0, MAX_FILTER_PEOPLE);
+  // Known personalities share the cap with people: people take their slots first.
+  const known = knownFilterSql(parseKnown(c.req.query('known'), people.length));
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 20, 1), 100);
   const offset = Math.max(Number(c.req.query('offset')) || 0, 0);
 
@@ -54,6 +57,8 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
       from += ` AND photos.id IN (SELECT photo_id FROM faces WHERE person_id IN (${people.map(() => '?').join(',')}) AND assign_status IN ('auto','confirmed') GROUP BY photo_id HAVING COUNT(DISTINCT person_id) = ?)`;
       params.push(...people, people.length);
     }
+    from += known.sql;
+    params.push(...known.params);
 
     // Album pages sort by date (newest first), name (file name) or rating (best first).
     // Otherwise best text match first; newest indexed first among equals and when
@@ -68,7 +73,7 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
             : match
               ? `ORDER BY bm25(photos_fts, 1.0, 4.0), last_indexed DESC`
               : `ORDER BY last_indexed DESC`;
-    const unfiltered = !match && !album && !dates.sql && people.length === 0 && access.sql === '';
+    const unfiltered = !match && !album && !dates.sql && people.length === 0 && !known.sql && access.sql === '';
     const [rows, count] = await Promise.all([
       c.env.DB.prepare(`SELECT photos.* ${from} ${order} LIMIT ? OFFSET ?`)
         .bind(...params, limit, offset)

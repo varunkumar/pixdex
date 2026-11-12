@@ -132,6 +132,31 @@ describe('GET /timeline', () => {
     expect(body.groups.map((g: any) => g.key)).toEqual(['2025-05']);
   });
 
+  it('filters by known person, AND, and combined with people', async () => {
+    const a = await seed({ dt: D('05'), score: 9 });
+    const b = await seed({ dt: D('04'), score: 9 });
+    await seed({ dt: D('03'), score: 9 });
+    const face = (id: string, photo: string, person: string | null, known: string) =>
+      env.DB.prepare(
+        `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, person_id, assign_status, known_id, created_at)
+         VALUES (?,?,0,0,0.1,0.1,0.9,x'00','m',?,?,?,'t')`
+      )
+        .bind(id, photo, person, person ? 'confirmed' : 'unassigned', known)
+        .run();
+    await face('k1', a, null, 'Q1');
+    await face('k2', a, 'per1', 'Q2');
+    await face('k3', b, null, 'Q1');
+    const keys = async (qs: string) => (await get(`/timeline?zoom=month&${qs}`)).body.groups.map((g: any) => g.key);
+    expect(await keys('known=Q1')).toEqual(['2025-05', '2025-04']);
+    expect(await keys('known=Q1,Q2')).toEqual(['2025-05']);
+    expect(await keys('known=Q1&people=per1')).toEqual(['2025-05']);
+    expect(await keys('known=Q9')).toEqual([]);
+    const buckets = (await get('/timeline/buckets?known=Q1,Q2')).body;
+    expect(buckets.buckets).toEqual([{ month: '2025-05', total: 1 }]);
+    const day = (await get('/timeline?zoom=day&known=Q1')).body;
+    expect(day.groups.reduce((n: number, g: any) => n + g.total, 0)).toBe(2);
+  });
+
   it('from/to bound the feed so a jump starts at the chosen month', async () => {
     await seed({ dt: D('05'), score: 9 });
     await seed({ dt: D('03'), score: 9 });

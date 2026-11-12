@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { MATCHABLE_SQL } from '../src/people/matching';
 import { KNOWN_COUNTS_SQL } from '../src/routes/known';
+import { knownFilterSql } from '../src/db/known';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 
 const U = { email: 'owner@example.com' };
@@ -96,6 +97,24 @@ describe('person label resolution', () => {
     expect(p).toMatch(/idx_faces_known_photo/);
     expect(p).not.toMatch(/SCAN faces/);
   });
+  it('the real known filter, combined with people and scope, is an indexed lookup', async () => {
+    const k = knownFilterSql(['Q1', 'Q2']);
+    const s = scopeFor(U, 'photos.album');
+    const p = await plan(
+      `SELECT photos.* FROM photos WHERE 1=1${s.sql} AND photos.id IN (SELECT photo_id FROM faces WHERE person_id IN (?,?) AND assign_status IN ('auto','confirmed') GROUP BY photo_id HAVING COUNT(DISTINCT person_id) = ?)${k.sql} ORDER BY last_indexed DESC LIMIT ? OFFSET ?`,
+      ...s.params,
+      'p1',
+      'p2',
+      2,
+      ...k.params,
+      20,
+      0
+    );
+    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX idx_faces_known_photo \(known_id=\?\)/);
+    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX idx_faces_person_status_created/);
+    expect(p).not.toMatch(/SCAN faces/);
+  });
+
   it('the embeddings page query ranges over faces by rowid', async () => {
     const p = await plan('SELECT rowid, id, embedding FROM faces WHERE embedding_model = ? AND rowid > ? AND rowid <= ? AND (? = 1 OR known_id IS NULL) ORDER BY rowid LIMIT ?', 'm', 0, 5000, 0, 100);
     expect(p).toMatch(/SEARCH faces USING INTEGER PRIMARY KEY \(rowid>\? AND rowid<\?\)/);

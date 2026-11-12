@@ -169,7 +169,7 @@ candidate). It returns 404 if no photo qualifies.
   date, so it can miss this morning's early photos. A follow-up should either
   store the local wall-clock time in the agent or add an owner UTC offset that
   the Worker applies before grouping and filtering.
-- `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces) with query-time
+- `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces; optional `known=<Qid>,<Qid>` known-personality filter, AND, sharing the cap of 5 with `people`, also on `/timeline` and `/timeline/buckets`) with query-time
   synonym expansion; no re-index is needed to change it. Category words
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
   word families (`search/word-families.json`: "hard" nouns/places, "soft"
