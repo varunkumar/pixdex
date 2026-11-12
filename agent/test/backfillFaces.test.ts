@@ -99,4 +99,17 @@ describe('backfillFaces', () => {
     expect(result.notIndexed).toBe(1);
     expect(result.scanned).toBe(0);
   });
+
+  it('passes the gallery and warning callback through to each scan', async () => {
+    const e = new Float32Array(512);
+    e[0] = 1;
+    const sidecar = sidecarWith([{ bbox: [5, 5, 25, 25], detScore: 0.9, embedding: Buffer.from(e.buffer).toString('base64') }]);
+    const cloudflareClient = {
+      facesUnscanned: vi.fn().mockResolvedValue({ items: [{ contentHash: 'hA', path: fileA }], nextCursor: null }),
+      ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }),
+    };
+    const gallery = { model: 'buffalo_l', people: [{ id: 'k1', name: 'A', aliases: [], refs: [e] }] };
+    await backfillFaces({ cloudflareClient: cloudflareClient as any, sidecar: sidecar as any, gallery, onProgress: vi.fn() });
+    expect(cloudflareClient.ingestFaces.mock.calls[0][2][0].known.id).toBe('k1');
+  });
 });

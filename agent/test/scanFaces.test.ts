@@ -166,3 +166,86 @@ describe('scanFaces', () => {
     expect([meta.width, meta.height]).toEqual([meta.width, meta.width]);
   });
 });
+
+describe('scanFaces known matching', () => {
+  let dir: string;
+  let file: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'pixdex-known-'));
+    file = path.join(dir, 'p.jpg');
+    await sharp({ create: { width: 1280, height: 640, channels: 3, background: { r: 1, g: 2, b: 3 } } }).jpeg().toFile(file);
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const unit = (i: number) => {
+    const v = new Float32Array(512);
+    v[i] = 1;
+    return v;
+  };
+  const b64 = (v: Float32Array) => Buffer.from(v.buffer).toString('base64');
+  const gallery = (model = 'buffalo_l') => ({
+    model,
+    people: [
+      { id: 'k1', name: 'A', aliases: [], refs: [unit(0)] },
+      { id: 'k2', name: 'B', aliases: [], refs: [unit(1)] },
+    ],
+  });
+  const detect = (embeddings: string[], model = 'buffalo_l') => ({
+    detect: vi.fn().mockResolvedValue({
+      model,
+      width: 1280,
+      height: 640,
+      faces: embeddings.map((embedding, i) => ({ bbox: [0, 0, 100 + i * 10, 100 + i * 10], detScore: 0.9, embedding })),
+    }),
+  });
+  const client = () => ({ ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }) });
+
+  it('posts known for a face above threshold and none for one below, keeping order', async () => {
+    // Faces sorted by area descending: index 1 (bigger) first.
+    const sidecar = detect([b64(unit(5)), b64(unit(0))]);
+    const cf = client();
+    await scanFaces(file, 'h', { sidecar: sidecar as any, cloudflareClient: cf as any, gallery: gallery() });
+    const faces = cf.ingestFaces.mock.calls[0][2];
+    expect(faces.map((f: any) => f.embedding)).toEqual([b64(unit(0)), b64(unit(5))]);
+    expect(faces[0].known).toEqual({ id: 'k1', score: expect.closeTo(1, 5) });
+    expect('known' in faces[1]).toBe(false);
+  });
+
+  it('posts no known without a gallery', async () => {
+    const cf = client();
+    await scanFaces(file, 'h', { sidecar: detect([b64(unit(0))]) as any, cloudflareClient: cf as any });
+    expect('known' in cf.ingestFaces.mock.calls[0][2][0]).toBe(false);
+  });
+
+  it('skips matching and warns once per gallery on a model mismatch, across photos', async () => {
+    const g = gallery('other_model');
+    const onWarning = vi.fn();
+    const cf = client();
+    for (let i = 0; i < 2; i++) {
+      await scanFaces(file, 'h', {
+        sidecar: detect([b64(unit(0)), b64(unit(1))]) as any,
+        cloudflareClient: cf as any,
+        gallery: g,
+        onWarning,
+      });
+    }
+    expect(onWarning).toHaveBeenCalledTimes(1);
+    for (const call of cf.ingestFaces.mock.calls) expect(call[2].some((f: any) => 'known' in f)).toBe(false);
+  });
+
+  it('skips a face with an undecodable embedding without failing the others', async () => {
+    const nan = new Float32Array(512).fill(NaN);
+    const cf = client();
+    const count = await scanFaces(file, 'h', {
+      sidecar: detect([b64(nan), 'short', b64(unit(0))]) as any,
+      cloudflareClient: cf as any,
+      gallery: gallery(),
+    });
+    expect(count).toBe(3);
+    const faces = cf.ingestFaces.mock.calls[0][2];
+    expect(faces.filter((f: any) => 'known' in f)).toHaveLength(1);
+    expect(faces.find((f: any) => 'known' in f).known.id).toBe('k1');
+  });
+});

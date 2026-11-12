@@ -5,6 +5,7 @@ import { listDriveFolders as defaultListDriveFolders, type DriveFilesClient } fr
 import { indexGoogleDriveFolder as defaultIndexGoogleDriveFolder } from './google/indexGoogleDriveFolder';
 import { CloudflareClient } from './cloudflareClient';
 import { OllamaClient } from './ollama/client';
+import { loadKnownGallery } from './known/loadKnownGallery';
 import { createFaceSidecar } from './faces/sidecarClient';
 import type { AgentConfig } from './config';
 
@@ -51,6 +52,7 @@ export async function runIndexDrive(config: AgentConfig, deps: RunIndexDriveDeps
     ollamaClient: new OllamaClient(config),
     config,
     faceSidecar: createFaceSidecar(config),
+    knownGallery: await loadKnownGallery(),
     onProgress: (message) => console.log(message),
   });
 

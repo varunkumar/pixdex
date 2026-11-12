@@ -61,6 +61,7 @@ never leave local disk or Google Drive.
 - `agent/known/people.json` - curated known-people list (Wikidata ids, sorted by name, one object per line, at least 200
   entries); manage it only through the CLI (`known-search`, `known-add`, `known-check [--offline]`, logic in
   `agent/src/known/list.ts`), never type ids from memory; process in `agent/known/README.md`
+- Known matching: `scanFaces` matches each kept face's embedding against the local gallery (`agent/.index-state/known-gallery.json`, loaded once per command by `src/known/loadKnownGallery.ts` and passed down as `gallery` / `knownGallery`; missing or corrupt means no matching, the corrupt case warns once) and posts `known: {id, score}` only for a confident match. A gallery built with a different face model than the detection warns once per run and posts no `known`; a face with an undecodable embedding is skipped. Cost is about 3.3 ms per face on the agent machine (405 people x 10 refs), local only.
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
 - `docs/` - internal docs, plus `superpowers/` plans and specs and `screenshots/`
   (README images made from dummy data: gradient placeholders, no real photos or people)

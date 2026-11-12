@@ -11,6 +11,7 @@ import { runServeOriginals } from './originalsCli';
 import { backfillRatings } from './backfillRatings';
 import { backfillExif } from './backfillExif';
 import { backfillFaces } from './backfillFaces';
+import { loadKnownGallery } from './known/loadKnownGallery';
 import { createFaceSidecar } from './faces/sidecarClient';
 import fs from 'node:fs/promises';
 import { buildGallery } from './known/buildGallery';
@@ -228,6 +229,7 @@ export async function runCli(argv: string[]): Promise<number> {
       const result = await backfillFaces({
         cloudflareClient: new CloudflareClient(config),
         sidecar,
+        gallery: await loadKnownGallery(),
         // A trailing separator keeps "Processed" from also matching "Processed 2".
         pathPrefix: faceFolder ? path.join(path.resolve(faceFolder), path.sep) : undefined,
         missingCrops,
@@ -278,6 +280,7 @@ export async function runCli(argv: string[]): Promise<number> {
       ollamaClient,
       config,
       faceSidecar: createFaceSidecar(config),
+      knownGallery: await loadKnownGallery(),
       onProgress: (message) => console.log(message),
     });
 

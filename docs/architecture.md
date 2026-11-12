@@ -228,7 +228,7 @@ candidate). It returns 404 if no photo qualifies.
 Flow: after the Ollama analysis, the agent posts the image to the local sidecar
 (`FACE_SIDECAR_URL`, `POST /faces`) and sends the faces (normalised bbox,
 `det_score`, 512-d L2-normalised embedding, model name) to `/ingest/faces`.
-A sidecar failure is logged and never fails the photo. `backfill-faces` does the
+A sidecar failure is logged and never fails the photo. Known matching: `scanFaces` matches each kept face's embedding against the local gallery (`agent/.index-state/known-gallery.json`, loaded once per command by `src/known/loadKnownGallery.ts` and passed down as `gallery` / `knownGallery`; missing or corrupt means no matching, the corrupt case warns once) and posts `known: {id, score}` only for a confident match. A gallery built with a different face model than the detection warns once per run and posts no `known`; a face with an undecodable embedding is skipped. Cost is about 3.3 ms per face on the agent machine (405 people x 10 refs), local only. `backfill-faces` does the
 same for already indexed photos and is resumable via `photos.faces_scanned_model`. It is driven by the
 index: `POST /ingest/faces/unscanned` pages (by rowid) through local photos not yet scanned with the
 sidecar's model and returns each one's content hash and source path (optionally limited by a path prefix),

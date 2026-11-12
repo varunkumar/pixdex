@@ -283,6 +283,8 @@ best rated or alphabetical.
 from `agent/` with `known-search "<name>"`, `known-add --id <Q...> [--name <n>] [--alias <a>]...`
 and `known-check [--offline]` (exits 1 on issues). The full process is in `agent/known/README.md`.
 
+When `agent/.index-state/known-gallery.json` exists, `index-local`, `index-drive`, `index-batch` and `backfill-faces` match each detected face against it and send the match with the face; without the file nothing changes.
+
 ## AI Search
 
 The `/ai-search` page turns a phrase such as "photos for a Diwali greeting" into

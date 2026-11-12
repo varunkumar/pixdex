@@ -11,6 +11,8 @@ export interface FacePayload {
   bbox: { x: number; y: number; w: number; h: number };
   detScore: number;
   embedding: string;
+  /** A confident match against the local known-personalities gallery; omitted when there is none. */
+  known?: { id: string; score: number };
 }
 
 export interface IngestPhotoPayload {

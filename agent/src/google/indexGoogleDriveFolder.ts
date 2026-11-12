@@ -8,6 +8,7 @@ import { processFile } from '../processFile';
 import type { OllamaClient } from '../ollama/client';
 import type { CloudflareClient } from '../cloudflareClient';
 import type { AgentConfig } from '../config';
+import type { Gallery } from '../known/gallery';
 import type { FaceSidecarClient } from '../faces/sidecarClient';
 
 export interface IndexGoogleDriveFolderResult {
@@ -22,6 +23,7 @@ export interface IndexGoogleDriveFolderDeps {
   ollamaClient: OllamaClient;
   config: AgentConfig;
   faceSidecar?: FaceSidecarClient;
+  knownGallery?: Gallery;
   onProgress?: (message: string) => void;
   tempDir?: string;
 }
@@ -42,7 +44,7 @@ export async function indexGoogleDriveFolder(
   folderName: string,
   deps: IndexGoogleDriveFolderDeps
 ): Promise<IndexGoogleDriveFolderResult> {
-  const { cloudflareClient, ollamaClient, config, faceSidecar, onProgress, tempDir = tmpdir() } = deps;
+  const { cloudflareClient, ollamaClient, config, faceSidecar, knownGallery, onProgress, tempDir = tmpdir() } = deps;
 
   const images = await listImagesInDriveFolder(driveClient, folderId);
 
@@ -77,7 +79,7 @@ export async function indexGoogleDriveFolder(
           filename: image.name,
           album: folderName,
         },
-        { cloudflareClient, ollamaClient, config, faceSidecar }
+        { cloudflareClient, ollamaClient, config, faceSidecar, knownGallery }
       );
       indexed++;
       reportProgress(onProgress, `Indexed: ${image.name}`);

@@ -8,6 +8,7 @@ import type { OllamaClient } from './ollama/client';
 import { CloudflareClient, type IngestPhotoPayload } from './cloudflareClient';
 import type { AgentConfig } from './config';
 import { scanFaces } from './faces/scanFaces';
+import type { Gallery } from './known/gallery';
 import type { FaceSidecarClient } from './faces/sidecarClient';
 
 export interface ProcessFileInput {
@@ -26,6 +27,7 @@ export interface ProcessFileDeps {
   config: AgentConfig;
   /** Face scanning runs after ingest when set; a failure never fails the photo. */
   faceSidecar?: FaceSidecarClient;
+  knownGallery?: Gallery;
 }
 
 export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps): Promise<void> {
@@ -81,7 +83,12 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
 
   if (deps.faceSidecar) {
     try {
-      await scanFaces(input.localPath, input.contentHash, { sidecar: deps.faceSidecar, cloudflareClient });
+      await scanFaces(input.localPath, input.contentHash, {
+        sidecar: deps.faceSidecar,
+        cloudflareClient,
+        gallery: deps.knownGallery,
+        onWarning: (message) => console.warn(message),
+      });
     } catch (error) {
       // The photo is already indexed; `backfill-faces` will pick this one up.
       console.warn(
