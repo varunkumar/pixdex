@@ -5,6 +5,9 @@ const indexLocalFolderMock = vi.fn();
 const runIndexDriveMock = vi.fn();
 const runServeOriginalsMock = vi.fn();
 const backfillFacesMock = vi.fn();
+const buildGalleryMock = vi.fn();
+const loadGalleryMock = vi.fn();
+const saveGalleryMock = vi.fn();
 
 vi.mock('../src/config', () => ({ loadConfig: loadConfigMock }));
 vi.mock('../src/indexLocalFolder', () => ({ indexLocalFolder: indexLocalFolderMock }));
@@ -15,6 +18,13 @@ vi.mock('../src/backfillFaces', () => ({ backfillFaces: backfillFacesMock }));
 vi.mock('../src/faces/sidecarClient', () => ({
   FaceSidecarClient: vi.fn(),
   createFaceSidecar: (config: { FACE_SIDECAR_URL?: string }) => (config.FACE_SIDECAR_URL ? {} : undefined),
+}));
+vi.mock('../src/known/buildGallery', () => ({ buildGallery: buildGalleryMock }));
+vi.mock('../src/known/wikimedia', () => ({ WikimediaClient: vi.fn() }));
+vi.mock('../src/known/gallery', () => ({
+  GALLERY_PATH: '/tmp/known-gallery.json',
+  loadGallery: loadGalleryMock,
+  saveGallery: saveGalleryMock,
 }));
 vi.mock('../src/originalsCli', () => ({ runServeOriginals: runServeOriginalsMock }));
 
@@ -112,5 +122,62 @@ describe('runCli', () => {
     expect(await runCli(['backfill-faces', '/tmp/photos'])).toBe(1);
     expect(backfillFacesMock).not.toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+
+  describe('build-known-gallery', () => {
+    const upsertMock = vi.fn();
+    const gallery = { model: 'm1', people: [{ id: 'Q1', name: 'A', aliases: ['x'], refs: [new Float32Array(512)] }] };
+
+    beforeEach(async () => {
+      const { CloudflareClient } = await import('../src/cloudflareClient');
+      vi.mocked(CloudflareClient).mockImplementation(function () {
+        return { upsertKnownPeople: upsertMock };
+      } as never);
+      upsertMock.mockReset().mockResolvedValue(1);
+      loadGalleryMock.mockReset().mockResolvedValue(undefined);
+      saveGalleryMock.mockReset().mockResolvedValue(undefined);
+      buildGalleryMock.mockReset().mockResolvedValue({
+        gallery,
+        report: {
+          included: [{ id: 'Q1', name: 'A', refs: 4 }],
+          excluded: [{ id: 'Q2', name: 'B', refs: 1 }],
+          averageRefs: 4,
+        },
+      });
+      loadConfigMock.mockReturnValue({
+        CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev',
+        INGEST_TOKEN: 'secret-token',
+        FACE_SIDECAR_URL: 'http://127.0.0.1:8799',
+      });
+    });
+
+    it('saves the gallery, upserts only included people and prints the report', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(saveGalleryMock).toHaveBeenCalledWith('/tmp/known-gallery.json', gallery);
+      expect(upsertMock).toHaveBeenCalledWith([{ id: 'Q1', name: 'A', aliases: ['x'] }]);
+      const out = log.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(out).toContain('4');
+      expect(out).toContain('Q2');
+      log.mockRestore();
+    });
+
+    it('passes existing gallery and --rebuild ids; --full ignores the existing gallery', async () => {
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      loadGalleryMock.mockResolvedValue(gallery);
+      await runCli(['build-known-gallery', '--rebuild', 'Q1', 'Q9']);
+      expect(buildGalleryMock.mock.calls[0][0]).toMatchObject({ existing: gallery, rebuild: ['Q1', 'Q9'] });
+      await runCli(['build-known-gallery', '--full']);
+      expect(buildGalleryMock.mock.calls[1][0].existing).toBeUndefined();
+    });
+
+    it('exits 1 when FACE_SIDECAR_URL is not set', async () => {
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      loadConfigMock.mockReturnValue({ CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev', INGEST_TOKEN: 't' });
+      expect(await runCli(['build-known-gallery'])).toBe(1);
+      expect(err).toHaveBeenCalledWith('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
+      expect(buildGalleryMock).not.toHaveBeenCalled();
+      err.mockRestore();
+    });
   });
 });

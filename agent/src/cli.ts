@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { loadConfig } from './config';
 import { CloudflareClient } from './cloudflareClient';
@@ -10,7 +11,63 @@ import { backfillRatings } from './backfillRatings';
 import { backfillExif } from './backfillExif';
 import { backfillFaces } from './backfillFaces';
 import { createFaceSidecar } from './faces/sidecarClient';
+import fs from 'node:fs/promises';
+import { buildGallery } from './known/buildGallery';
+import { GALLERY_PATH, loadGallery, saveGallery, type KnownPerson } from './known/gallery';
+import { WikimediaClient } from './known/wikimedia';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
+
+const PEOPLE_PATH = fileURLToPath(new URL('../known/people.json', import.meta.url));
+
+async function runBuildKnownGallery(args: string[]): Promise<number> {
+  try {
+    const full = args.includes('--full');
+    const rebuild: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] !== '--rebuild') continue;
+      while (i + 1 < args.length && !args[i + 1].startsWith('--')) rebuild.push(args[++i]);
+    }
+    const config = loadConfig();
+    const sidecar = createFaceSidecar(config);
+    if (!sidecar) {
+      console.error('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
+      return 1;
+    }
+    const people = JSON.parse(await fs.readFile(PEOPLE_PATH, 'utf8')) as KnownPerson[];
+    const existing = full ? undefined : await loadGallery(GALLERY_PATH);
+    const { gallery, report } = await buildGallery({
+      people,
+      existing,
+      rebuild,
+      wikimedia: new WikimediaClient(),
+      sidecar,
+      download: async (url) => {
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'face-gallery-builder/0.1' },
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!response.ok) throw new Error(`download failed: ${response.status}`);
+        return Buffer.from(await response.arrayBuffer());
+      },
+      onProgress: (message) => console.log(message),
+    });
+    await saveGallery(GALLERY_PATH, gallery);
+    const upserted = await new CloudflareClient(config).upsertKnownPeople(
+      gallery.people.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases }))
+    );
+    console.log(
+      `Gallery saved: ${report.included.length} people included, ${report.excluded.length} excluded, average refs per person ${report.averageRefs.toFixed(1)}, upserted ${upserted}`
+    );
+    if (report.excluded.length > 0) {
+      console.log('Excluded (fewer than 3 usable openly licensed photos):');
+      for (const p of report.excluded) console.log(`  ${p.id} ${p.name} (${p.refs})`);
+    }
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
 
 export async function runCli(argv: string[]): Promise<number> {
   const [command, folder] = argv;
@@ -21,6 +78,10 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command === 'index-batch') {
     return runIndexBatch(loadConfig(), argv.slice(1));
+  }
+
+  if (command === 'build-known-gallery') {
+    return runBuildKnownGallery(argv.slice(1));
   }
 
   if (command === 'index-status') {
@@ -105,7 +166,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--full]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }
