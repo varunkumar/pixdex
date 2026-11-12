@@ -4,6 +4,7 @@ import { guardedWrites } from './access';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
 import { ingestFacesRoute, pendingFacesRoute, putFaceCropRoute, unscannedFacesRoute } from './routes/ingest-faces';
 import { ingestExifRoute } from './routes/ingest-exif';
+import { upsertKnownPeopleRoute } from './routes/ingest-known';
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { ingestRelocateRoute } from './routes/ingest-relocate';
@@ -55,6 +56,7 @@ app.post('/ingest/faces/unscanned', unscannedFacesRoute);
 app.post('/ingest/faces', ingestFacesRoute);
 app.put('/ingest/faces/:faceId/crop', putFaceCropRoute);
 app.post('/ingest/rating', ingestRatingRoute);
+app.post('/ingest/known-people', upsertKnownPeopleRoute);
 app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);
 
 app.use('/thumbnails/*', requireReadToken);
