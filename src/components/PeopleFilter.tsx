@@ -29,6 +29,10 @@ interface Props {
   onChange: (next: { people: string[]; known: string[] }) => void;
 }
 
+// The dropdown is a typeahead over a short list, so one letter already filters (as the old substring filter did);
+// the 3 character minimum of matchesQuery is for the omnibox chips, not for this box.
+const MIN_QUERY = 1;
+
 const isKnown = (value: string) => value.startsWith('k:');
 
 /**
@@ -37,12 +41,12 @@ const isKnown = (value: string) => value.startsWith('k:');
  * real person. Matching is local (no request per keystroke) and only a picked option, never typing, filters.
  */
 const PeopleFilter = ({ people, known, onChange }: Props) => {
-  const { data: own = [] } = useQuery({
+  const { data: own = [], isSuccess: ownLoaded } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
     staleTime: FIVE_MINUTES,
   });
-  const { data: knownList = [] } = useQuery({
+  const { data: knownList = [], isSuccess: knownLoaded } = useQuery({
     queryKey: ['known-people'],
     queryFn: () => workerApiClient.getKnownPeople(),
     staleTime: FIVE_MINUTES,
@@ -62,7 +66,7 @@ const PeopleFilter = ({ people, known, onChange }: Props) => {
   ];
 
   const filter: OptionsFilter = ({ options, search }) => {
-    const matches = (o: ComboboxItem) => matchesQuery(search, [o.label, ...(aliases.get(o.value) ?? [])]);
+    const matches = (o: ComboboxItem) => matchesQuery(search, [o.label, ...(aliases.get(o.value) ?? [])], MIN_QUERY);
     const out: ComboboxParsedItem[] = [];
     for (const item of options) {
       if ('group' in item) {
@@ -80,11 +84,15 @@ const PeopleFilter = ({ people, known, onChange }: Props) => {
     ...known.filter((id) => knownIds.has(id)).map((id) => `k:${id}`),
   ];
 
+  // The two lists load separately. While one has not loaded (or failed) its ids are not shown in `value`, so they
+  // are carried through from the props unchanged instead of being dropped from the URL.
+  const carriedPeople = ownLoaded ? [] : people;
+  const carriedKnown = knownLoaded ? [] : known;
   const change = (values: string[]) => {
-    const next = values.slice(0, MAX_PEOPLE_FILTER);
+    const next = values.slice(0, Math.max(0, MAX_PEOPLE_FILTER - carriedPeople.length - carriedKnown.length));
     onChange({
-      people: next.filter((v) => !isKnown(v)).map((v) => v.slice(2)),
-      known: next.filter(isKnown).map((v) => v.slice(2)),
+      people: [...carriedPeople, ...next.filter((v) => !isKnown(v)).map((v) => v.slice(2))],
+      known: [...carriedKnown, ...next.filter(isKnown).map((v) => v.slice(2))],
     });
   };
 

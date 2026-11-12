@@ -71,6 +71,44 @@ describe('PeopleFilter', () => {
     expect(headings).toEqual(['Your people', 'Known personalities in your photos']);
   });
 
+  it('finds own people from the first letters typed (no 3 character minimum)', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([own('m1', 'Mani'), own('z1', 'Zed')]);
+    vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue([known('ms', 'MS Dhoni'), known('ar', 'A. R. Rahman')]);
+    renderWithProviders(<PeopleFilter people={[]} known={[]} onChange={vi.fn()} />);
+    await typeInPeople('ma');
+    expect(await screen.findByRole('option', { name: /Mani/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Zed/ })).not.toBeInTheDocument();
+    await typeInPeople('m');
+    expect(await screen.findByRole('option', { name: /Mani/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Zed/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Rahman/ })).not.toBeInTheDocument();
+  });
+
+  it('a punctuation-only query matches nothing', async () => {
+    renderWithProviders(<PeopleFilter people={[]} known={[]} onChange={vi.fn()} />);
+    await typeInPeople('.');
+    await waitFor(() => expect(screen.queryAllByRole('option')).toHaveLength(0));
+  });
+
+  it('keeps the ids of a list that has not loaded yet when picking from the other', async () => {
+    vi.mocked(workerApiClient.getKnownPeople).mockReturnValue(new Promise(() => {}));
+    const onChange = vi.fn();
+    renderWithProviders(<PeopleFilter people={['a1']} known={['Q1']} onChange={onChange} />);
+    await typeInPeople('dho');
+    fireEvent.click(await screen.findByRole('option', { name: /Dhoni/ }));
+    expect(onChange).toHaveBeenCalledWith({ people: ['a1', 'b2'], known: ['Q1'] });
+  });
+
+  it('keeps own ids when the own list failed to load', async () => {
+    vi.mocked(workerApiClient.getPeople).mockRejectedValue(new Error('boom'));
+    const onChange = vi.fn();
+    renderWithProviders(<PeopleFilter people={['a1']} known={[]} onChange={onChange} />);
+    await typeInPeople('dho');
+    fireEvent.click(await screen.findByRole('option', { name: /MS Dhoni/ }));
+    expect(onChange).toHaveBeenCalledWith({ people: ['a1'], known: ['ms'] });
+  });
+
   it('refuses a sixth selection', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([own('a1', 'Asha')]);
     vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue(

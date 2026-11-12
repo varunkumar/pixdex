@@ -287,9 +287,11 @@ and `known-check [--offline]` (exits 1 on issues). The full process is in `agent
 
 When `agent/.index-state/known-gallery.json` exists, `index-local`, `index-drive`, `index-batch` and `backfill-faces` match each detected face against it and send the match with the face; without the file nothing changes. Matches are suggestions ("looks like"), never a claim of identity, and never name or assign a face.
 
-Commands (from `agent/`): `known-search`, `known-add`, `known-check [--offline]`, `build-known-gallery [--rebuild <id>]`
-(writes `agent/.index-state/known-gallery.json`, never committed) and `backfill-known [--dry-run] [--rescore]` (matches already
-indexed faces from their stored embeddings). Thresholds `KNOWN_THRESHOLD` 0.5 and `KNOWN_MARGIN` 0.05 in
+Commands (from `agent/`): `known-search`, `known-add`, `known-check [--offline]`, `build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]`
+(incremental; writes `agent/.index-state/known-gallery.json`, never committed; people with too few photos are remembered and skipped
+unless `--rebuild <id>` or `--retry-excluded`; `--full` starts over) and `backfill-known [--dry-run] [--rescore] [--page-size <n>]` (matches
+already indexed faces from their stored embeddings; `--rescore` after a threshold change, a removed person or a `--rebuild`). A rescan on a
+machine without the gallery file resets known matches on rescanned faces; run `backfill-known` to restore them. Thresholds `KNOWN_THRESHOLD` 0.5 and `KNOWN_MARGIN` 0.05 in
 `agent/src/known/matcher.ts` are initial guesses to tune from the `--dry-run` output. People with fewer than 3 usable photos are left
 out of the gallery, so fewer than the 405 listed will be recognized (the first build reports how many).
 

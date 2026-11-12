@@ -100,10 +100,14 @@ to own your local albums.
 2. On the owner's machine, from `agent/`: `known-check`, then `build-known-gallery` (reports how many people reach the gallery, at least
    3 openly licensed photos each), then `backfill-known --dry-run` (writes nothing; counts, per-person top 20, score histogram, sample
    face ids). Tune `KNOWN_THRESHOLD` (0.5) and `KNOWN_MARGIN` (0.05) in `agent/src/known/matcher.ts` from that output, then run
-   `backfill-known`. Use `--rescore` only after a threshold change (about 8K row writes on a library this size, since non-matching
-   faces are cleared with a write each).
+   `backfill-known`. Use `--rescore` after a threshold change, after removing a person from `people.json`, or after `--rebuild` of one
+   (the Worker only writes rows that change, so a rescore costs reads of all faces but writes only the changed ones). If the embeddings
+   route nears 10 ms CPU, lower the page size with `--page-size <n>` (1 to 100). `build-known-gallery` is incremental and remembers people
+   with too few photos (`--retry-excluded` or `--rebuild <id>` retries them, `--full` starts over). Note: a rescan (`index-*`,
+   `backfill-faces --recrop`) on a machine without the gallery file resets known matches on the rescanned unassigned and auto faces; run
+   `backfill-known` to restore them.
 3. Measure (all of this is unmeasured locally): start `cd worker && npx wrangler tail pixdex-worker --format json` before step 2 and
-   watch `cpuTime` on `POST /ingest/faces/embeddings` (BLOB decode; lower the page `limit`, at most 100, if it nears 10 ms) and
+   watch `cpuTime` on `POST /ingest/faces/embeddings` (BLOB decode; lower the page `limit`, at most 100, with `backfill-known --page-size <n>` if it nears 10 ms) and
    `POST /ingest/faces/known`; time the whole backfill (estimate 1 to 3 minutes for about 5K photos); afterwards run
    `cd worker && npx wrangler d1 insights pixdex --timePeriod 1d --sort-type sum --sort-by reads --limit 12 --json` and check
    `GET /people/known` (its reads scale with the global count of known-matched faces) and the `known=` filter queries.

@@ -53,7 +53,8 @@ existing capability stays.
   126, Mohanlal 54, Ganguly 25, Kohli 17, Rohit 4, Shah Rukh Khan 2 in direct files). Reaching the average needs
   subcategory crawling, and some famous names will fall short. Wikidata ids and aliases are needed because several
   people are filed under longer names.
-- Sources and licences are recorded per person in the committed list. InsightFace weights stay non-commercial,
+- Licences are enforced at build time (only open licences are used) and only embeddings are stored, so no per-person source
+  or licence list is kept. InsightFace weights stay non-commercial,
   personal use.
 
 ### Matching (agent)

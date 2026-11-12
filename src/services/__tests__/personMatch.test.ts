@@ -40,5 +40,8 @@ describe('matchesQuery', () => {
   it('never matches everything for punctuation-only or too-short queries', () => {
     for (const q of ['.', '..', '-', "'", 'ms', 'a b']) expect(matchesQuery(q, ['MS Dhoni'])).toBe(false);
     expect(matchesQuery('ms', ['MS Dhoni'], 2)).toBe(true);
+    expect(matchesQuery('.', ['MS Dhoni'], 1)).toBe(false);
+    expect(matchesQuery(' - ', ['MS Dhoni'], 1)).toBe(false);
+    expect(matchesQuery('m', ['MS Dhoni'], 1)).toBe(true);
   });
 });
