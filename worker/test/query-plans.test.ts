@@ -95,4 +95,9 @@ describe('person label resolution', () => {
     expect(p).toMatch(/idx_faces_known_photo/);
     expect(p).not.toMatch(/SCAN faces/);
   });
+  it('the embeddings page query ranges over faces by rowid', async () => {
+    const p = await plan('SELECT rowid, id, embedding FROM faces WHERE embedding_model = ? AND rowid > ? AND (? = 1 OR known_id IS NULL) ORDER BY rowid LIMIT ?', 'm', 0, 0, 100);
+    expect(p).toMatch(/SEARCH faces USING INTEGER PRIMARY KEY \(rowid>\?\)/);
+    expect(p).not.toMatch(/SCAN faces|TEMP B-TREE/);
+  });
 });

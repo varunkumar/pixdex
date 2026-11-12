@@ -62,3 +62,122 @@ describe('POST /ingest/known-people', () => {
     expect(res.status).toBe(401);
   });
 });
+
+const fid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
+async function seedFace(n: number, model = 'arcface', knownId: string | null = null, fill = n) {
+  await env.DB.prepare(
+    `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, known_id, created_at)
+     VALUES (?, 'photo-e', 0.1, 0.1, 0.2, 0.2, 0.9, ?, ?, ?, '2026-01-01')`
+  )
+    .bind(fid(n), new Uint8Array(2048).fill(fill), model, knownId)
+    .run();
+}
+
+const page = (body: unknown) =>
+  SELF.fetch('https://example.com/ingest/faces/embeddings', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.INGEST_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+const setKnown = (body: unknown, token: string = env.INGEST_TOKEN) =>
+  SELF.fetch('https://example.com/ingest/faces/known', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+describe('POST /ingest/faces/embeddings', () => {
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM faces').run();
+    await env.DB.prepare('DELETE FROM known_people').run();
+  });
+
+  it('returns id plus raw embedding bytes per face, with no cursor on the last page', async () => {
+    for (const n of [1, 2, 3]) await seedFace(n);
+    const res = await page({ model: 'arcface' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
+    expect(res.headers.get('X-Next-Cursor')).toBeNull();
+    const buf = new Uint8Array(await res.arrayBuffer());
+    expect(buf.length).toBe(3 * (36 + 2048));
+    for (const [i, n] of [1, 2, 3].entries()) {
+      const off = i * 2084;
+      expect(new TextDecoder().decode(buf.subarray(off, off + 36))).toBe(fid(n));
+      expect(buf.subarray(off + 36, off + 2084)).toEqual(new Uint8Array(2048).fill(n));
+    }
+  });
+
+  it('excludes other models and skips known faces unless rescore', async () => {
+    await seedFace(1);
+    await seedFace(2, 'other');
+    await env.DB.prepare("INSERT INTO known_people (id, name, aliases, created_at) VALUES ('Q1','A','[]','x')").run();
+    await seedFace(3, 'arcface', 'Q1');
+    const ids = async (body: unknown) => {
+      const buf = new Uint8Array(await (await page(body)).arrayBuffer());
+      return Array.from({ length: buf.length / 2084 }, (_, i) => new TextDecoder().decode(buf.subarray(i * 2084, i * 2084 + 36)));
+    };
+    expect(await ids({ model: 'arcface' })).toEqual([fid(1)]);
+    expect(await ids({ model: 'arcface', rescore: true })).toEqual([fid(1), fid(3)]);
+  });
+
+  it('pages by rowid cursor and sets X-Next-Cursor on a full page', async () => {
+    for (const n of [1, 2, 3]) await seedFace(n);
+    const first = await page({ model: 'arcface', limit: 2 });
+    const cursor = first.headers.get('X-Next-Cursor');
+    expect(cursor).not.toBeNull();
+    expect((await first.arrayBuffer()).byteLength).toBe(2 * 2084);
+    const second = await page({ model: 'arcface', limit: 2, cursor: Number(cursor) });
+    expect((await second.arrayBuffer()).byteLength).toBe(2084);
+    expect(second.headers.get('X-Next-Cursor')).toBeNull();
+  });
+
+  it('rejects bad limits and invalid JSON, and requires the ingest token', async () => {
+    expect((await page({ model: 'arcface', limit: 101 })).status).toBe(400);
+    expect((await page({ model: 'arcface', limit: 0 })).status).toBe(400);
+    expect((await page({})).status).toBe(400);
+    const bad = await SELF.fetch('https://example.com/ingest/faces/embeddings', { method: 'POST', headers: { Authorization: `Bearer ${env.INGEST_TOKEN}` }, body: '{' });
+    expect(bad.status).toBe(400);
+    const res = await SELF.fetch('https://example.com/ingest/faces/embeddings', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.READ_TOKEN}` },
+      body: JSON.stringify({ model: 'arcface' }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /ingest/faces/known', () => {
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM faces').run();
+    await env.DB.prepare('DELETE FROM known_people').run();
+    await env.DB.prepare("INSERT INTO known_people (id, name, aliases, created_at) VALUES ('Q1','A','[]','x')").run();
+    for (const n of [1, 2]) await seedFace(n);
+  });
+  const row = (n: number) => env.DB.prepare('SELECT known_id, known_score FROM faces WHERE id = ?').bind(fid(n)).first();
+
+  it('sets matches and clears with null', async () => {
+    const res = await setKnown({ matches: [{ faceId: fid(1), knownId: 'Q1', score: 0.8 }, { faceId: fid(2), knownId: 'Q1' }] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ updated: 2 });
+    expect(await row(1)).toEqual({ known_id: 'Q1', known_score: 0.8 });
+    expect(await row(2)).toEqual({ known_id: 'Q1', known_score: null });
+    await setKnown({ matches: [{ faceId: fid(1), knownId: null }] });
+    expect(await row(1)).toEqual({ known_id: null, known_score: null });
+  });
+
+  it('returns 400 and changes nothing when a knownId does not exist', async () => {
+    const res = await setKnown({ matches: [{ faceId: fid(1), knownId: 'Q1', score: 0.9 }, { faceId: fid(2), knownId: 'Q999' }] });
+    expect(res.status).toBe(400);
+    expect(await row(1)).toEqual({ known_id: null, known_score: null });
+  });
+
+  it('rejects 0 and 201 matches and the wrong token', async () => {
+    const m = (n: number) => Array.from({ length: n }, () => ({ faceId: fid(1), knownId: null }));
+    expect((await setKnown({ matches: m(201) })).status).toBe(400);
+    expect((await setKnown({ matches: [] })).status).toBe(400);
+    expect((await setKnown({ matches: m(200) })).status).toBe(200);
+    expect((await setKnown({ matches: m(1) }, env.READ_TOKEN)).status).toBe(401);
+  });
+});
