@@ -1,4 +1,4 @@
-import { Button, Card, Chip, Group, Loader, MultiSelect, Select, Stack, Text, TextInput } from '@mantine/core';
+import { Button, Card, Chip, Group, Loader, Select, Stack, Text, TextInput } from '@mantine/core';
 import { DatePickerInput, type DatesRangeValue } from '@mantine/dates';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -8,7 +8,8 @@ import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient
 import { onThisDayToday, parseDateQuery, quickRange } from '../services/dateQuery';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
-import { personOptions } from '../services/peopleKeys';
+import { parsePeopleSelection } from '../services/peopleSelection';
+import PeopleFilter from './PeopleFilter';
 
 const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string }[] = [
   { value: 'relevance', label: 'Best match' },
@@ -37,11 +38,12 @@ const Search = () => {
   const rawQ = params.get('q') ?? '';
   const q = rawQ.trim();
   const album = params.get('album') ?? '';
-  const people = (params.get('people') ?? '').split(',').filter(Boolean).slice(0, 5);
+  const { people, known } = parsePeopleSelection(params.get('people'), params.get('known'));
   const from = params.get('from') ?? '';
   const to = params.get('to') ?? '';
   const onThisDay = params.get('onThisDay') ?? '';
   const peopleKey = people.join(',');
+  const knownKey = known.join(',');
   const sort = (SORT_OPTIONS.find((o) => o.value === params.get('sort'))?.value ?? 'relevance') as PhotoSort | 'relevance';
   const [text, setText] = useState(rawQ);
   const [syncedQ, setSyncedQ] = useState(rawQ);
@@ -57,22 +59,17 @@ const Search = () => {
     queryFn: () => workerApiClient.getAlbums(),
   });
 
-  const { data: namedPeople = [] } = useQuery({
-    queryKey: ['people'],
-    queryFn: () => workerApiClient.getPeople(),
-  });
-  const peopleOptions = personOptions(namedPeople);
-
   // No term, album or person means nothing to look for: show a prompt, not the whole library.
-  const hasCriteria = q !== '' || album !== '' || people.length > 0 || from !== '' || to !== '' || onThisDay !== '';
+  const hasCriteria = q !== '' || album !== '' || people.length > 0 || known.length > 0 || from !== '' || to !== '' || onThisDay !== '';
 
   const { data, isFetching, error, isPlaceholderData } = useQuery({
-    queryKey: ['search', q, album, peopleKey, from, to, onThisDay, page, size, sort],
+    queryKey: ['search', q, album, peopleKey, knownKey, from, to, onThisDay, page, size, sort],
     queryFn: () =>
       workerApiClient.searchPage({
         q,
         album,
         ...(people.length > 0 && { people }),
+        ...(known.length > 0 && { known }),
         ...(from && { from }),
         ...(to && { to }),
         ...(onThisDay && { onThisDay }),
@@ -131,19 +128,13 @@ const Search = () => {
             clearable
             searchable
           />
-          {peopleOptions.length > 0 && (
-            <MultiSelect
-              label="People"
-              placeholder={people.length === 0 ? 'Anyone' : undefined}
-              data={peopleOptions}
-              value={people.filter((id) => peopleOptions.some((o) => o.value === id))}
-              onChange={(ids) => update({ people: ids.join(',') }, { resetPage: true })}
-              maxValues={5}
-              clearable
-              searchable
-              hidePickedOptions
-            />
-          )}
+          <PeopleFilter
+            people={people}
+            known={known}
+            onChange={(next) =>
+              update({ people: next.people.join(','), known: next.known.join(',') }, { resetPage: true })
+            }
+          />
           <Select
             label="Sort by"
             aria-label="Sort results"

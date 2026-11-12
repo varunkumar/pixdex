@@ -1,12 +1,18 @@
 import type { AgentConfig } from './config';
 import type { CameraExif } from './exif';
 
+import type { KnownPerson } from './known/gallery';
+
 const CHECK_HASHES_BATCH_SIZE = 500;
+const EMBEDDING_ID_BYTES = 36;
+const EMBEDDING_BYTES = 2048;
 
 export interface FacePayload {
   bbox: { x: number; y: number; w: number; h: number };
   detScore: number;
   embedding: string;
+  /** A confident match against the local known-personalities gallery; omitted when there is none. */
+  known?: { id: string; score: number };
 }
 
 export interface IngestPhotoPayload {
@@ -148,6 +154,101 @@ export class CloudflareClient {
     if (!response.ok) {
       throw new Error(`ingest/faces/crop failed: ${response.status}`);
     }
+  }
+
+  /** Upserts the known-people list (at most 500 per call on the Worker); returns the count upserted. */
+  async upsertKnownPeople(people: KnownPerson[]): Promise<number> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-people`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ people }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/known-people failed: ${response.status}`);
+    }
+    return ((await response.json()) as { upserted: number }).upserted;
+  }
+
+  /** Backs up the known gallery file's bytes as one R2 object (the Worker never parses it). */
+  async putKnownGallery(bytes: Buffer | Uint8Array): Promise<void> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-gallery`, {
+      method: 'PUT',
+      headers: this.authHeaders('application/json'),
+      body: bytes,
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/known-gallery put failed: ${response.status}`);
+    }
+  }
+
+  /** Whether the R2 backup exists and its size (one R2 head on the Worker, no body). */
+  async knownGalleryStatus(): Promise<{ exists: boolean; size: number | null }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-gallery/status`, {
+      headers: { Authorization: `Bearer ${this.config.INGEST_TOKEN}` },
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/known-gallery status failed: ${response.status}`);
+    }
+    return (await response.json()) as { exists: boolean; size: number | null };
+  }
+
+  /** The backed-up known gallery bytes, or undefined when none is stored (404). */
+  async getKnownGallery(): Promise<Buffer | undefined> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/known-gallery`, {
+      headers: { Authorization: `Bearer ${this.config.INGEST_TOKEN}` },
+    });
+    if (response.status === 404) return undefined;
+    if (!response.ok) {
+      throw new Error(`ingest/known-gallery get failed: ${response.status}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  /**
+   * One page of stored face embeddings (binary: per face 36 ASCII id bytes then 2048 float32 bytes).
+   * Follow nextCursor (the X-Next-Cursor header), never the body length: an empty page can carry a cursor.
+   */
+  async faceEmbeddingsPage(
+    model: string,
+    opts: { cursor?: number; rescore?: boolean; limit?: number } = {}
+  ): Promise<{ faces: { id: string; embedding: Float32Array }[]; nextCursor?: number }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces/embeddings`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ model, ...opts }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/faces/embeddings failed: ${response.status}`);
+    }
+    const header = response.headers.get('X-Next-Cursor');
+    const nextCursor = header === null ? undefined : Number(header);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const record = EMBEDDING_ID_BYTES + EMBEDDING_BYTES;
+    if (bytes.byteLength % record !== 0) {
+      throw new Error(`ingest/faces/embeddings returned ${bytes.byteLength} bytes, not a multiple of ${record}`);
+    }
+    const decoder = new TextDecoder('ascii');
+    const faces: { id: string; embedding: Float32Array }[] = [];
+    for (let off = 0; off < bytes.byteLength; off += record) {
+      const id = decoder.decode(bytes.subarray(off, off + EMBEDDING_ID_BYTES));
+      // Copy: the slice offset is not 4-byte aligned for a Float32Array view.
+      const embedding = new Float32Array(bytes.slice(off + EMBEDDING_ID_BYTES, off + record).buffer);
+      faces.push({ id, embedding });
+    }
+    return { faces, nextCursor };
+  }
+
+  /** Sets (or clears, with knownId null) known matches on up to 200 faces; returns the rows updated. */
+  async setFaceKnown(matches: { faceId: string; knownId: string | null; score?: number }[]): Promise<number> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/faces/known`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ matches }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/faces/known failed: ${response.status}`);
+    }
+    return ((await response.json()) as { updated: number }).updated;
   }
 
   async ingestPhoto(payload: IngestPhotoPayload): Promise<void> {

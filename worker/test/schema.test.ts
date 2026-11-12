@@ -84,3 +84,29 @@ describe('people schema', () => {
     expect(cols.results.map((c) => c.name)).toContain('faces_scanned_model');
   });
 });
+
+describe('known people schema', () => {
+  it('known_people has the expected columns', async () => {
+    const r = await env.DB.prepare('PRAGMA table_info(known_people)').all<{ name: string; notnull: number; dflt_value: string | null; pk: number }>();
+    const cols = Object.fromEntries(r.results.map((c) => [c.name, c]));
+    expect(Object.keys(cols).sort()).toEqual(['aliases', 'created_at', 'id', 'name']);
+    expect(cols.id.pk).toBe(1);
+    expect(cols.name.notnull).toBe(1);
+    expect(cols.aliases.notnull).toBe(1);
+    expect(cols.aliases.dflt_value).toBe("'[]'");
+    expect(cols.created_at.notnull).toBe(1);
+  });
+
+  it('faces has nullable known_id and known_score, null by default', async () => {
+    const r = await env.DB.prepare('PRAGMA table_info(faces)').all<{ name: string; notnull: number }>();
+    const cols = Object.fromEntries(r.results.map((c) => [c.name, c]));
+    expect(cols.known_id.notnull).toBe(0);
+    expect(cols.known_score.notnull).toBe(0);
+    await env.DB.prepare(
+      `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, created_at)
+       VALUES ('kf-1', 'photo-k', 0.1, 0.2, 0.3, 0.4, 0.99, x'00', 'arcface', '2026-11-12T00:00:00.000Z')`
+    ).run();
+    const row = await env.DB.prepare("SELECT known_id, known_score FROM faces WHERE id = 'kf-1'").first();
+    expect(row).toEqual({ known_id: null, known_score: null });
+  });
+});

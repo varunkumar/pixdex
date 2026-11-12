@@ -4,6 +4,7 @@ import { COMBINED_SCORE_SQL } from '../db/rating';
 import { dateFilterSql, parseDateFilter } from '../db/dateFilter';
 import { userOf } from '../access';
 import { canEditFor, scopeFor, type Scope } from '../db/visibility';
+import { knownFilterSql, MAX_FILTER_PEOPLE, parseKnown } from '../db/known';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 // Highlight rule for the zoomed-out views: a photo is shown when its combined
@@ -26,7 +27,7 @@ const DATED = `(photos.date_time IS NOT NULL AND photos.date_time GLOB '[0-9][0-
 const pastPrefix = (key: string) => key.slice(0, -1) + String.fromCharCode(key.charCodeAt(key.length - 1) + 1);
 
 // Shared album/people filters, same shape as /search. All values are bound.
-function scopeSql(album: string | undefined, people: string[], access: Scope) {
+function scopeSql(album: string | undefined, people: string[], known: string[], access: Scope) {
   let sql = '';
   const params: unknown[] = [];
   if (album) {
@@ -37,6 +38,9 @@ function scopeSql(album: string | undefined, people: string[], access: Scope) {
     sql += ` AND photos.id IN (SELECT photo_id FROM faces WHERE person_id IN (${people.map(() => '?').join(',')}) AND assign_status IN ('auto','confirmed') GROUP BY photo_id HAVING COUNT(DISTINCT person_id) = ?)`;
     params.push(...people, people.length);
   }
+  const k = knownFilterSql(known);
+  sql += k.sql;
+  params.push(...k.params);
   sql += access.sql;
   params.push(...access.params);
   return { sql, params };
@@ -50,7 +54,13 @@ function parsePeople(raw: string | undefined): string[] {
         .map((id) => id.trim())
         .filter(Boolean)
     ),
-  ].slice(0, 5);
+  ].slice(0, MAX_FILTER_PEOPLE);
+}
+
+// People take their cap slots first, then known ids fill what is left.
+function filtersOf(c: Context<{ Bindings: Env }>, access: Scope) {
+  const people = parsePeople(c.req.query('people'));
+  return scopeSql(c.req.query('album'), people, parseKnown(c.req.query('known'), people.length), access);
 }
 
 export async function timelineRoute(c: Context<{ Bindings: Env }>) {
@@ -72,7 +82,7 @@ export async function timelineRoute(c: Context<{ Bindings: Env }>) {
 
   const user = userOf(c);
   const access = scopeFor(user, 'photos.album');
-  const scope = scopeSql(c.req.query('album'), parsePeople(c.req.query('people')), access);
+  const scope = filtersOf(c, access);
   const dates = dateFilterSql(parsedDates.filter);
 
   const keyExpr =
@@ -165,7 +175,7 @@ export async function timelineRoute(c: Context<{ Bindings: Env }>) {
 
 export async function bucketsRoute(c: Context<{ Bindings: Env }>) {
   const access = scopeFor(userOf(c), 'photos.album');
-  const scope = scopeSql(c.req.query('album'), parsePeople(c.req.query('people')), access);
+  const scope = filtersOf(c, access);
   const rows = await c.env.DB.prepare(
     `SELECT CASE WHEN ${DATED} THEN substr(photos.date_time, 1, 7) ELSE NULL END AS month, COUNT(*) AS total
      FROM photos WHERE 1=1${scope.sql} GROUP BY month ORDER BY month DESC`

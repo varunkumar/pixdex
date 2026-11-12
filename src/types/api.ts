@@ -144,6 +144,14 @@ export interface PersonSummary {
   cover: SerializedFace | null;
 }
 
+/** A known personality (global reference data) matched in at least one photo the caller can see. */
+export interface KnownPersonSummary {
+  id: string;
+  name: string;
+  aliases: string[];
+  photoCount: number;
+}
+
 export interface FaceGroup {
   faces: SerializedFace[];
 }

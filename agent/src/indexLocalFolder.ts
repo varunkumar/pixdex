@@ -5,6 +5,7 @@ import { processFile } from './processFile';
 import type { OllamaClient } from './ollama/client';
 import type { CloudflareClient } from './cloudflareClient';
 import type { AgentConfig } from './config';
+import type { Gallery } from './known/gallery';
 import type { FaceSidecarClient } from './faces/sidecarClient';
 
 export interface IndexLocalFolderResult {
@@ -19,6 +20,7 @@ export interface IndexLocalFolderDeps {
   ollamaClient: OllamaClient;
   config: AgentConfig;
   faceSidecar?: FaceSidecarClient;
+  knownGallery?: Gallery;
   onProgress?: (message: string) => void;
   /** Structured per-file outcome, for callers that track progress durably. */
   onFile?: (event: IndexFileEvent) => void;
@@ -47,7 +49,7 @@ export async function indexLocalFolder(
   folder: string,
   deps: IndexLocalFolderDeps
 ): Promise<IndexLocalFolderResult> {
-  const { cloudflareClient, ollamaClient, config, faceSidecar, onProgress, onFile } = deps;
+  const { cloudflareClient, ollamaClient, config, faceSidecar, knownGallery, onProgress, onFile } = deps;
 
   const allFiles = await scanDirectory(folder);
   const imageFiles = allFiles.filter(isImageFile);
@@ -105,7 +107,7 @@ export async function indexLocalFolder(
           filename: path.basename(file),
           album: albumFromPath(file),
         },
-        { cloudflareClient, ollamaClient, config, faceSidecar }
+        { cloudflareClient, ollamaClient, config, faceSidecar, knownGallery }
       );
       indexed++;
       onProgress?.(`Indexed: ${file}`);

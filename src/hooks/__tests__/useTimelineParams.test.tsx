@@ -64,4 +64,18 @@ describe('useTimelineParams', () => {
     act(() => result.current.jumpTo(month));
     expect(result.current.to).toBe(expected);
   });
+
+  it('reads known, deduped and capped so people plus known is at most 5', () => {
+    const { result } = renderHook(() => useTimelineParams(), {
+      wrapper: wrapperAt('/timeline?people=a,b,c&known=k1,k1,k2,k3'),
+    });
+    expect(result.current.people).toEqual(['a', 'b', 'c']);
+    expect(result.current.known).toEqual(['k1', 'k2']);
+  });
+
+  it('setFilters writes known', () => {
+    const { result } = renderHook(() => useTimelineParams(), { wrapper: wrapperAt('/timeline') });
+    act(() => result.current.setFilters({ people: ['a1'], known: ['ms'] }));
+    expect(result.current).toMatchObject({ people: ['a1'], known: ['ms'] });
+  });
 });

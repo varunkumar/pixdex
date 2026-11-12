@@ -212,6 +212,16 @@ WHEN new.viewer_email <> lower(new.viewer_email)
 BEGIN SELECT RAISE(ABORT, 'emails on person_labels must be lowercase'); END;`,
   `CREATE TRIGGER IF NOT EXISTS persons_labels_ad AFTER DELETE ON persons
 BEGIN DELETE FROM person_labels WHERE person_id = old.id; END;`,
+  // Mirrors 0018_known_people.sql.
+  `CREATE TABLE IF NOT EXISTS known_people (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  aliases TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);`,
+  'ALTER TABLE faces ADD COLUMN known_id TEXT;',
+  'ALTER TABLE faces ADD COLUMN known_score REAL;',
+  'CREATE INDEX IF NOT EXISTS idx_faces_known_photo ON faces (known_id, photo_id) WHERE known_id IS NOT NULL;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

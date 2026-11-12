@@ -1,6 +1,8 @@
 import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { MATCHABLE_SQL } from '../src/people/matching';
+import { KNOWN_COUNTS_SQL } from '../src/routes/known';
+import { knownFilterSql } from '../src/db/known';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 
 const U = { email: 'owner@example.com' };
@@ -89,5 +91,43 @@ describe('person label resolution', () => {
   it('the clash check uses the per-viewer name index', async () => {
     const p = await plan('SELECT 1 AS x FROM person_labels WHERE viewer_email = ? AND lower(name) = lower(?) AND person_id != ?', U.email, 'x', '');
     expect(p).toMatch(/idx_person_labels_viewer_name_lower/);
+  });
+  it('the known-person photo filter uses the partial index', async () => {
+    const p = await plan('SELECT photo_id FROM faces WHERE known_id IN (?,?) GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?', 'Q1', 'Q2', 2);
+    expect(p).toMatch(/idx_faces_known_photo/);
+    expect(p).not.toMatch(/SCAN faces/);
+  });
+  it('the real known filter, combined with people and scope, is an indexed lookup', async () => {
+    const k = knownFilterSql(['Q1', 'Q2']);
+    const s = scopeFor(U, 'photos.album');
+    const p = await plan(
+      `SELECT photos.* FROM photos WHERE 1=1${s.sql} AND photos.id IN (SELECT photo_id FROM faces WHERE person_id IN (?,?) AND assign_status IN ('auto','confirmed') GROUP BY photo_id HAVING COUNT(DISTINCT person_id) = ?)${k.sql} ORDER BY last_indexed DESC LIMIT ? OFFSET ?`,
+      ...s.params,
+      'p1',
+      'p2',
+      2,
+      ...k.params,
+      20,
+      0
+    );
+    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX idx_faces_known_photo \(known_id=\?\)/);
+    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX idx_faces_person_status_created/);
+    expect(p).not.toMatch(/SCAN faces/);
+  });
+
+  it('the embeddings page query ranges over faces by rowid', async () => {
+    const p = await plan('SELECT rowid, id, embedding FROM faces WHERE embedding_model = ? AND rowid > ? AND rowid <= ? AND (? = 1 OR known_id IS NULL) ORDER BY rowid LIMIT ?', 'm', 0, 5000, 0, 100);
+    expect(p).toMatch(/SEARCH faces USING INTEGER PRIMARY KEY \(rowid>\? AND rowid<\?\)/);
+    expect(await plan('SELECT max(rowid) AS m FROM faces')).not.toMatch(/SCAN faces/);
+    expect(p).not.toMatch(/SCAN faces|TEMP B-TREE/);
+  });
+
+  it('known-people list walks idx_faces_known_photo with a photos primary-key lookup', async () => {
+    const s = scopeFor(U, 'p.album');
+    const k = await plan(`${KNOWN_COUNTS_SQL}${s.sql} GROUP BY f.known_id`, ...s.params);
+    expect(k).toMatch(/SEARCH f USING COVERING INDEX idx_faces_known_photo \(known_id>\?\)/);
+    expect(k).toMatch(/SEARCH p USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
+    const n = await plan('SELECT k.id, k.name, k.aliases FROM json_each(?) j JOIN known_people k ON k.id = j.value', '[]');
+    expect(n).toMatch(/SEARCH k USING INDEX sqlite_autoindex_known_people_1 \(id=\?\)/);
   });
 });

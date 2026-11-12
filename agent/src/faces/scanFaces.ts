@@ -1,5 +1,7 @@
 import sharp from 'sharp';
 import type { CloudflareClient, FacePayload } from '../cloudflareClient';
+import { decodeEmbedding, type Gallery } from '../known/gallery';
+import { matchKnown } from '../known/matcher';
 import type { FaceSidecarClient } from './sidecarClient';
 
 const MAX_SIDE = 1280;
@@ -89,16 +91,36 @@ export function uprightBoxToRaw(box: Box, orientation: number | undefined): Box 
   return { x, y, w: Math.max(ax, bx) - x, h: Math.max(ay, by) - y };
 }
 
+/** Galleries already warned about, so a model mismatch warns once per run (one gallery is loaded per command). */
+const warnedGalleries = new WeakSet<Gallery>();
+
 /** Detects faces and stores them on the Worker; returns the face count. */
 export async function scanFaces(
   filePath: string,
   contentHash: string,
-  deps: { sidecar: FaceSidecarClient; cloudflareClient: CloudflareClient }
+  deps: {
+    sidecar: FaceSidecarClient;
+    cloudflareClient: CloudflareClient;
+    /** Known-personalities gallery; absent means no known matching. */
+    gallery?: Gallery;
+    onWarning?: (message: string) => void;
+  }
 ): Promise<number> {
-  const { sidecar, cloudflareClient } = deps;
+  const { sidecar, cloudflareClient, onWarning } = deps;
+  let { gallery } = deps;
   const detection = await sidecar.detect(await prepareFaceImage(filePath));
   const { width, height } = detection;
   const { orientation } = await sharp(filePath).metadata();
+
+  if (gallery && gallery.model !== detection.model) {
+    if (!warnedGalleries.has(gallery)) {
+      warnedGalleries.add(gallery);
+      onWarning?.(
+        `Known gallery was built with model "${gallery.model}" but faces use "${detection.model}"; skipping known matching (rebuild it with build-known-gallery --full)`
+      );
+    }
+    gallery = undefined;
+  }
 
   const all = detection.faces.map((face) => {
     const x1 = clamp01(face.bbox[0] / width);
@@ -117,7 +139,10 @@ export async function scanFaces(
     .sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)
     .slice(0, MAX_FACES_PER_PHOTO);
 
-  const faces: FacePayload[] = largest.map(({ upright: _upright, ...face }) => face);
+  const faces: FacePayload[] = largest.map(({ upright: _upright, ...face }) => {
+    const known = gallery ? matchFace(face.embedding, gallery) : null;
+    return known ? { ...face, known } : face;
+  });
 
   // An empty list is posted on purpose: it marks the photo as scanned with this model.
   const stored = await cloudflareClient.ingestFaces(contentHash, detection.model, faces);
@@ -142,4 +167,13 @@ export async function scanFaces(
     }
   }
   return faces.length;
+}
+
+/** A bad embedding (wrong length, non-finite, zero norm) never matches and never fails the scan. */
+function matchFace(embedding: string, gallery: Gallery): { id: string; score: number } | null {
+  try {
+    return matchKnown(decodeEmbedding(embedding), gallery);
+  } catch {
+    return null;
+  }
 }

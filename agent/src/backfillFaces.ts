@@ -1,6 +1,7 @@
 import { access } from 'node:fs/promises';
 import { PhotoNotIndexedError, scanFaces } from './faces/scanFaces';
 import type { CloudflareClient } from './cloudflareClient';
+import type { Gallery } from './known/gallery';
 import type { FaceSidecarClient } from './faces/sidecarClient';
 
 export interface BackfillFacesResult {
@@ -22,12 +23,14 @@ export interface BackfillFacesResult {
 export async function backfillFaces(deps: {
   cloudflareClient: CloudflareClient;
   sidecar: FaceSidecarClient;
+  /** Known-personalities gallery, loaded once by the CLI; absent means no known matching. */
+  gallery?: Gallery;
   pathPrefix?: string;
   /** Also re-scan photos that have a face without a sharp crop (faces scanned before crops existed). */
   missingCrops?: boolean;
   onProgress?: (message: string) => void;
 }): Promise<BackfillFacesResult> {
-  const { cloudflareClient, sidecar, pathPrefix, missingCrops, onProgress } = deps;
+  const { cloudflareClient, sidecar, gallery, pathPrefix, missingCrops, onProgress } = deps;
   const result: BackfillFacesResult = { total: 0, scanned: 0, faces: 0, missing: 0, notIndexed: 0, failed: 0 };
   const model = await sidecar.model();
 
@@ -43,7 +46,7 @@ export async function backfillFaces(deps: {
         continue;
       }
       try {
-        const count = await scanFaces(file, contentHash, { sidecar, cloudflareClient });
+        const count = await scanFaces(file, contentHash, { sidecar, cloudflareClient, gallery, onWarning: onProgress });
         result.scanned++;
         result.faces += count;
         onProgress?.(`Scanned (${count} faces): ${file}`);

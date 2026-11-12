@@ -10,6 +10,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     searchPage: vi.fn(),
     getAlbums: vi.fn(),
     getPeople: vi.fn(),
+    getKnownPeople: vi.fn(),
     thumbnailUrl: vi.fn((p: { thumbnailUrl?: string }) => `/api${p.thumbnailUrl}`),
   },
 }));
@@ -19,11 +20,20 @@ vi.mock('../../services/originals', () => ({ getOriginalUrl: vi.fn(() => null) }
 const page = (n: number) =>
   Array.from({ length: n }, (_, i) => makePhoto({ id: `p${i}`, description: `Photo number ${i}.` }));
 
+async function typeInPeople(text: string) {
+  const input = (await screen.findAllByLabelText('People'))[0];
+  fireEvent.click(input);
+  fireEvent.change(input, { target: { value: text } });
+}
+
 describe('Search', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(workerApiClient.getAlbums).mockResolvedValue(['Kanha', 'Kaziranga']);
     vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: page(10), total: 56 });
+    vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue([
+      { id: 'ms', name: 'MS Dhoni', aliases: ['Mahendra Singh Dhoni'], photoCount: 4 },
+    ]);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'a1', name: 'Asha', faceCount: 3, photoCount: 3, canEdit: true, cover: null },
       { id: 'b2', name: 'Ravi', faceCount: 2, photoCount: 2, canEdit: true, cover: null },
@@ -142,8 +152,9 @@ describe('Search', () => {
     await waitFor(() => expect(router.state.location.search).toBe('?q=lion'));
   });
 
-  it('hides the control when nobody is named', async () => {
+  it('hides the control when nobody is named and no known person is present', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([]);
+    vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue([]);
     renderWithProviders(<Search />, { route: '/search?q=lion' });
     await screen.findByLabelText('Select photo album');
     expect(screen.queryByText('People')).not.toBeInTheDocument();
@@ -252,5 +263,35 @@ describe('Search', () => {
       fireEvent.click(await screen.findByLabelText('Clear dates'));
       await waitFor(() => expect(router.state.location.search).toBe('?q=lion'));
     });
+  });
+
+  it('still shows the People box when only known people exist', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([]);
+    renderWithProviders(<Search />, { route: '/search?q=lion' });
+    expect((await screen.findAllByLabelText('People'))[0]).toBeInTheDocument();
+  });
+
+  it('picking a known person puts known in the URL, resets the page and sends known', async () => {
+    const { router } = renderWithRouter([{ path: '/search', element: <Search /> }], ['/search?q=lion&page=2']);
+    await typeInPeople('dho');
+    fireEvent.click(await screen.findByRole('option', { name: /MS Dhoni/ }));
+    await waitFor(() => expect(router.state.location.search).toBe('?q=lion&known=ms'));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ known: ['ms'] }))
+    );
+  });
+
+  it('a known-only URL searches without a term', async () => {
+    renderWithProviders(<Search />, { route: '/search?known=ms' });
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ known: ['ms'] }))
+    );
+    expect(await screen.findByText('MS Dhoni')).toBeInTheDocument();
+  });
+
+  it('an old people-only URL does not send known', async () => {
+    renderWithProviders(<Search />, { route: '/search?people=a1' });
+    await waitFor(() => expect(workerApiClient.searchPage).toHaveBeenCalled());
+    expect(vi.mocked(workerApiClient.searchPage).mock.calls[0][0]).not.toHaveProperty('known');
   });
 });

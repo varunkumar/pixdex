@@ -98,7 +98,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `me`) plus `originals/:id`, which goes
+`people/groups`, `people/known`, `me`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
 `no-cache`. The only writes the browser can make are `PUT albums/cover`,
@@ -169,7 +169,7 @@ candidate). It returns 404 if no photo qualifies.
   date, so it can miss this morning's early photos. A follow-up should either
   store the local wall-clock time in the agent or add an owner UTC offset that
   the Worker applies before grouping and filtering.
-- `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces) with query-time
+- `routes/search.ts` + `search/synonyms.ts` - FTS5 search (optional `people=<id>,<id>` "together" filter, max 5, all must appear via auto/confirmed faces; optional `known=<Qid>,<Qid>` known-personality filter, AND, sharing the cap of 5 with `people`, also on `/timeline` and `/timeline/buckets`) with query-time
   synonym expansion; no re-index is needed to change it. Category words
   (`search/wildlife-synonyms.json`, e.g. "big cat" -> leopard, tiger) and
   word families (`search/word-families.json`: "hard" nouns/places, "soft"
@@ -228,7 +228,7 @@ candidate). It returns 404 if no photo qualifies.
 Flow: after the Ollama analysis, the agent posts the image to the local sidecar
 (`FACE_SIDECAR_URL`, `POST /faces`) and sends the faces (normalised bbox,
 `det_score`, 512-d L2-normalised embedding, model name) to `/ingest/faces`.
-A sidecar failure is logged and never fails the photo. `backfill-faces` does the
+A sidecar failure is logged and never fails the photo. Known matching: `scanFaces` matches each kept face's embedding against the local gallery (`agent/.index-state/known-gallery.json`, loaded once per command by `src/known/loadKnownGallery.ts` and passed down as `gallery` / `knownGallery`; missing or corrupt means no matching, the corrupt case warns once) and posts `known: {id, score}` only for a confident match. A gallery built with a different face model than the detection warns once per run and posts no `known`; a face with an undecodable embedding is skipped. Cost is about 3.3 ms per face on the agent machine (405 people x 10 refs), local only. `backfill-faces` does the
 same for already indexed photos and is resumable via `photos.faces_scanned_model`. It is driven by the
 index: `POST /ingest/faces/unscanned` pages (by rowid) through local photos not yet scanned with the
 sidecar's model and returns each one's content hash and source path (optionally limited by a path prefix),
@@ -295,6 +295,24 @@ invocation):
   these limits were tightened. Real Worker CPU has not been measured: before
   relying on these constants, measure on a deployed preview (`wrangler tail` or
   the dashboard) and tune them. This is a to-do for the owner at merge.
+
+### Known personalities (phase 1)
+
+Data: migration `0018_known_people.sql` adds `known_people` (Wikidata id, name, aliases JSON), `faces.known_id`, `faces.known_score`
+and the partial index `idx_faces_known_photo (known_id, photo_id) WHERE known_id IS NOT NULL`. All additive.
+
+Flow: the agent builds a local gallery of reference embeddings from openly licensed Commons photos
+(`build-known-gallery`, `agent/.index-state/known-gallery.json`, uncommitted) and syncs the people list to the Worker
+(`POST /ingest/known-people`). Matching is cosine similarity on the agent only (threshold 0.5, margin 0.05 over the runner-up, both
+initial guesses); the Worker never loops over embeddings. The gallery is matched only on the agent; its backup is one R2 object `known/gallery.json` written and read only by the agent through `PUT`/`GET /ingest/known-gallery` (ingest token, not in the Pages proxy allowlist). The Worker streams the bytes to and from R2 (64 MB cap, no parsing, no D1, no matching). `build-known-gallery` restores it when the local file is missing and pushes after a changed build or when `GET /ingest/known-gallery/status` (one R2 head) reports no backup. Performance: one R2 put per build that changed the gallery (about 11 MB for 405 people x 10 refs), one R2 get on a restore, one R2 head per unchanged build, zero D1 queries, and the Worker does no JSON work (the body is streamed through, never parsed); these are Class A (put) and Class B (get) R2 operations, a handful per month. New faces carry `known: {id, score}` (nullable) on `POST /ingest/faces`.
+Existing faces are matched by `backfill-known`, which pages stored embeddings (`POST /ingest/faces/embeddings`, raw bytes, keyset by
+rowid, `limit` at most 100 within a 5000-rowid window) and writes matches back in batches of up to 200 (`POST /ingest/faces/known`,
+`knownId: null` clears). A match is a "looks like" suggestion: it never sets `person_id` or `assign_status`.
+
+Read side: `GET /people/known` lists known people with a matched face in a photo the viewer can see; `known=<Qid>,...` on `/search`,
+`/timeline` and `/timeline/buckets` is an AND filter sharing the cap of 5 with `people` (people first, extras silently dropped). The
+People filter on Search and Timeline shows "Your people" (blue) and "Known personalities in your photos" (violet, with a "known"
+marker). Cost and measurement notes: `AGENTS.md` (performance review) and `docs/development.md`.
 
 Known limits: matching ignores `faces.embedding_model`. After a face model
 change, faces must be re-scanned and re-confirmed (phase A does not mix models).

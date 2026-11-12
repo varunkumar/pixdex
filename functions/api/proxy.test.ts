@@ -115,6 +115,74 @@ describe('Pages Function identity', () => {
     expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
   });
 
+  describe('known personalities', () => {
+    it('forwards GET people/known with the verified email, READ_TOKEN and the query string', async () => {
+      const res = await get('/api/people/known?limit=5', ' Friend@Example.com');
+      expect(res.status).toBe(200);
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe('https://worker.example.dev/people/known?limit=5');
+      const h = new Headers(init.headers);
+      expect(h.get('x-viewer-email')).toBe('friend@example.com');
+      expect(h.get('authorization')).toBe('Bearer secret-token');
+    });
+
+    it('forwards known= on search and timeline', async () => {
+      await get('/api/search?q=a&known=1', 'friend@example.com');
+      await get('/api/timeline?known=1', 'friend@example.com');
+      expect(upstreamCalls().map(([u]) => String(u))).toEqual([
+        'https://worker.example.dev/search?q=a&known=1',
+        'https://worker.example.dev/timeline?known=1',
+      ]);
+    });
+
+    it('refuses GET people/known without a valid Access JWT', async () => {
+      const res = await get('/api/people/known', null);
+      expect(res.status).toBe(401);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+
+    it.each(['/api/ingest/known-people', '/api/ingest/faces/known', '/api/ingest/faces/embeddings'])(
+      'does not proxy %s',
+      async (path) => {
+        const got = await get(path, 'friend@example.com');
+        expect(got.status).toBe(404);
+        const post = await onRequestPost({
+          request: new Request(`https://pixdex.example.dev${path}`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
+            },
+            body: '{}',
+          }),
+          env,
+        });
+        expect([404, 405]).toContain(post.status);
+        expect(upstreamCalls()).toHaveLength(0);
+      },
+    );
+  });
+
+  describe('known gallery backup', () => {
+    it.each(['/api/ingest/known-gallery', '/api/ingest/known-gallery/status'])('does not proxy GET or PUT %s', async (path) => {
+      const got = await get(path, 'friend@example.com');
+      expect(got.status).toBe(404);
+      const put = await onRequestPut({
+        request: new Request(`https://pixdex.example.dev${path}`, {
+          method: 'PUT',
+          headers: {
+            'content-type': 'application/json',
+            'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
+          },
+          body: '{}',
+        }),
+        env,
+      });
+      expect(put.status).toBe(404);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+  });
+
   describe('originals', () => {
     it('returns 404 when the access check is 404, without calling the tunnel', async () => {
       accessStatus = 404;

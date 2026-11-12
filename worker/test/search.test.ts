@@ -324,6 +324,95 @@ describe('GET /search people filter', () => {
   });
 });
 
+describe('GET /search known filter', () => {
+  async function face(id: string, photoId: string, personId: string | null, status: string, knownId: string | null) {
+    await env.DB.prepare(
+      `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, person_id, assign_status, known_id, created_at)
+       VALUES (?,?,0,0,0.1,0.1,0.9,x'00','m',?,?,?,'t')`
+    )
+      .bind(id, photoId, personId, status, knownId)
+      .run();
+  }
+
+  async function get(qs: string): Promise<{ results: { id: string }[]; total: number }> {
+    const response = await SELF.fetch(`https://example.com/search?${qs}`, { headers: readHeaders() });
+    return (await response.json()) as any;
+  }
+  const ids = async (qs: string) => (await get(qs)).results.map((r) => r.id).sort();
+
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM photos').run();
+    await env.DB.prepare('DELETE FROM faces').run();
+    await env.DB.prepare('DELETE FROM persons').run();
+    await env.DB.prepare("INSERT INTO persons (id, name, created_at) VALUES ('p1','Asha','t'), ('p2','Ravi','t')").run();
+    await seed('both', 'h-both', ['leopard'], 'leopard forest', 'Kanha');
+    await seed('only-q1', 'h-q1', ['leopard'], 'leopard forest', 'Kaziranga');
+    await seed('only-q2', 'h-q2', ['elephant'], 'elephant grassland', 'Kanha');
+    await seed('none', 'h-none', ['elephant'], 'elephant grassland', 'Kanha');
+    await face('f1', 'both', null, 'unassigned', 'Q1');
+    await face('f2', 'both', 'p1', 'confirmed', 'Q2');
+    await face('f3', 'only-q1', 'p1', 'confirmed', 'Q1');
+    await face('f4', 'only-q2', null, 'unassigned', 'Q2');
+  });
+
+  it('known=Q1 returns photos with that match, with or without a person', async () => {
+    expect(await ids('known=Q1')).toEqual(['both', 'only-q1']);
+  });
+
+  it('several known ids are AND', async () => {
+    expect(await ids('known=Q1,Q2')).toEqual(['both']);
+  });
+
+  it('known combines with people as AND across both', async () => {
+    expect(await ids('known=Q2&people=p1')).toEqual(['both']);
+    expect(await ids('known=Q1&people=p1')).toEqual(['both', 'only-q1']);
+    expect(await ids('known=Q2&people=p2')).toEqual([]);
+  });
+
+  it('people fill the cap first: known ids beyond 5 minus the people count are dropped', async () => {
+    await face('f5', 'both', null, 'unassigned', 'Q3');
+    await face('f6', 'both', null, 'unassigned', 'Q4');
+    // One person leaves room for four known ids; the fifth (Q5, matches nothing) is dropped.
+    expect(await ids('people=p1&known=Q1,Q2,Q3,Q4,Q5')).toEqual(['both']);
+    // Without people all five count, so the unmatched Q5 empties the result.
+    expect(await ids('known=Q1,Q2,Q3,Q4,Q5')).toEqual([]);
+    // Five people leave no room: known is ignored entirely.
+    expect(await ids('people=p1,p1,x1,x2,x3&known=Q9')).toEqual([]);
+    expect(await ids('people=p1&known=Q9,Q9,Q9')).toEqual([]);
+  });
+
+  it('an unknown id returns zero results with 200', async () => {
+    const response = await SELF.fetch('https://example.com/search?known=Q999', { headers: readHeaders() });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as any;
+    expect(body.results).toEqual([]);
+    expect(body.total).toBe(0);
+  });
+
+  it('duplicate ids behave as one', async () => {
+    expect(await ids('known=Q1,Q1')).toEqual(['both', 'only-q1']);
+    expect((await get('known=Q1,Q1')).total).toBe(2);
+  });
+
+  it('an empty known param is ignored', async () => {
+    expect((await get('known=')).total).toBe(4);
+  });
+
+  it('never returns a photo in an invisible album', async () => {
+    await env.DB.prepare("INSERT INTO photos (id, content_hash, source, filename, subjects, album, colors, patterns, model_provider, model_name, search_text, search_primary, last_indexed) VALUES ('hid','h-hid','local','hid.jpg','[]','Other','[]','[]','o','m','x','','2026-09-18T00:00:00.000Z')").run();
+    await env.DB.prepare("UPDATE albums SET owner_email = 'someone@else.com' WHERE name = 'Other'").run();
+    await face('f9', 'hid', null, 'unassigned', 'Q1');
+    expect(await ids('known=Q1')).toEqual(['both', 'only-q1']);
+  });
+
+  it('total reflects the filter and combines with q and album', async () => {
+    expect((await get('known=Q1&limit=1')).total).toBe(2);
+    expect((await get('known=Q1,Q2')).total).toBe(1);
+    expect(await ids('known=Q1&album=Kaziranga')).toEqual(['only-q1']);
+    expect(await ids('known=Q2&q=elephant')).toEqual(['only-q2']);
+  });
+});
+
 describe('GET /search date filters', () => {
   async function seedDated(id: string, dateTime: string | null, album: string) {
     await env.DB.prepare(

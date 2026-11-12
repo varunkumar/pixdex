@@ -256,6 +256,18 @@ describe('WorkerApiClient', () => {
       expect(fetchMock.mock.calls[0][0]).toBe('/api/search?people=a%2Cb');
     });
 
+    it('getKnownPeople unwraps the known list', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ known: [{ id: 'k1', name: 'A', aliases: [], photoCount: 2 }] })));
+      await expect(client.getKnownPeople()).resolves.toEqual([{ id: 'k1', name: 'A', aliases: [], photoCount: 2 }]);
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/people/known');
+    });
+
+    it('search sends known as a comma list', async () => {
+      fetchMock.mockResolvedValue(new Response(JSON.stringify({ results: [], total: 0 })));
+      await client.search({ people: ['a'], known: ['k1', 'k2'] });
+      expect(fetchMock.mock.calls[0][0]).toBe('/api/search?people=a&known=k1%2Ck2');
+    });
+
     it('a failed write throws with the status', async () => {
       fetchMock.mockResolvedValue({ ok: false, status: 409 });
       await expect(client.renamePerson('n1', 'B')).rejects.toThrow('409');
@@ -287,11 +299,19 @@ describe('WorkerApiClient', () => {
     );
   });
 
+  it('getTimeline() sends known as a comma list', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ groups: [], nextCursor: null }), { status: 200 }));
+    await client.getTimeline({ zoom: 'month', known: ['k1', 'k2'] });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/timeline?zoom=month&known=k1%2Ck2');
+  });
+
   it('getTimelineBuckets() builds the query and works without params', async () => {
     fetchMock.mockImplementation(async () => new Response(JSON.stringify({ buckets: [], undated: 0 }), { status: 200 }));
     await client.getTimelineBuckets({ album: 'Kanha', people: ['a', 'b'] });
     expect(fetchMock.mock.calls[0][0]).toBe('/api/timeline/buckets?album=Kanha&people=a%2Cb');
     await client.getTimelineBuckets();
     expect(fetchMock.mock.calls[1][0]).toBe('/api/timeline/buckets');
+    await client.getTimelineBuckets({ known: ['k1', 'k2'] });
+    expect(fetchMock.mock.calls[2][0]).toBe('/api/timeline/buckets?known=k1%2Ck2');
   });
 });

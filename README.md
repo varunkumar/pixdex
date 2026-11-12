@@ -224,8 +224,10 @@ them. Your stars are blended with the model's aesthetic score (70% yours, 30%
 the model's, on a 1-10 scale; the model's alone when you have not rated). That
 combined score drives "Best rated" on the search and album pages, album average
 ratings and the daily pick. The search page has a "Sort by" control (best match
-by default) and a "People" filter (up to 5 named people; photos containing all
-selected people). The description and suggested caption are not editable.
+by default) and a "People" filter (up to 5 values in total; photos containing all
+selected people). The same box on Search and Timeline lists "Your people" (blue) and "Known personalities in
+your photos" (violet, with a "known" marker); both are always shown, even for the same real person.
+Typing only narrows the list, from 3 characters (matches anywhere inside a word, so "man" finds "Rahman" while "m" shows nothing; case and accents ignored; aliases included); picking an option filters. The description and suggested caption are not editable.
 
 ### Sharing albums
 
@@ -275,6 +277,29 @@ best rated or alphabetical.
 - The browser writes involved are `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label` (a viewer's own private name) and `POST` to
   `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover` and
   `faces/:id/assign|reject|unassign`, all through the Pages proxy.
+
+### Known people list (agent)
+
+`agent/known/people.json` is a curated list of public figures (405 entries, India first) that
+`build-known-gallery` turns into reference faces from openly licensed Commons photos. Manage it
+from `agent/` with `known-search "<name>"`, `known-add --id <Q...> [--name <n>] [--alias <a>]...`
+and `known-check [--offline]` (exits 1 on issues). The full process is in `agent/known/README.md`.
+
+When `agent/.index-state/known-gallery.json` exists, `index-local`, `index-drive`, `index-batch` and `backfill-faces` match each detected face against it and send the match with the face; without the file nothing changes. Matches are suggestions ("looks like"), never a claim of identity, and never name or assign a face.
+
+Commands (from `agent/`): `known-search`, `known-add`, `known-check [--offline]`, `build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]`
+(incremental; writes `agent/.index-state/known-gallery.json`, never committed; people with too few photos are remembered and skipped
+unless `--rebuild <id>` or `--retry-excluded`; `--full` starts over) and `backfill-known [--dry-run] [--rescore] [--page-size <n>]` (matches
+already indexed faces from their stored embeddings; `--rescore` after a threshold change, a removed person or a `--rebuild`). A rescan on a
+machine without the gallery file resets known matches on rescanned faces; run `backfill-known` to restore them. Thresholds `KNOWN_THRESHOLD` 0.5 and `KNOWN_MARGIN` 0.05 in
+`agent/src/known/matcher.ts` are initial guesses to tune from the `--dry-run` output. People with fewer than 3 usable photos are left
+out of the gallery, so fewer than the 405 listed will be recognized (the first build reports how many).
+
+Backup: the gallery is built from public openly licensed photos and is also kept as one object (`known/gallery.json`) in your private R2 bucket, so a new machine does not repeat the multi-hour Wikimedia crawl. Only the agent can read or write it (ingest token); the Worker never parses it. `build-known-gallery` (unless `--full`) uses the local file, else restores the R2 copy, builds incrementally, and pushes the result when it changed or when R2 has no backup yet (checked with one R2 head; a failed push or check only warns, so your existing local gallery is backed up by the next build with no extra step). `known-gallery-push` and `known-gallery-pull [--force]` do it explicitly; pull will not overwrite an existing local file without `--force`. `backfill-known` also restores from R2 if the local file is missing. Scan commands stay local-only, so on a new machine run `known-gallery-pull` (or `build-known-gallery`) once before indexing. Cost: one R2 put per changed build (about 11 MB), one get per restore, one head per unchanged build, no D1, no Worker JSON work.
+
+Rollout: merging applies migration `0018` before the Worker deploys. Then on your machine: `known-check`, `build-known-gallery`,
+`backfill-known --dry-run`, tune the thresholds, `backfill-known`. Backfill is estimated at 1 to 3 minutes for about 5K photos
+(not yet measured). See `docs/development.md` for the steps and how to measure.
 
 ## AI Search
 

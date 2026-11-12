@@ -3,6 +3,7 @@ import type {
   AlbumsResponse,
   DailyPickResponse,
   FaceGroup,
+  KnownPersonSummary,
   MeResponse,
   MatchResponse,
   PersonSummary,
@@ -22,6 +23,8 @@ export interface SearchParams {
   q?: string;
   album?: string;
   people?: string[];
+  /** Known personality ids (AND with people, combined cap 5). */
+  known?: string[];
   sort?: PhotoSort;
   limit?: number;
   offset?: number;
@@ -99,6 +102,7 @@ export class WorkerApiClient {
     if (params.q) query.set('q', params.q);
     if (params.album) query.set('album', params.album);
     if (params.people?.length) query.set('people', params.people.join(','));
+    if (params.known?.length) query.set('known', params.known.join(','));
     if (params.sort) query.set('sort', params.sort);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
@@ -114,6 +118,7 @@ export class WorkerApiClient {
     zoom: TimelineZoom;
     album?: string;
     people?: string[];
+    known?: string[];
     from?: string;
     to?: string;
     cursor?: string;
@@ -122,6 +127,7 @@ export class WorkerApiClient {
     const query = new URLSearchParams({ zoom: p.zoom });
     if (p.album) query.set('album', p.album);
     if (p.people?.length) query.set('people', p.people.join(','));
+    if (p.known?.length) query.set('known', p.known.join(','));
     if (p.from) query.set('from', p.from);
     if (p.to) query.set('to', p.to);
     if (p.cursor) query.set('cursor', p.cursor);
@@ -129,10 +135,13 @@ export class WorkerApiClient {
     return this.getJson<TimelineResponse>(`/timeline?${query.toString()}`);
   }
 
-  async getTimelineBuckets(p: { album?: string; people?: string[] } = {}): Promise<TimelineBucketsResponse> {
+  async getTimelineBuckets(
+    p: { album?: string; people?: string[]; known?: string[] } = {}
+  ): Promise<TimelineBucketsResponse> {
     const query = new URLSearchParams();
     if (p.album) query.set('album', p.album);
     if (p.people?.length) query.set('people', p.people.join(','));
+    if (p.known?.length) query.set('known', p.known.join(','));
     const suffix = query.toString() ? `?${query.toString()}` : '';
     return this.getJson<TimelineBucketsResponse>(`/timeline/buckets${suffix}`);
   }
@@ -200,6 +209,10 @@ export class WorkerApiClient {
 
   async getPeople(): Promise<PersonSummary[]> {
     return (await this.getJson<{ people: PersonSummary[] }>('/people')).people;
+  }
+
+  async getKnownPeople(): Promise<KnownPersonSummary[]> {
+    return (await this.getJson<{ known: KnownPersonSummary[] }>('/people/known')).known;
   }
 
   async getFaceGroups(cursor?: string): Promise<{ groups: FaceGroup[]; scanned: number; nextCursor: string | null }> {

@@ -93,6 +93,27 @@ Local dev: the Vite `/api` proxy sends `X-Viewer-Email` from `DEV_VIEWER_EMAIL`,
 `.env`; set `DEV_VIEWER_EMAIL` to preview as a user an album is shared with. Run `cd worker && npm run backfill-owner -- --local`
 to own your local albums.
 
+### Rollout order for known personalities (phase 1)
+
+1. Merge. The Worker build applies migration `0018_known_people.sql` (additive: one table, two nullable `faces` columns, one partial
+   index) before the Worker deploys; the Pages Function deploys independently (it only adds the `people/known` read route).
+2. On the owner's machine, from `agent/`: `known-check`, then `build-known-gallery` (reports how many people reach the gallery, at least
+   3 openly licensed photos each), then `backfill-known --dry-run` (writes nothing; counts, per-person top 20, score histogram, sample
+   face ids). Tune `KNOWN_THRESHOLD` (0.5) and `KNOWN_MARGIN` (0.05) in `agent/src/known/matcher.ts` from that output, then run
+   `backfill-known`. Use `--rescore` after a threshold change, after removing a person from `people.json`, or after `--rebuild` of one
+   (the Worker only writes rows that change, so a rescore costs reads of all faces but writes only the changed ones). If the embeddings
+   route nears 10 ms CPU, lower the page size with `--page-size <n>` (1 to 100). `build-known-gallery` is incremental and remembers people
+   with too few photos (`--retry-excluded` or `--rebuild <id>` retries them, `--full` starts over). Note: a rescan (`index-*`,
+   `backfill-faces --recrop`) on a machine without the gallery file resets known matches on the rescanned unassigned and auto faces; run
+   `backfill-known` to restore them.
+   New machine: from `agent/` run `known-gallery-pull` once (or `build-known-gallery`, which restores the R2 backup `known/gallery.json` before it crawls anything), because `index-*` and `backfill-faces` never talk to R2. Back up explicitly with `known-gallery-push`. Existing local gallery and empty R2: just run `build-known-gallery`; an unchanged build checks R2 (one head) and pushes when no backup exists. Cost: one R2 put (about 11 MB) per changed build or first backup, one get per restore, one head per unchanged build, no D1, no Worker JSON work (Class A and Class B operations, a handful per month).
+3. Measure (all of this is unmeasured locally): start `cd worker && npx wrangler tail pixdex-worker --format json` before step 2 and
+   watch `cpuTime` on `POST /ingest/faces/embeddings` (BLOB decode; lower the page `limit`, at most 100, with `backfill-known --page-size <n>` if it nears 10 ms) and
+   `POST /ingest/faces/known`; time the whole backfill (estimate 1 to 3 minutes for about 5K photos); afterwards run
+   `cd worker && npx wrangler d1 insights pixdex --timePeriod 1d --sort-type sum --sort-by reads --limit 12 --json` and check
+   `GET /people/known` (its reads scale with the global count of known-matched faces) and the `known=` filter queries.
+4. In a browser, check the People filter on Search and Timeline in light and dark mode (tests only ran in jsdom).
+
 ## D1 read budget
 
 The free tier allows 5M rows read per day and every route past the limit returns 500 (`D1_ERROR: ... exceeded

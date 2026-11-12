@@ -1,4 +1,4 @@
-import { Box, Button, Card, Group, Loader, MultiSelect, SegmentedControl, Select, Stack, Text, Title } from '@mantine/core';
+import { Box, Button, Card, Group, Loader, SegmentedControl, Select, Stack, Text, Title } from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTimelineParams, ZOOMS } from '../hooks/useTimelineParams';
@@ -6,7 +6,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import type { TimelineGroup, TimelineZoom } from '../types/api';
 import PhotoGrid from './PhotoGrid';
 import TimelineScrubber from './TimelineScrubber';
-import { personOptions } from '../services/peopleKeys';
+import PeopleFilter from './PeopleFilter';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -48,17 +48,20 @@ const groupCount = ({ total, shown }: TimelineGroup) => {
 const pinchDistance = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 
 const Timeline = () => {
-  const { zoom, album, people, to, setZoom, setFilters, jumpTo } = useTimelineParams();
+  const { zoom, album, people, known, to, setZoom, setFilters, jumpTo } = useTimelineParams();
   const peopleKey = people.join(',');
+  const knownKey = known.join(',');
 
   const { data: albums = [] } = useQuery({ queryKey: ['album-names'], queryFn: () => workerApiClient.getAlbums() });
-  const { data: namedPeople = [] } = useQuery({ queryKey: ['people'], queryFn: () => workerApiClient.getPeople() });
-  const peopleOptions = personOptions(namedPeople);
 
-  // Keyed by album and people only, so the scrubber lists every month with photos whatever the zoom, jump or rating cut-off.
+  // Keyed by album and people (own and known) only, so the scrubber lists every month with photos whatever the zoom, jump or rating cut-off.
   const { data: bucketData } = useQuery({
-    queryKey: ['timeline-buckets', album, peopleKey],
-    queryFn: () => workerApiClient.getTimelineBuckets({ ...(album && { album }), ...(people.length > 0 && { people }) }),
+    queryKey: ['timeline-buckets', album, peopleKey, knownKey],
+    queryFn: () => workerApiClient.getTimelineBuckets({
+        ...(album && { album }),
+        ...(people.length > 0 && { people }),
+        ...(known.length > 0 && { known }),
+      }),
   });
 
   const {
@@ -72,13 +75,14 @@ const Timeline = () => {
     fetchNextPage,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ['timeline', zoom, album, peopleKey, to],
+    queryKey: ['timeline', zoom, album, peopleKey, knownKey, to],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) =>
       workerApiClient.getTimeline({
         zoom,
         ...(album && { album }),
         ...(people.length > 0 && { people }),
+        ...(known.length > 0 && { known }),
         ...(to && { to }),
         ...(pageParam && { cursor: pageParam }),
       }),
@@ -246,19 +250,7 @@ const Timeline = () => {
             clearable
             searchable
           />
-          {peopleOptions.length > 0 && (
-            <MultiSelect
-              label="People"
-              placeholder={people.length === 0 ? 'Anyone' : undefined}
-              data={peopleOptions}
-              value={people.filter((id) => peopleOptions.some((o) => o.value === id))}
-              onChange={(ids) => setFilters({ people: ids })}
-              maxValues={5}
-              clearable
-              searchable
-              hidePickedOptions
-            />
-          )}
+          <PeopleFilter people={people} known={known} onChange={(next) => setFilters(next)} />
         </Group>
       </Card>
 
@@ -276,7 +268,7 @@ const Timeline = () => {
           </Group>
         ) : groups.length === 0 ? (
           <Text c="dimmed" ta="center" py="xl">
-            {album || people.length > 0 || to ? 'No photos match these filters.' : 'No photos to show.'}
+            {album || people.length > 0 || known.length > 0 || to ? 'No photos match these filters.' : 'No photos to show.'}
           </Text>
         ) : (
           <Stack gap="lg">
