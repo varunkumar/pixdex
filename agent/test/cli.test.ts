@@ -141,6 +141,7 @@ describe('runCli', () => {
         report: {
           included: [{ id: 'Q1', name: 'A', refs: 4 }],
           excluded: [{ id: 'Q2', name: 'B', refs: 1 }],
+          failed: [{ id: 'Q3', name: 'C', error: 'HTTP 429' }],
           averageRefs: 4,
         },
       });
@@ -159,16 +160,35 @@ describe('runCli', () => {
       const out = log.mock.calls.map((c) => String(c[0])).join('\n');
       expect(out).toContain('4');
       expect(out).toContain('Q2');
+      expect(out).toContain('Q3');
+      log.mockRestore();
+    });
+
+    it('passes a checkpoint that saves the gallery, and upserts in batches of 500', async () => {
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const big = {
+        model: 'm1',
+        people: Array.from({ length: 1200 }, (_, i) => ({ id: `Q${i}`, name: `N${i}`, aliases: [], refs: [] })),
+      };
+      buildGalleryMock.mockResolvedValue({
+        gallery: big,
+        report: { included: [], excluded: [], failed: [], averageRefs: 0 },
+      });
+      expect(await runCli(['build-known-gallery'])).toBe(0);
+      expect(upsertMock.mock.calls.map((c) => c[0].length)).toEqual([500, 500, 200]);
+      await buildGalleryMock.mock.calls[0][0].onCheckpoint(big);
+      expect(saveGalleryMock).toHaveBeenCalledWith('/tmp/known-gallery.json', big);
       log.mockRestore();
     });
 
     it('passes existing gallery and --rebuild ids; --full ignores the existing gallery', async () => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {});
       loadGalleryMock.mockResolvedValue(gallery);
       await runCli(['build-known-gallery', '--rebuild', 'Q1', 'Q9']);
       expect(buildGalleryMock.mock.calls[0][0]).toMatchObject({ existing: gallery, rebuild: ['Q1', 'Q9'] });
       await runCli(['build-known-gallery', '--full']);
       expect(buildGalleryMock.mock.calls[1][0].existing).toBeUndefined();
+      log.mockRestore();
     });
 
     it('exits 1 when FACE_SIDECAR_URL is not set', async () => {

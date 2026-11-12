@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
+import { z } from 'zod';
 import { loadConfig } from './config';
 import { CloudflareClient } from './cloudflareClient';
 import { OllamaClient } from './ollama/client';
@@ -17,6 +18,8 @@ import { GALLERY_PATH, loadGallery, saveGallery, type KnownPerson } from './know
 import { WikimediaClient } from './known/wikimedia';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
 
+const UPSERT_BATCH = 500;
+const PeopleSchema = z.array(z.object({ id: z.string().min(1), name: z.string().min(1), aliases: z.array(z.string()) }));
 const PEOPLE_PATH = fileURLToPath(new URL('../known/people.json', import.meta.url));
 
 async function runBuildKnownGallery(args: string[]): Promise<number> {
@@ -33,7 +36,7 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
       console.error('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
       return 1;
     }
-    const people = JSON.parse(await fs.readFile(PEOPLE_PATH, 'utf8')) as KnownPerson[];
+    const people = PeopleSchema.parse(JSON.parse(await fs.readFile(PEOPLE_PATH, 'utf8'))) as KnownPerson[];
     const existing = full ? undefined : await loadGallery(GALLERY_PATH);
     const { gallery, report } = await buildGallery({
       people,
@@ -50,14 +53,22 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
         return Buffer.from(await response.arrayBuffer());
       },
       onProgress: (message) => console.log(message),
+      onCheckpoint: (g) => saveGallery(GALLERY_PATH, g),
     });
     await saveGallery(GALLERY_PATH, gallery);
-    const upserted = await new CloudflareClient(config).upsertKnownPeople(
-      gallery.people.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases }))
-    );
+    const client = new CloudflareClient(config);
+    const included = gallery.people.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases }));
+    let upserted = 0;
+    for (let i = 0; i < included.length; i += UPSERT_BATCH) {
+      upserted += await client.upsertKnownPeople(included.slice(i, i + UPSERT_BATCH));
+    }
     console.log(
       `Gallery saved: ${report.included.length} people included, ${report.excluded.length} excluded, average refs per person ${report.averageRefs.toFixed(1)}, upserted ${upserted}`
     );
+    if (report.failed.length > 0) {
+      console.log(`Failed on Wikimedia errors (not stored, retried next run): ${report.failed.length}`);
+      for (const p of report.failed) console.log(`  ${p.id} ${p.name}: ${p.error}`);
+    }
     if (report.excluded.length > 0) {
       console.log('Excluded (fewer than 3 usable openly licensed photos):');
       for (const p of report.excluded) console.log(`  ${p.id} ${p.name} (${p.refs})`);

@@ -97,7 +97,7 @@ export class WikimediaClient {
       query?: {
         pages?: Record<
           string,
-          { imageinfo?: { thumburl?: string; url?: string; extmetadata?: { LicenseShortName?: { value?: string } } }[] }
+          { imageinfo?: { thumburl?: string; extmetadata?: { LicenseShortName?: { value?: string } } }[] }
         >;
       };
     }>(COMMONS_API, {
@@ -109,12 +109,15 @@ export class WikimediaClient {
     });
     const page = Object.values(data.query?.pages ?? {})[0];
     const info = page?.imageinfo?.[0];
-    const thumbUrl = info?.thumburl ?? info?.url;
+    const thumbUrl = info?.thumburl;
     if (!info || !thumbUrl) return undefined;
     return { thumbUrl, license: info.extmetadata?.LicenseShortName?.value ?? '' };
   }
 
-  /** CC0, CC BY, CC BY-SA and public domain only (no NC, ND or unknown terms). */
+  /**
+   * CC0, CC BY, CC BY-SA and public domain (including "Public domain mark") only; NC, ND, GFDL, fair use
+   * and unknown terms are rejected.
+   */
   isOpenLicense(license: string): boolean {
     const l = license.trim().toLowerCase();
     if (/^cc0\b/.test(l)) return true;

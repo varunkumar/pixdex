@@ -8,12 +8,15 @@ export const MIN_DET_SCORE = 0.6;
 export const OUTLIER_COSINE = 0.35;
 /** Stop downloading once this many usable faces are in hand (headroom for outlier removal). */
 const COLLECT_LIMIT = MAX_REFS + 5;
+const CHECKPOINT_EVERY = 25;
 const CATEGORY_DEPTH = 1;
 const CATEGORY_LIMIT = 40;
 
 export interface GalleryReport {
   included: { id: string; name: string; refs: number }[];
   excluded: { id: string; name: string; refs: number }[];
+  /** Wikimedia errors: not stored, retried on the next run. */
+  failed: { id: string; name: string; error: string }[];
   averageRefs: number;
 }
 
@@ -25,6 +28,7 @@ export interface BuildGalleryDeps {
   sidecar: FaceSidecarClient;
   download: (url: string) => Promise<Buffer>;
   onProgress?: (m: string) => void;
+  onCheckpoint?: (gallery: Gallery) => Promise<void>;
 }
 
 function dot(a: Float32Array, b: Float32Array): number {
@@ -51,8 +55,17 @@ function medianReference(refs: Float32Array[]): Float32Array {
   return out;
 }
 
+/** The face sidecar itself is unreachable: the build must stop rather than exclude everyone. */
+export class SidecarDownError extends Error {
+  constructor(cause: unknown) {
+    super(`Face sidecar is not reachable: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'SidecarDownError';
+  }
+}
+
 async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise<Float32Array[]> {
-  const { wikimedia, sidecar, download } = deps;
+  const { wikimedia, sidecar, download, onProgress } = deps;
+  // Wikimedia failures (including a persistent 429) propagate: the caller marks the person failed.
   const candidates: string[] = [];
   const portrait = await wikimedia.portrait(person.id);
   if (portrait) candidates.push(portrait);
@@ -63,16 +76,48 @@ async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise
   const refs: Float32Array[] = [];
   for (const title of candidates) {
     if (refs.length >= COLLECT_LIMIT) break;
+    const info = await wikimedia.fileInfo(title);
+    if (!info) {
+      onProgress?.(`  skip ${title}: no thumbnail`);
+      continue;
+    }
+    if (!wikimedia.isOpenLicense(info.license)) {
+      onProgress?.(`  skip ${title}: license "${info.license}"`);
+      continue;
+    }
+    let image: Buffer;
     try {
-      const info = await wikimedia.fileInfo(title);
-      if (!info || !wikimedia.isOpenLicense(info.license)) continue;
-      const detection = await sidecar.detect(await download(info.thumbUrl));
-      if (detection.faces.length !== 1) continue;
-      const face = detection.faces[0];
-      if (!(face.detScore >= MIN_DET_SCORE)) continue;
+      image = await download(info.thumbUrl);
+    } catch (err) {
+      onProgress?.(`  skip ${title}: download failed (${err instanceof Error ? err.message : String(err)})`);
+      continue;
+    }
+    let detection;
+    try {
+      detection = await sidecar.detect(image);
+    } catch (err) {
+      // A bad image can make the sidecar answer with an error; a dead sidecar cannot answer a health check.
+      try {
+        await sidecar.model();
+      } catch (healthErr) {
+        throw new SidecarDownError(healthErr);
+      }
+      onProgress?.(`  skip ${title}: not detectable (${err instanceof Error ? err.message : String(err)})`);
+      continue;
+    }
+    if (detection.faces.length !== 1) {
+      onProgress?.(`  skip ${title}: ${detection.faces.length} faces`);
+      continue;
+    }
+    const face = detection.faces[0];
+    if (!(face.detScore >= MIN_DET_SCORE)) {
+      onProgress?.(`  skip ${title}: low detection score`);
+      continue;
+    }
+    try {
       refs.push(decodeEmbedding(face.embedding));
-    } catch {
-      // A bad file, a non-finite embedding or a transient failure only skips this candidate.
+    } catch (err) {
+      onProgress?.(`  skip ${title}: bad embedding (${err instanceof Error ? err.message : String(err)})`);
     }
   }
 
@@ -85,6 +130,11 @@ async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise
  * Builds (or incrementally updates) the known gallery. People already in `existing` (same model) keep
  * their refs unless listed in `rebuild`; people no longer in `people` are dropped. Images are downloaded
  * only to compute embeddings in memory; nothing but embeddings is kept.
+ *
+ * A Wikimedia failure marks only that person failed (listed in `report.failed`, never stored as a new
+ * person, retried next run; a failed `rebuild` keeps the person's previous refs). A dead sidecar aborts
+ * the build with SidecarDownError after a final checkpoint. `onCheckpoint` gets a consistent gallery
+ * snapshot every CHECKPOINT_EVERY people and at the end.
  */
 export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: Gallery; report: GalleryReport }> {
   const model = await deps.sidecar.model();
@@ -92,9 +142,19 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
   if (deps.existing && !existing) deps.onProgress?.(`Existing gallery is for model ${deps.existing.model}, rebuilding fully`);
   const kept = new Map(existing?.people.map((p) => [p.id, p]) ?? []);
   const rebuild = new Set(deps.rebuild ?? []);
+  const listed = new Set(deps.people.map((p) => p.id));
+  for (const id of rebuild) if (!listed.has(id)) deps.onProgress?.(`Warning: --rebuild id ${id} is not in the people list`);
 
-  const people: GalleryPerson[] = [];
-  const report: GalleryReport = { included: [], excluded: [], averageRefs: 0 };
+  const results = new Map<string, GalleryPerson | undefined>();
+  const report: GalleryReport = { included: [], excluded: [], failed: [], averageRefs: 0 };
+
+  /** Processed people use their new result; unprocessed ones keep their previous refs, so a partial save loses nothing. */
+  const snapshot = (): Gallery => ({
+    model,
+    people: deps.people
+      .map((p) => (results.has(p.id) ? results.get(p.id) : kept.get(p.id)))
+      .filter((p): p is GalleryPerson => p !== undefined),
+  });
 
   for (const [index, person] of deps.people.entries()) {
     const prior = kept.get(person.id);
@@ -103,17 +163,35 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
       refs = prior.refs;
     } else {
       deps.onProgress?.(`[${index + 1}/${deps.people.length}] ${person.name} (${person.id})`);
-      refs = await collectRefs(person, deps);
+      try {
+        refs = await collectRefs(person, deps);
+      } catch (err) {
+        if (err instanceof SidecarDownError) {
+          await deps.onCheckpoint?.(snapshot());
+          throw err;
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        deps.onProgress?.(`  FAILED ${person.name} (${person.id}): ${message}`);
+        report.failed.push({ id: person.id, name: person.name, error: message });
+        if (prior) results.set(person.id, { ...prior, name: person.name, aliases: person.aliases });
+        else results.set(person.id, undefined);
+        continue;
+      }
     }
     if (refs.length >= MIN_REFS) {
-      people.push({ id: person.id, name: person.name, aliases: person.aliases, refs });
+      const entry = { id: person.id, name: person.name, aliases: person.aliases, refs };
+      results.set(person.id, entry);
       report.included.push({ id: person.id, name: person.name, refs: refs.length });
     } else {
+      results.set(person.id, undefined);
       report.excluded.push({ id: person.id, name: person.name, refs: refs.length });
     }
+    if (deps.onCheckpoint && (index + 1) % CHECKPOINT_EVERY === 0) await deps.onCheckpoint(snapshot());
   }
 
+  const gallery = snapshot();
+  await deps.onCheckpoint?.(gallery);
   const total = report.included.reduce((sum, p) => sum + p.refs, 0);
   report.averageRefs = report.included.length ? total / report.included.length : 0;
-  return { gallery: { model, people }, report };
+  return { gallery, report };
 }

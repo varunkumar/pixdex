@@ -147,4 +147,99 @@ describe('buildGallery', () => {
     expect(second.fetched).toEqual(['Q1']);
     expect(res.gallery.model).toBe('new');
   });
+
+  it('a Wikimedia failure marks only that person failed and the build continues', async () => {
+    const { deps } = setup({ Q1: many(4), Q2: many(4, 3) });
+    const wiki = deps.wikimedia as unknown as { categoryFiles: (q: string) => Promise<string[]> };
+    const orig = wiki.categoryFiles;
+    wiki.categoryFiles = async (q) => {
+      if (q === 'Q1') throw new Error('Wikimedia request failed: 429');
+      return orig(q);
+    };
+    const { gallery, report } = await buildGallery({ ...deps, people: [person('Q1'), person('Q2')] });
+    expect(gallery.people.map((p) => p.id)).toEqual(['Q2']);
+    expect(report.failed).toEqual([{ id: 'Q1', name: 'Name Q1', error: 'Wikimedia request failed: 429' }]);
+    expect(report.excluded).toEqual([]);
+    // Retried on the next incremental run.
+    const again = setup({ Q1: many(4), Q2: many(4, 3) });
+    const res = await buildGallery({ ...again.deps, people: [person('Q1'), person('Q2')], existing: gallery });
+    expect(again.fetched).toEqual(['Q1']);
+    expect(res.gallery.people.map((p) => p.id)).toEqual(['Q1', 'Q2']);
+  });
+
+  it('a failed rebuild keeps the previous refs', async () => {
+    const first = setup({ Q1: many(4) });
+    const { gallery } = await buildGallery({ ...first.deps, people: [person('Q1')] });
+    const second = setup({ Q1: many(4) });
+    (second.deps.wikimedia as unknown as { portrait: () => Promise<never> }).portrait = async () => {
+      throw new Error('boom');
+    };
+    const res = await buildGallery({ ...second.deps, people: [person('Q1')], existing: gallery, rebuild: ['Q1'] });
+    expect(res.gallery.people[0].refs).toBe(gallery.people[0].refs);
+    expect(res.report.failed).toHaveLength(1);
+  });
+
+  it('aborts with SidecarDownError after checkpointing when the sidecar dies', async () => {
+    const first = setup({ Q1: many(4) });
+    const { gallery: prior } = await buildGallery({ ...first.deps, people: [person('Q1')] });
+    const { deps } = setup({ Q2: many(4, 3), Q3: many(4, 6) });
+    let alive = true;
+    const sidecar = deps.sidecar as unknown as { detect: () => Promise<never>; model: () => Promise<string> };
+    sidecar.detect = async () => {
+      alive = false;
+      throw new TypeError('fetch failed');
+    };
+    sidecar.model = async () => {
+      if (!alive) throw new Error('ECONNREFUSED');
+      return 'm1';
+    };
+    const checkpoints: Gallery[] = [];
+    await expect(
+      buildGallery({
+        ...deps,
+        people: [person('Q1'), person('Q2'), person('Q3')],
+        existing: prior,
+        onCheckpoint: async (g) => {
+          checkpoints.push(g);
+        },
+      })
+    ).rejects.toThrow(/sidecar is not reachable/i);
+    expect(checkpoints).toHaveLength(1);
+    expect(checkpoints[0].people.map((p) => p.id)).toEqual(['Q1']);
+  });
+
+  it('a sidecar error on one image with a healthy sidecar only skips that image', async () => {
+    const { deps } = setup({ Q1: many(4) });
+    const sidecar = deps.sidecar as unknown as { detect: (b: Buffer) => Promise<unknown> };
+    const orig = sidecar.detect;
+    sidecar.detect = async (b) => {
+      if (b.toString().endsWith('Q1-0.jpg')) throw new Error('sidecar /faces failed: 400');
+      return orig(b);
+    };
+    const { report } = await buildGallery({ ...deps, people: [person('Q1')] });
+    expect(report.included[0].refs).toBe(3);
+  });
+
+  it('checkpoints every 25 people and at the end, and warns on unknown rebuild ids', async () => {
+    const images: Record<string, FakeImage[]> = {};
+    const people: KnownPerson[] = [];
+    for (let i = 0; i < 30; i++) {
+      images[`Q${i}`] = many(3, i);
+      people.push(person(`Q${i}`));
+    }
+    const { deps } = setup(images);
+    const sizes: number[] = [];
+    const messages: string[] = [];
+    await buildGallery({
+      ...deps,
+      people,
+      rebuild: ['Q999'],
+      onCheckpoint: async (g) => {
+        sizes.push(g.people.length);
+      },
+      onProgress: (m) => messages.push(m),
+    });
+    expect(sizes).toEqual([25, 30]);
+    expect(messages.some((m) => m.includes('Q999'))).toBe(true);
+  });
 });

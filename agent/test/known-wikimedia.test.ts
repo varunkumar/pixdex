@@ -12,12 +12,12 @@ function emptyFetch(): typeof fetch {
 describe('isOpenLicense', () => {
   const client = new WikimediaClient(emptyFetch(), 0);
   it('accepts open licenses', () => {
-    for (const l of ['CC BY-SA 4.0', 'CC0', 'Public domain', 'CC BY 2.0', 'CC0 1.0']) {
+    for (const l of ['CC BY-SA 4.0', 'CC0', 'Public domain', 'CC BY 2.0', 'CC0 1.0', 'Public domain mark 1.0']) {
       expect(client.isOpenLicense(l), l).toBe(true);
     }
   });
   it('rejects restrictive licenses', () => {
-    for (const l of ['CC BY-NC 4.0', 'All rights reserved', 'CC BY-ND 2.0', 'CC BY-NC-SA 3.0', '']) {
+    for (const l of ['CC BY-NC 4.0', 'All rights reserved', 'CC BY-ND 2.0', 'CC BY-NC-SA 3.0', 'GFDL', 'GFDL 1.2', 'Fair use', '']) {
       expect(client.isOpenLicense(l), l).toBe(false);
     }
   });
@@ -110,6 +110,12 @@ describe('WikimediaClient', () => {
       })) as unknown as typeof fetch;
     const c = new WikimediaClient(f, 0);
     expect(await c.fileInfo('File:x.jpg')).toEqual({ thumbUrl: 'https://upload/x.jpg', license: 'CC BY-SA 4.0' });
+  });
+
+  it('fileInfo is undefined when there is no thumburl (never falls back to the original)', async () => {
+    const f = (async () =>
+      jsonResponse({ query: { pages: { '1': { imageinfo: [{ url: 'https://upload/orig.tif' }] } } } })) as unknown as typeof fetch;
+    expect(await new WikimediaClient(f, 0).fileInfo('File:x.tif')).toBeUndefined();
   });
 
   it('fileInfo is undefined when the page has no imageinfo', async () => {
