@@ -29,9 +29,9 @@ interface Props {
   onChange: (next: { people: string[]; known: string[] }) => void;
 }
 
-// The dropdown is a typeahead over a short list, so one letter already filters (as the old substring filter did);
-// the 3 character minimum of matchesQuery is for the omnibox chips, not for this box.
-const MIN_QUERY = 1;
+// Typing narrows the list only from 3 characters (the owner's design): "m" shows nothing, "man" finds "Rahman".
+// An empty box still lists everyone.
+const MIN_QUERY = 3;
 
 const isKnown = (value: string) => value.startsWith('k:');
 

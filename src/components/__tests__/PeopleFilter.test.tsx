@@ -71,19 +71,19 @@ describe('PeopleFilter', () => {
     expect(headings).toEqual(['Your people', 'Known personalities in your photos']);
   });
 
-  it('finds own people from the first letters typed (no 3 character minimum)', async () => {
+  it('narrows only from 3 characters: "m" shows nothing, "man" matches inside "Rahman"', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([own('m1', 'Mani'), own('z1', 'Zed')]);
     vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue([known('ms', 'MS Dhoni'), known('ar', 'A. R. Rahman')]);
     renderWithProviders(<PeopleFilter people={[]} known={[]} onChange={vi.fn()} />);
-    await typeInPeople('ma');
-    expect(await screen.findByRole('option', { name: /Mani/ })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Zed/ })).not.toBeInTheDocument();
     await typeInPeople('m');
+    await waitFor(() => expect(screen.queryAllByRole('option')).toHaveLength(0));
+    await typeInPeople('ma');
+    await waitFor(() => expect(screen.queryAllByRole('option')).toHaveLength(0));
+    await typeInPeople('man');
     expect(await screen.findByRole('option', { name: /Mani/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Zed/ })).not.toBeInTheDocument();
-    // A letter matches anywhere inside a word ("Rahman" contains an m), like the old substring filter.
     expect(screen.getByRole('option', { name: /Rahman/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Zed/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /MS Dhoni/ })).not.toBeInTheDocument();
   });
 
   it('a punctuation-only query matches nothing', async () => {
