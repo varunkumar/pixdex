@@ -205,10 +205,25 @@ describe('POST /ingest/faces/known', () => {
     expect(await row(1)).toEqual({ known_id: null, known_score: null });
   });
 
+  it('writes only rows that change (updated means changed)', async () => {
+    const m = (knownId: string | null, score?: number) => ({ matches: [{ faceId: fid(1), knownId, score }] });
+    const updated = async (body: unknown) => ((await (await setKnown(body)).json()) as { updated: number }).updated;
+    expect(await updated(m(null))).toBe(0); // clearing an already-NULL face
+    expect(await updated(m('Q1', 0.8))).toBe(1);
+    expect(await updated(m('Q1', 0.8))).toBe(0); // same match again
+    expect(await updated(m('Q1', 0.9))).toBe(1); // changed score
+    expect(await updated(m('Q1'))).toBe(1); // score dropped to null
+    expect(await updated(m('Q1'))).toBe(0);
+    await env.DB.prepare("INSERT INTO known_people (id, name, aliases, created_at) VALUES ('Q2','B','[]','x')").run();
+    expect(await updated(m('Q2'))).toBe(1); // changed id
+    expect(await updated(m(null))).toBe(1); // null clear of a matched face
+    expect(await row(1)).toEqual({ known_id: null, known_score: null });
+  });
+
   it('keeps person_id and assign_status, and the last duplicate faceId wins', async () => {
     await env.DB.prepare("UPDATE faces SET person_id = 'p1', assign_status = 'confirmed' WHERE id = ?").bind(fid(1)).run();
     const res = await setKnown({ matches: [{ faceId: fid(1), knownId: 'Q1', score: 0.5 }, { faceId: fid(1), knownId: null }] });
-    expect(await res.json()).toEqual({ updated: 1 });
+    expect(await res.json()).toEqual({ updated: 0 }); // the last entry clears an already-NULL face: no change
     expect(await row(1)).toEqual({ known_id: null, known_score: null });
     const f = await env.DB.prepare('SELECT person_id, assign_status FROM faces WHERE id = ?').bind(fid(1)).first();
     expect(f).toEqual({ person_id: 'p1', assign_status: 'confirmed' });

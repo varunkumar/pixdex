@@ -127,7 +127,8 @@ const knownSchema = z.object({
  * Sets (or clears, with knownId null) known matches on up to 200 faces in one UPDATE ... FROM json_each.
  * A non-null knownId must exist in known_people, else 400 for the whole request and nothing changes.
  * D1: one indexed pre-check (<= 200 primary-key probes on known_people), then one UPDATE (<= 200 faces rows
- * read and written by primary key). Last write wins.
+ * read by primary key; only rows whose known_id or known_score actually change are written, so re-sending the same
+ * match or clearing an already-NULL face writes nothing and `updated` means "changed"). Last write wins.
  */
 export async function setFaceKnownRoute(c: Context<{ Bindings: Env }>) {
   const body = await readJson(c);
@@ -154,7 +155,7 @@ export async function setFaceKnownRoute(c: Context<{ Bindings: Env }>) {
     `UPDATE faces SET known_id = j.known_id, known_score = j.score
      FROM (SELECT json_extract(value, '$.faceId') AS face_id, json_extract(value, '$.knownId') AS known_id,
                   json_extract(value, '$.score') AS score FROM json_each(?)) AS j
-     WHERE faces.id = j.face_id`
+     WHERE faces.id = j.face_id AND (faces.known_id IS NOT j.known_id OR faces.known_score IS NOT j.score)`
   )
     .bind(payload)
     .run();
