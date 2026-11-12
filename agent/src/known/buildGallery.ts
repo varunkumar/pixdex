@@ -1,6 +1,6 @@
 import type { FaceSidecarClient } from '../faces/sidecarClient';
 import { decodeEmbedding, type ExcludedPerson, type Gallery, type GalleryPerson, type KnownPerson } from './gallery';
-import type { WikimediaClient } from './wikimedia';
+import { isRasterTitle, RateLimitedError, type WikimediaClient } from './wikimedia';
 
 export const MAX_REFS = 10;
 export const MIN_REFS = 3;
@@ -9,6 +9,8 @@ export const OUTLIER_COSINE = 0.35;
 /** Stop downloading once this many usable faces are in hand (headroom for outlier removal). */
 const COLLECT_LIMIT = MAX_REFS + 5;
 const CHECKPOINT_EVERY = 25;
+/** Stop the build after this many people in a row fail on Wikimedia rate limiting. */
+export const RATE_LIMIT_STOP_AFTER = 5;
 const CATEGORY_DEPTH = 1;
 const CATEGORY_LIMIT = 40;
 
@@ -65,14 +67,22 @@ export class SidecarDownError extends Error {
   }
 }
 
+/** Wikimedia keeps rate limiting this machine: the build stops (after a checkpoint) instead of failing the whole list. */
+export class RateLimitStopError extends Error {
+  constructor() {
+    super('Wikimedia is rate limiting this machine; wait a few minutes and rerun, finished people are kept');
+    this.name = 'RateLimitStopError';
+  }
+}
+
 async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise<Float32Array[]> {
   const { wikimedia, sidecar, download, onProgress } = deps;
   // Wikimedia failures (including a persistent 429) propagate: the caller marks the person failed.
   const candidates: string[] = [];
   const portrait = await wikimedia.portrait(person.id);
-  if (portrait) candidates.push(portrait);
+  if (portrait && isRasterTitle(portrait)) candidates.push(portrait);
   for (const title of await wikimedia.categoryFiles(person.id, { maxDepth: CATEGORY_DEPTH, limit: CATEGORY_LIMIT })) {
-    if (!candidates.includes(title)) candidates.push(title);
+    if (isRasterTitle(title) && !candidates.includes(title)) candidates.push(title);
   }
 
   const refs: Float32Array[] = [];
@@ -91,6 +101,8 @@ async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise
     try {
       image = await download(info.thumbUrl);
     } catch (err) {
+      // A persistent 429 says nothing about the photo: fail the person (retried next run), do not skip or exclude.
+      if (err instanceof RateLimitedError) throw err;
       onProgress?.(`  skip ${title}: download failed (${err instanceof Error ? err.message : String(err)})`);
       continue;
     }
@@ -167,6 +179,7 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
     };
   };
 
+  let rateLimitedInARow = 0;
   for (const [index, person] of deps.people.entries()) {
     const prior = kept.get(person.id);
     const priorExcluded = keptExcluded.get(person.id);
@@ -188,6 +201,7 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
           await deps.onCheckpoint?.(snapshot());
           throw err;
         }
+        rateLimitedInARow = err instanceof RateLimitedError ? rateLimitedInARow + 1 : 0;
         const message = err instanceof Error ? err.message : String(err);
         deps.onProgress?.(`  FAILED ${person.name} (${person.id}): ${message}`);
         report.failed.push({ id: person.id, name: person.name, error: message });
@@ -196,8 +210,13 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
           results.set(person.id, undefined);
           if (priorExcluded) excludedNow.set(person.id, priorExcluded);
         }
+        if (rateLimitedInARow >= RATE_LIMIT_STOP_AFTER) {
+          await deps.onCheckpoint?.(snapshot());
+          throw new RateLimitStopError();
+        }
         continue;
       }
+      rateLimitedInARow = 0;
     }
     if (refs.length >= MIN_REFS) {
       const entry = { id: person.id, name: person.name, aliases: person.aliases, refs };

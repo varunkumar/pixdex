@@ -167,6 +167,17 @@ describe('runCli', () => {
       });
     });
 
+    it('exits non-zero with the rate limit message when the build stops on rate limiting', async () => {
+      buildGalleryMock.mockRejectedValue(
+        new Error('Wikimedia is rate limiting this machine; wait a few minutes and rerun, finished people are kept')
+      );
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(await runCli(['build-known-gallery'])).toBe(1);
+      expect(String(err.mock.calls[0][0])).toContain('rate limiting this machine');
+      expect(upsertMock).not.toHaveBeenCalled();
+      err.mockRestore();
+    });
+
     it('saves the gallery, upserts only included people and prints the report', async () => {
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
       expect(await runCli(['build-known-gallery'])).toBe(0);

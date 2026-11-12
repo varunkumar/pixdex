@@ -59,21 +59,16 @@ async function runBuildKnownGallery(args: string[]): Promise<number> {
         }
       }
     }
+    const wikimedia = new WikimediaClient();
+    wikimedia.onRateLimit = (seconds) => console.log(`  Wikimedia asked to slow down: waiting ${seconds}s`);
     const { gallery, report } = await buildGallery({
       people,
       existing,
       rebuild,
       retryExcluded,
-      wikimedia: new WikimediaClient(),
+      wikimedia,
       sidecar,
-      download: async (url) => {
-        const response = await fetch(url, {
-          headers: { 'User-Agent': 'face-gallery-builder/0.1' },
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (!response.ok) throw new Error(`download failed: ${response.status}`);
-        return Buffer.from(await response.arrayBuffer());
-      },
+      download: (url) => wikimedia.download(url),
       onProgress: (message) => console.log(message),
       onCheckpoint: (g) => saveGallery(GALLERY_PATH, g),
     });

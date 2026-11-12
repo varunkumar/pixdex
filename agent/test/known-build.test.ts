@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildGallery, MAX_REFS } from '../src/known/buildGallery';
+import { buildGallery, MAX_REFS, RATE_LIMIT_STOP_AFTER } from '../src/known/buildGallery';
+import { RateLimitedError } from '../src/known/wikimedia';
 import type { Gallery, KnownPerson } from '../src/known/gallery';
 
 const DIM = 512;
@@ -298,5 +299,72 @@ describe('buildGallery', () => {
     });
     expect(sizes).toEqual([25, 30]);
     expect(messages.some((m) => m.includes('Q999'))).toBe(true);
+  });
+
+  it('a rate limited download fails the person instead of excluding them', async () => {
+    const { deps } = setup({ Q1: many(4) });
+    const res = await buildGallery({
+      ...deps,
+      download: async () => {
+        throw new RateLimitedError(429);
+      },
+      people: [person('Q1')],
+    });
+    expect(res.report.failed.map((f) => f.id)).toEqual(['Q1']);
+    expect(res.report.excluded).toEqual([]);
+    expect(res.gallery.excluded).toBeUndefined();
+  });
+
+  it('skips non-raster candidates without asking for their info', async () => {
+    const { deps } = setup({ Q1: many(4) });
+    const asked: string[] = [];
+    const wikimedia = deps.wikimedia as unknown as { categoryFiles: () => Promise<string[]>; fileInfo: (t: string) => Promise<unknown> };
+    const orig = wikimedia.fileInfo;
+    wikimedia.categoryFiles = async () => ['File:Voice.ogg', 'File:Q1-0.jpg', 'File:x.svg'];
+    wikimedia.fileInfo = async (t) => {
+      asked.push(t);
+      return orig(t);
+    };
+    await buildGallery({ ...deps, people: [person('Q1')] });
+    expect(asked).toEqual(['File:Q1-0.jpg']);
+  });
+
+  it('stops after 5 rate limited people in a row, checkpointing finished people first', async () => {
+    const people = [person('Q0'), ...[1, 2, 3, 4, 5, 6, 7].map((n) => person(`Q${n}`))];
+    const { deps } = setup({ Q0: many(4) });
+    const wikimedia = deps.wikimedia as unknown as { portrait: (q: string) => Promise<unknown> };
+    const calls: string[] = [];
+    wikimedia.portrait = async (q) => {
+      calls.push(q);
+      if (q !== 'Q0') throw new RateLimitedError(429);
+      return undefined;
+    };
+    const checkpoints: Gallery[] = [];
+    await expect(
+      buildGallery({
+        ...deps,
+        people,
+        onCheckpoint: async (g) => {
+          checkpoints.push(g);
+        },
+      })
+    ).rejects.toThrow(/rate limiting this machine; wait a few minutes and rerun, finished people are kept/);
+    expect(RATE_LIMIT_STOP_AFTER).toBe(5);
+    expect(calls).toEqual(['Q0', 'Q1', 'Q2', 'Q3', 'Q4', 'Q5']);
+    expect(checkpoints).toHaveLength(1);
+    expect(checkpoints[0].people.map((p) => p.id)).toEqual(['Q0']);
+  });
+
+  it('a success in between resets the rate limit streak', async () => {
+    const { deps } = setup({ Q3: many(4) });
+    const wikimedia = deps.wikimedia as unknown as { portrait: (q: string) => Promise<unknown> };
+    wikimedia.portrait = async (q) => {
+      if (q !== 'Q3') throw new RateLimitedError(429);
+      return undefined;
+    };
+    const people = ['Q1', 'Q2', 'Q4', 'Q5'].map(person);
+    people.splice(2, 0, person('Q3'));
+    const res = await buildGallery({ ...deps, people: [...people, ...['Q6', 'Q7'].map(person)] });
+    expect(res.report.failed).toHaveLength(6);
   });
 });
