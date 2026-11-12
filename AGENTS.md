@@ -75,6 +75,11 @@ never leave local disk or Google Drive.
   (`agent/src/known/matcher.ts`) are initial guesses: tune them from `backfill-known --dry-run` before the real run. The seed list
   is 405 people; how many reach the gallery is reported by the first `build-known-gallery` and is not yet known.
 - Gallery build group photos: after the single-face pass, photos with 2 to `MAX_GROUP_FACES` (12) faces contribute the one face whose max cosine over the accepted single-face refs (anchors; at least one required) is at least `GROUP_MIN_COSINE` (0.5) and leads the next face by `GROUP_MARGIN` (0.1), at most `GROUP_PHOTO_LIMIT` (15) photos per person, never beyond `MAX_REFS`; constants in `agent/src/known/buildGallery.ts`, report field `groupRefs`. Batched Wikimedia requests are chunked to `MAX_QUERY_CHARS` (6000) encoded characters plus 50 items (HTTP 414 fix). Agent-side only: no Worker CPU or D1 impact.
+- `known-pick [--id <Q-id>...] [--port <n>]` (`agent/src/known/pick/`: `server.ts` pure `createPickApp` handler plus an http adapter bound to 127.0.0.1 only,
+  random per-run token required on every call as `X-Pick-Token` or `?token=`, Host header checked, no CORS; `candidates.ts` gather (reuses `candidateTitles` from `buildGallery.ts`, the
+  same `WikimediaClient`) plus the on-disk cache `agent/.index-state/known-pick-cache/` and a one-at-a-time crawl queue; `scoring.ts`; `page.ts` the single HTML page): manual face picker for excluded people.
+  Picks are trusted (no outlier filter, warn below cosine 0.3), at least `MIN_REFS`, at most `MAX_REFS` stored, the file is written atomically (`saveGallery` now writes a temp file then renames),
+  other people are never altered, a changed gallery is pushed to R2 on exit. Agent-only: no Worker route, no D1, embeddings never leave the machine (the page gets boxes, never vectors).
 - Known personalities performance review (phase 1; none of the Worker costs can be measured locally, see `docs/development.md`):
   matching is agent-side only (about 3.3 ms per face, measured with a synthetic 405 x 10 gallery). Rows read and written per request:
   `POST /ingest/known-people` 0 read, up to 500 written; `POST /ingest/faces` adds one `json_each` lookup only when a face has `known`;

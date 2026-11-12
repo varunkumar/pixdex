@@ -64,7 +64,15 @@ export async function saveGallery(file: string, g: Gallery): Promise<void> {
     people: g.people.map((p) => ({ id: p.id, name: p.name, aliases: p.aliases, refs: p.refs.map(encodeEmbedding) })),
     ...(g.excluded && g.excluded.length > 0 ? { excluded: g.excluded.map((e) => ({ id: e.id, refs: e.refs })) } : {}),
   };
-  await fs.writeFile(file, JSON.stringify(json));
+  // Write a temp file then rename, so a crash never leaves a half-written gallery.
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(tmp, JSON.stringify(json));
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true });
+    throw err;
+  }
 }
 
 export async function loadGallery(file: string): Promise<Gallery | undefined> {
