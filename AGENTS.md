@@ -49,7 +49,7 @@ never leave local disk or Google Drive.
   user and stamps the owner on an unowned album once (one extra single-row write). `shared_with` is only ever written as valid
   JSON or NULL.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
-  include `GET timeline`, `GET timeline/buckets` and `GET me`; also
+  include `GET timeline`, `GET timeline/buckets`, `GET people/known` and `GET me`; also
   forwards the browser writes: `PUT albums/cover`, `PUT albums/shares`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`, `people/:id/faces`,
   `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`). It first verifies the Cloudflare Access

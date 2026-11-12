@@ -43,6 +43,7 @@ const ALLOWED_PATHS = [
   /^thumbnails\/[^/]+$/,
   /^people$/,
   /^people\/groups$/,
+  /^people\/known$/,
   /^photos\/[^/]+\/faces$/,
   /^faces\/[^/]+\/crop$/,
 ];

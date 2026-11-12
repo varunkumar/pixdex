@@ -98,7 +98,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `me`) plus `originals/:id`, which goes
+`people/groups`, `people/known`, `me`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
 Thumbnails are cached immutably (content-hash addressed); other routes use
 `no-cache`. The only writes the browser can make are `PUT albums/cover`,
