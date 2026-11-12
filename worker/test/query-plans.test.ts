@@ -90,4 +90,9 @@ describe('person label resolution', () => {
     const p = await plan('SELECT 1 AS x FROM person_labels WHERE viewer_email = ? AND lower(name) = lower(?) AND person_id != ?', U.email, 'x', '');
     expect(p).toMatch(/idx_person_labels_viewer_name_lower/);
   });
+  it('the known-person photo filter uses the partial index', async () => {
+    const p = await plan('SELECT photo_id FROM faces WHERE known_id IN (?,?) GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?', 'Q1', 'Q2', 2);
+    expect(p).toMatch(/idx_faces_known_photo/);
+    expect(p).not.toMatch(/SCAN faces/);
+  });
 });
