@@ -185,3 +185,74 @@ describe('CloudflareClient', () => {
     expect(init.body).toBe(bytes);
   });
 });
+
+describe('CloudflareClient known-people methods', () => {
+  const mk = () => {
+    const fetchMock = vi.fn();
+    return { fetchMock, client: new CloudflareClient(config, fetchMock as unknown as typeof fetch) };
+  };
+
+  it('upsertKnownPeople posts people and returns the count', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ upserted: 1 }), { status: 200 }));
+    const n = await client.upsertKnownPeople([{ id: 'p', name: 'P', aliases: ['a'] }]);
+    expect(n).toBe(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/known-people');
+    expect(init.headers.Authorization).toBe('Bearer secret-token');
+    expect(JSON.parse(init.body)).toEqual({ people: [{ id: 'p', name: 'P', aliases: ['a'] }] });
+  });
+
+  it('faceEmbeddingsPage parses ids, exact floats and the cursor header', async () => {
+    const { fetchMock, client } = mk();
+    const ids = ['a'.repeat(36), 'b'.repeat(36)];
+    const embs = [0, 1].map((k) => Float32Array.from({ length: 512 }, (_, i) => i * 0.001 + k + 0.1));
+    const parts = ids.flatMap((id, k) => [Buffer.from(id, 'ascii'), Buffer.from(embs[k].buffer)]);
+    fetchMock.mockResolvedValueOnce(
+      new Response(Buffer.concat(parts), { status: 200, headers: { 'X-Next-Cursor': '42' } })
+    );
+    const page = await client.faceEmbeddingsPage('buffalo_l', { cursor: 7, rescore: true });
+    expect(page.nextCursor).toBe(42);
+    expect(page.faces.map((f) => f.id)).toEqual(ids);
+    expect(Array.from(page.faces[1].embedding)).toEqual(Array.from(embs[1]));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/faces/embeddings');
+    expect(init.headers.Authorization).toBe('Bearer secret-token');
+    expect(JSON.parse(init.body)).toEqual({ model: 'buffalo_l', cursor: 7, rescore: true });
+  });
+
+  it('faceEmbeddingsPage handles an empty body with a cursor and a last page without one', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Uint8Array(0), { status: 200, headers: { 'X-Next-Cursor': '5000' } })
+    );
+    expect(await client.faceEmbeddingsPage('m', {})).toEqual({ faces: [], nextCursor: 5000 });
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(0), { status: 200 }));
+    expect(await client.faceEmbeddingsPage('m', {})).toEqual({ faces: [], nextCursor: undefined });
+  });
+
+  it('faceEmbeddingsPage rejects a body that is not a whole number of records', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response(new Uint8Array(10), { status: 200 }));
+    await expect(client.faceEmbeddingsPage('m', {})).rejects.toThrow();
+  });
+
+  it('setFaceKnown posts matches (null clears) and returns updated', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ updated: 2 }), { status: 200 }));
+    const matches = [
+      { faceId: 'f1', knownId: 'p', score: 0.8 },
+      { faceId: 'f2', knownId: null },
+    ];
+    expect(await client.setFaceKnown(matches)).toBe(2);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/faces/known');
+    expect(JSON.parse(init.body)).toEqual({ matches });
+  });
+
+  it('throws on a failed response', async () => {
+    const { fetchMock, client } = mk();
+    fetchMock.mockResolvedValueOnce(new Response('x', { status: 500 }));
+    await expect(client.setFaceKnown([{ faceId: 'f', knownId: null }])).rejects.toThrow(/500/);
+  });
+});
