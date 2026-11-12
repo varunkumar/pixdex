@@ -158,6 +158,7 @@ describe('runCli', () => {
           excluded: [{ id: 'Q2', name: 'B', refs: 1 }],
           failed: [{ id: 'Q3', name: 'C', error: 'HTTP 429' }],
           averageRefs: 4,
+          groupRefs: 0,
         },
       });
       loadConfigMock.mockReturnValue({
@@ -198,7 +199,7 @@ describe('runCli', () => {
       };
       buildGalleryMock.mockResolvedValue({
         gallery: big,
-        report: { included: [], excluded: [], failed: [], averageRefs: 0 },
+        report: { included: [], excluded: [], failed: [], averageRefs: 0, groupRefs: 0 },
       });
       expect(await runCli(['build-known-gallery'])).toBe(0);
       expect(upsertMock.mock.calls.map((c) => c[0].length)).toEqual([500, 500, 200]);

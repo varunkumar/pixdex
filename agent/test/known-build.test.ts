@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildGallery, MAX_REFS, RATE_LIMIT_STOP_AFTER } from '../src/known/buildGallery';
+import {
+  buildGallery,
+  GROUP_MARGIN,
+  GROUP_MIN_COSINE,
+  GROUP_PHOTO_LIMIT,
+  MAX_GROUP_FACES,
+  MAX_REFS,
+  RATE_LIMIT_STOP_AFTER,
+} from '../src/known/buildGallery';
 import { RateLimitedError } from '../src/known/wikimedia';
 import type { Gallery, KnownPerson } from '../src/known/gallery';
 
@@ -400,5 +408,76 @@ describe('buildGallery', () => {
     people.splice(2, 0, person('Q3'));
     const res = await buildGallery({ ...deps, people: [...people, ...['Q6', 'Q7'].map(person)] });
     expect(res.report.failed).toHaveLength(6);
+  });
+
+  describe('group photos', () => {
+    /** Unit vector with cosine `c` to axis `axis`, the rest on `other`. */
+    const mix = (axis: number, c: number, other = 200): string => {
+      const v = new Float32Array(DIM);
+      v[axis] = c;
+      v[other] = Math.sqrt(1 - c * c);
+      return Buffer.from(v.buffer).toString('base64');
+    };
+    const face = (embedding: string, detScore = 0.9) => ({ detScore, embedding });
+    const group = (...faces: ReturnType<typeof face>[]): FakeImage => ({ faces });
+    const run = async (images: FakeImage[]) => {
+      const { deps } = setup({ Q1: images });
+      const lines: string[] = [];
+      const res = await buildGallery({ ...deps, people: [person('Q1')], onProgress: (m) => lines.push(m) });
+      return { ...res, lines };
+    };
+    const ref = (r: { gallery: { people: { refs: Float32Array[] }[] } }, i: number) => r.gallery.people[0].refs[i];
+
+    it('accepts the one face that matches the anchors and keeps that face embedding, not the first', async () => {
+      const r = await run([...many(3), group(face(emb(7)), face(mix(0, 0.8)))]);
+      expect(r.gallery.people[0].refs).toHaveLength(4);
+      const picked = ref(r, 3);
+      expect(picked[200]).toBeCloseTo(0.6, 3);
+      expect(picked[7]).toBe(0);
+      expect(r.report.groupRefs).toBe(1);
+      expect(r.lines.some((l) => /group .*: picked face \(cos 0\.8\d\)/.test(l))).toBe(true);
+    });
+
+    it('rejects a photo whose two faces both look like the anchors (margin too small)', async () => {
+      const r = await run([...many(3), group(face(mix(0, 0.8, 200)), face(mix(0, 0.78, 201)))]);
+      expect(r.gallery.people[0].refs).toHaveLength(3);
+      expect(r.report.groupRefs).toBe(0);
+      expect(r.lines.some((l) => l.includes('no confident face among 2'))).toBe(true);
+      expect(GROUP_MARGIN).toBeGreaterThan(0.02);
+    });
+
+    it('rejects a best face below the cosine threshold', async () => {
+      const r = await run([...many(3), group(face(emb(7)), face(mix(0, GROUP_MIN_COSINE - 0.1)))]);
+      expect(r.gallery.people[0].refs).toHaveLength(3);
+      expect(r.report.groupRefs).toBe(0);
+    });
+
+    it('needs at least one anchor: group photos alone never create refs', async () => {
+      const r = await run(Array.from({ length: 6 }, () => group(face(emb(0)), face(emb(7)))));
+      expect(r.report.excluded).toEqual([{ id: 'Q1', name: 'Name Q1', refs: 0 }]);
+      expect(r.report.groupRefs).toBe(0);
+    });
+
+    it('ignores low detection score faces and photos with no faces or too many faces', async () => {
+      const crowd = group(...Array.from({ length: MAX_GROUP_FACES + 1 }, (_, i) => face(i === 0 ? mix(0, 0.9) : emb(10 + i))));
+      const r = await run([...many(3), crowd, { faces: [] }, group(face(mix(0, 0.9), 0.3), face(emb(7)))]);
+      expect(r.gallery.people[0].refs).toHaveLength(3);
+      expect(r.report.groupRefs).toBe(0);
+    });
+
+    it('tries at most GROUP_PHOTO_LIMIT group photos per person', async () => {
+      const rejected = Array.from({ length: GROUP_PHOTO_LIMIT + 10 }, () => group(face(emb(7)), face(emb(8))));
+      const r = await run([...many(3), ...rejected]);
+      const tried = r.lines.filter((l) => /^ {2}(group|skip) .*(picked|no confident)/.test(l));
+      expect(tried).toHaveLength(GROUP_PHOTO_LIMIT);
+    });
+
+    it('stops at MAX_REFS', async () => {
+      const accepted = Array.from({ length: 20 }, (_, i) => group(face(emb(300 + i)), face(mix(0, 0.8, 201 + (i % 5)))));
+      const r = await run([...many(4), ...accepted]);
+      expect(r.gallery.people[0].refs).toHaveLength(MAX_REFS);
+      expect(r.report.groupRefs).toBe(MAX_REFS - 4);
+      expect(r.lines.filter((l) => l.includes('picked face'))).toHaveLength(MAX_REFS - 4);
+    });
   });
 });

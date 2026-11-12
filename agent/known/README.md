@@ -27,3 +27,18 @@ Delete the entry from `people.json`, run `build-known-gallery` (the person leave
 ## Fix a weak person
 
 If a person matches badly or has too few references, run `build-known-gallery --rebuild <id>` to refetch just that person. If they stay weak, remove them or check their Commons category.
+
+## Group photos and URL limits
+
+Photos with one face are the primary references. After that pass, photos with 2 to `MAX_GROUP_FACES` (12) faces are used too, but only
+when the person already has at least one accepted single-face ref (the portrait counts) to act as an anchor. For each such photo every
+face (detection score at least `MIN_DET_SCORE`) is compared with the anchors using the maximum cosine over the anchors (a mean would blur
+pose and age differences). The best face is taken only if its cosine is at least `GROUP_MIN_COSINE` (0.5) and it beats the second-best face
+in the photo by `GROUP_MARGIN` (0.1); its own embedding is stored, and the usual outlier check against the person's median still applies.
+At most `GROUP_PHOTO_LIMIT` (15) group photos are tried per person, and the build stops adding once `MAX_REFS` is reached. Photos with no
+face or more than 12 faces are skipped. Progress shows `group X: picked face (cos 0.61)` or `skip X: no confident face among N`, and the
+final line reports how many refs came from group photos. Constants are in `agent/src/known/buildGallery.ts` next to `MAX_REFS` and
+`MIN_REFS`; they are first guesses, tune them if people end up with wrong faces (raise `GROUP_MIN_COSINE`/`GROUP_MARGIN`) or too few refs.
+
+Batched Wikimedia requests (titles, Wikidata ids) are chunked so the encoded `|`-joined value stays under `MAX_QUERY_CHARS` (6000) in
+addition to the 50 item cap; this avoids HTTP 414 on people with long file names.

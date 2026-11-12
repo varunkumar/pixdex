@@ -6,6 +6,17 @@ export const MAX_REFS = 10;
 export const MIN_REFS = 3;
 export const MIN_DET_SCORE = 0.6;
 export const OUTLIER_COSINE = 0.35;
+/**
+ * Group photos (2 to MAX_GROUP_FACES faces) are used only after the single-face pass, with the accepted single-face
+ * refs (the portrait counts) as anchors. A face is taken when its best cosine over the anchors is at least
+ * GROUP_MIN_COSINE and it beats the next face in the same photo by GROUP_MARGIN. Max over anchors, not the mean
+ * embedding: portraits vary in pose and age, and a mean blurs them; the margin guards against a lucky anchor.
+ */
+export const MAX_GROUP_FACES = 12;
+export const GROUP_MIN_COSINE = 0.5;
+export const GROUP_MARGIN = 0.1;
+/** Group photos tried per person, so the build stays bounded. */
+export const GROUP_PHOTO_LIMIT = 15;
 /** Stop downloading once this many usable faces are in hand (headroom for outlier removal). */
 const COLLECT_LIMIT = MAX_REFS + 5;
 const CHECKPOINT_EVERY = 25;
@@ -20,6 +31,8 @@ export interface GalleryReport {
   /** Wikimedia errors: not stored, retried on the next run. */
   failed: { id: string; name: string; error: string }[];
   averageRefs: number;
+  /** Refs (over included people) that came from group photos, picked by anchor matching. */
+  groupRefs: number;
 }
 
 export interface BuildGalleryDeps {
@@ -75,7 +88,34 @@ export class RateLimitStopError extends Error {
   }
 }
 
-async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise<Float32Array[]> {
+interface GroupCandidate {
+  title: string;
+  faces: Float32Array[];
+}
+
+/** Picks the face that clearly matches the anchors; undefined when no face is confident enough. */
+function pickGroupFace(faces: Float32Array[], anchors: Float32Array[]): { face: Float32Array; cosine: number } | undefined {
+  let best = -Infinity;
+  let second = -Infinity;
+  let bestFace: Float32Array | undefined;
+  for (const f of faces) {
+    let c = -Infinity;
+    for (const a of anchors) c = Math.max(c, dot(f, a));
+    if (c > best) {
+      second = best;
+      best = c;
+      bestFace = f;
+    } else if (c > second) second = c;
+  }
+  if (!bestFace || best < GROUP_MIN_COSINE) return undefined;
+  if (faces.length > 1 && best - second < GROUP_MARGIN) return undefined;
+  return { face: bestFace, cosine: best };
+}
+
+async function collectRefs(
+  person: KnownPerson,
+  deps: BuildGalleryDeps
+): Promise<{ refs: Float32Array[]; groupRefs: number }> {
   const { wikimedia, sidecar, download, onProgress } = deps;
   // Wikimedia failures (including a persistent 429) propagate: the caller marks the person failed.
   const candidates: string[] = [];
@@ -88,6 +128,7 @@ async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise
   // One request for up to 50 titles; the loop below stops early once enough faces are in hand.
   const infos = wikimedia.fileInfos ? await wikimedia.fileInfos(candidates) : undefined;
   const refs: Float32Array[] = [];
+  const groups: GroupCandidate[] = [];
   for (const title of candidates) {
     if (refs.length >= COLLECT_LIMIT) break;
     const info = infos ? infos.get(title) : await wikimedia.fileInfo(title);
@@ -121,8 +162,22 @@ async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise
       onProgress?.(`  skip ${title}: not detectable (${err instanceof Error ? err.message : String(err)})`);
       continue;
     }
-    if (detection.faces.length !== 1) {
-      onProgress?.(`  skip ${title}: ${detection.faces.length} faces`);
+    const count = detection.faces.length;
+    if (count === 0 || count > MAX_GROUP_FACES) {
+      onProgress?.(`  skip ${title}: ${count} faces`);
+      continue;
+    }
+    if (count > 1) {
+      // Decided after the single-face pass, once the anchors are known (no second download).
+      const faces: Float32Array[] = [];
+      try {
+        for (const f of detection.faces) if (f.detScore >= MIN_DET_SCORE) faces.push(decodeEmbedding(f.embedding));
+      } catch (err) {
+        onProgress?.(`  skip ${title}: bad embedding (${err instanceof Error ? err.message : String(err)})`);
+        continue;
+      }
+      if (faces.length === 0) onProgress?.(`  skip ${title}: low detection score`);
+      else groups.push({ title, faces });
       continue;
     }
     const face = detection.faces[0];
@@ -137,9 +192,28 @@ async function collectRefs(person: KnownPerson, deps: BuildGalleryDeps): Promise
     }
   }
 
-  if (refs.length === 0) return refs;
+  if (refs.length === 0) {
+    if (groups.length > 0) onProgress?.(`  skip ${groups.length} group photos: no single-face anchor`);
+    return { refs, groupRefs: 0 };
+  }
   const median = medianReference(refs);
-  return refs.filter((r) => dot(r, median) >= OUTLIER_COSINE).slice(0, MAX_REFS);
+  const kept = refs.filter((r) => dot(r, median) >= OUTLIER_COSINE).slice(0, MAX_REFS);
+  const anchors = kept.slice();
+  let groupRefs = 0;
+  let tried = 0;
+  for (const group of groups) {
+    if (kept.length >= MAX_REFS || tried >= GROUP_PHOTO_LIMIT || anchors.length === 0) break;
+    tried++;
+    const pick = pickGroupFace(group.faces, anchors);
+    if (!pick || dot(pick.face, median) < OUTLIER_COSINE) {
+      onProgress?.(`  skip ${group.title}: no confident face among ${group.faces.length}`);
+      continue;
+    }
+    kept.push(pick.face);
+    groupRefs++;
+    onProgress?.(`  group ${group.title}: picked face (cos ${pick.cosine.toFixed(2)})`);
+  }
+  return { refs: kept, groupRefs };
 }
 
 /**
@@ -165,7 +239,7 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
 
   const results = new Map<string, GalleryPerson | undefined>();
   const excludedNow = new Map<string, ExcludedPerson>();
-  const report: GalleryReport = { included: [], excluded: [], failed: [], averageRefs: 0 };
+  const report: GalleryReport = { included: [], excluded: [], failed: [], averageRefs: 0, groupRefs: 0 };
 
   /** Processed people use their new result; unprocessed ones keep their previous refs, so a partial save loses nothing. */
   const snapshot = (): Gallery => {
@@ -199,6 +273,7 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
     const prior = kept.get(person.id);
     const priorExcluded = keptExcluded.get(person.id);
     let refs: Float32Array[];
+    let groupRefs = 0;
     if (prior && !rebuild.has(person.id)) {
       refs = prior.refs;
     } else if (!prior && priorExcluded && !rebuild.has(person.id) && !deps.retryExcluded) {
@@ -210,7 +285,7 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
     } else {
       deps.onProgress?.(`[${index + 1}/${deps.people.length}] ${person.name} (${person.id})`);
       try {
-        refs = await collectRefs(person, deps);
+        ({ refs, groupRefs } = await collectRefs(person, deps));
       } catch (err) {
         if (err instanceof SidecarDownError) {
           await deps.onCheckpoint?.(snapshot());
@@ -237,6 +312,7 @@ export async function buildGallery(deps: BuildGalleryDeps): Promise<{ gallery: G
       const entry = { id: person.id, name: person.name, aliases: person.aliases, refs };
       results.set(person.id, entry);
       report.included.push({ id: person.id, name: person.name, refs: refs.length });
+      report.groupRefs += groupRefs;
     } else {
       results.set(person.id, undefined);
       excludedNow.set(person.id, { id: person.id, refs: refs.length });
