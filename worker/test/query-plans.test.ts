@@ -96,8 +96,9 @@ describe('person label resolution', () => {
     expect(p).not.toMatch(/SCAN faces/);
   });
   it('the embeddings page query ranges over faces by rowid', async () => {
-    const p = await plan('SELECT rowid, id, embedding FROM faces WHERE embedding_model = ? AND rowid > ? AND (? = 1 OR known_id IS NULL) ORDER BY rowid LIMIT ?', 'm', 0, 0, 100);
-    expect(p).toMatch(/SEARCH faces USING INTEGER PRIMARY KEY \(rowid>\?\)/);
+    const p = await plan('SELECT rowid, id, embedding FROM faces WHERE embedding_model = ? AND rowid > ? AND rowid <= ? AND (? = 1 OR known_id IS NULL) ORDER BY rowid LIMIT ?', 'm', 0, 5000, 0, 100);
+    expect(p).toMatch(/SEARCH faces USING INTEGER PRIMARY KEY \(rowid>\? AND rowid<\?\)/);
+    expect(await plan('SELECT max(rowid) AS m FROM faces')).not.toMatch(/SCAN faces/);
     expect(p).not.toMatch(/SCAN faces|TEMP B-TREE/);
   });
 });

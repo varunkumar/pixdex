@@ -57,13 +57,17 @@ const embeddingsSchema = z.object({
 
 const ID_BYTES = 36;
 const EMB_BYTES = 2048;
+export const EMBEDDING_WINDOW = 5000;
 
 /**
  * One page of stored face embeddings for the backfill, as raw bytes: per face 36 ASCII id bytes then the
  * 2048 stored embedding bytes. No JSON, no base64, no per-float work: the Worker only copies bytes.
- * Keyset paging by rowid (no OFFSET); the next rowid comes back in X-Next-Cursor when the page was full.
- * D1: one query, at most `limit` (100) rows returned; rows scanned are the rowid range up to the page's last
- * match, so a sparse match set reads more rows than it returns (bounded by the faces table, rowid-ordered).
+ * Keyset paging by rowid (no OFFSET) over a bounded window (cursor, cursor + EMBEDDING_WINDOW], so a sparse
+ * match set never scans more than EMBEDDING_WINDOW rowids per request. Clients MUST follow the X-Next-Cursor
+ * header, never body length: a sparse window returns an empty body with a cursor; the last page has no header.
+ * D1: one batch of two statements: the page (at most `limit` rows returned, at most EMBEDDING_WINDOW rowids
+ * scanned) and max(rowid) (O(1) on the rowid b-tree).
+ * CPU is unmeasured locally: after deploy measure with `wrangler tail`; the `limit` cap (<= 100) is the knob.
  */
 export async function faceEmbeddingsRoute(c: Context<{ Bindings: Env }>) {
   const body = await readJson(c);
@@ -72,20 +76,25 @@ export async function faceEmbeddingsRoute(c: Context<{ Bindings: Env }>) {
   if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
   const { model, cursor = 0, limit = 100, rescore = false } = parsed.data;
 
-  const { results } = await c.env.DB.prepare(
-    `SELECT rowid AS cursor, id, embedding FROM faces
-     WHERE embedding_model = ? AND rowid > ? AND (? = 1 OR known_id IS NULL)
-     ORDER BY rowid LIMIT ?`
-  )
-    .bind(model, cursor, rescore ? 1 : 0, limit)
-    .all<{ cursor: number; id: string; embedding: ArrayBuffer | null }>();
+  const windowEnd = cursor + EMBEDDING_WINDOW;
+  const [page, maxRow] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `SELECT rowid AS cursor, id, embedding FROM faces
+       WHERE embedding_model = ? AND rowid > ? AND rowid <= ? AND (? = 1 OR known_id IS NULL)
+       ORDER BY rowid LIMIT ?`
+    ).bind(model, cursor, windowEnd, rescore ? 1 : 0, limit),
+    c.env.DB.prepare('SELECT max(rowid) AS m FROM faces'),
+  ]);
+  const results = page.results as { cursor: number; id: string; embedding: ArrayBuffer | number[] | null }[];
+  const tableMax = ((maxRow.results[0] as { m: number | null } | undefined)?.m) ?? 0;
 
   const out = new Uint8Array(results.length * (ID_BYTES + EMB_BYTES));
   const enc = new TextEncoder();
   let n = 0;
   for (const r of results) {
     if (!r.embedding || r.id.length !== ID_BYTES) continue;
-    const emb = new Uint8Array(r.embedding);
+    // D1 may return a BLOB as an ArrayBuffer or as a number[] depending on the path.
+    const emb = Array.isArray(r.embedding) ? Uint8Array.from(r.embedding) : new Uint8Array(r.embedding);
     if (emb.byteLength !== EMB_BYTES) continue;
     enc.encodeInto(r.id, out.subarray(n, n + ID_BYTES));
     out.set(emb, n + ID_BYTES);
@@ -93,7 +102,12 @@ export async function faceEmbeddingsRoute(c: Context<{ Bindings: Env }>) {
   }
 
   const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' };
-  if (results.length === limit) headers['X-Next-Cursor'] = String(results[results.length - 1].cursor);
+  if (results.length === limit) {
+    headers['X-Next-Cursor'] = String(results[results.length - 1].cursor);
+  } else if (windowEnd < tableMax) {
+    // Short page: the window was exhausted but the table continues. Possibly an empty body.
+    headers['X-Next-Cursor'] = String(windowEnd);
+  }
   return new Response(out.subarray(0, n), { headers });
 }
 
@@ -120,7 +134,8 @@ export async function setFaceKnownRoute(c: Context<{ Bindings: Env }>) {
   if (body === undefined) return c.json({ error: 'Invalid JSON body' }, 400);
   const parsed = knownSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
-  const { matches } = parsed.data;
+  // Duplicate faceIds: the last entry wins (deterministic).
+  const matches = [...new Map(parsed.data.matches.map((m) => [m.faceId, m])).values()];
 
   const payload = JSON.stringify(
     matches.map((m) => ({ faceId: m.faceId, knownId: m.knownId, score: m.knownId === null ? null : (m.score ?? null) }))

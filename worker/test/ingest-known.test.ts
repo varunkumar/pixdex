@@ -1,6 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { readHeaders } from './helpers';
+import { EMBEDDING_WINDOW } from '../src/routes/ingest-known';
 
 const post = (body: unknown, token: string = env.INGEST_TOKEN) =>
   SELF.fetch('https://example.com/ingest/known-people', {
@@ -129,8 +130,45 @@ describe('POST /ingest/faces/embeddings', () => {
     expect(cursor).not.toBeNull();
     expect((await first.arrayBuffer()).byteLength).toBe(2 * 2084);
     const second = await page({ model: 'arcface', limit: 2, cursor: Number(cursor) });
-    expect((await second.arrayBuffer()).byteLength).toBe(2084);
+    const b2 = new Uint8Array(await second.arrayBuffer());
+    expect(b2.byteLength).toBe(2084);
+    expect(new TextDecoder().decode(b2.subarray(0, 36))).toBe(fid(3));
     expect(second.headers.get('X-Next-Cursor')).toBeNull();
+  });
+
+  it('bounds the scanned rowid window: sparse data gives empty pages with a cursor that terminates', async () => {
+    await seedFace(1);
+    await env.DB.prepare(
+      `INSERT INTO faces (rowid, id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, created_at)
+       VALUES (?, ?, 'photo-e', 0.1, 0.1, 0.2, 0.2, 0.9, ?, 'arcface', '2026-01-01')`
+    )
+      .bind(3 * EMBEDDING_WINDOW - 1, fid(2), new Uint8Array(2048))
+      .run();
+    const sizes: number[] = [];
+    let cursor = 0;
+    for (let i = 0; i < 10; i++) {
+      const res = await page({ model: 'arcface', cursor });
+      sizes.push((await res.arrayBuffer()).byteLength);
+      const next = res.headers.get('X-Next-Cursor');
+      if (next === null) break;
+      expect(Number(next)).toBeGreaterThan(cursor);
+      expect(Number(next) - cursor).toBeLessThanOrEqual(EMBEDDING_WINDOW);
+      cursor = Number(next);
+    }
+    expect(sizes).toEqual([2084, 0, 2084]);
+  });
+
+  it('skips null or wrong-length embeddings and still returns a cursor when the last row of a full page is skipped', async () => {
+    await seedFace(1);
+    await env.DB.prepare(
+      `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, created_at)
+       VALUES (?, 'photo-e', 0.1, 0.1, 0.2, 0.2, 0.9, x'00', 'arcface', '2026-01-01')`
+    )
+      .bind(fid(2))
+      .run();
+    const res = await page({ model: 'arcface', limit: 2 });
+    expect((await res.arrayBuffer()).byteLength).toBe(2084);
+    expect(res.headers.get('X-Next-Cursor')).not.toBeNull();
   });
 
   it('rejects bad limits and invalid JSON, and requires the ingest token', async () => {
@@ -165,6 +203,15 @@ describe('POST /ingest/faces/known', () => {
     expect(await row(2)).toEqual({ known_id: 'Q1', known_score: null });
     await setKnown({ matches: [{ faceId: fid(1), knownId: null }] });
     expect(await row(1)).toEqual({ known_id: null, known_score: null });
+  });
+
+  it('keeps person_id and assign_status, and the last duplicate faceId wins', async () => {
+    await env.DB.prepare("UPDATE faces SET person_id = 'p1', assign_status = 'confirmed' WHERE id = ?").bind(fid(1)).run();
+    const res = await setKnown({ matches: [{ faceId: fid(1), knownId: 'Q1', score: 0.5 }, { faceId: fid(1), knownId: null }] });
+    expect(await res.json()).toEqual({ updated: 1 });
+    expect(await row(1)).toEqual({ known_id: null, known_score: null });
+    const f = await env.DB.prepare('SELECT person_id, assign_status FROM faces WHERE id = ?').bind(fid(1)).first();
+    expect(f).toEqual({ person_id: 'p1', assign_status: 'confirmed' });
   });
 
   it('returns 400 and changes nothing when a knownId does not exist', async () => {
