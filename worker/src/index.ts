@@ -6,6 +6,7 @@ import { ingestFacesRoute, pendingFacesRoute, putFaceCropRoute, unscannedFacesRo
 import { ingestExifRoute } from './routes/ingest-exif';
 import { listKnownRoute } from './routes/known';
 import { faceEmbeddingsRoute, setFaceKnownRoute, upsertKnownPeopleRoute } from './routes/ingest-known';
+import { getKnownGalleryRoute, putKnownGalleryRoute } from './routes/ingest-known-gallery';
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { ingestRelocateRoute } from './routes/ingest-relocate';
@@ -60,6 +61,8 @@ app.post('/ingest/faces', ingestFacesRoute);
 app.put('/ingest/faces/:faceId/crop', putFaceCropRoute);
 app.post('/ingest/rating', ingestRatingRoute);
 app.post('/ingest/known-people', upsertKnownPeopleRoute);
+app.put('/ingest/known-gallery', putKnownGalleryRoute);
+app.get('/ingest/known-gallery', getKnownGalleryRoute);
 app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);
 
 app.use('/thumbnails/*', requireReadToken);

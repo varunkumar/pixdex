@@ -163,6 +163,26 @@ describe('Pages Function identity', () => {
     );
   });
 
+  describe('known gallery backup', () => {
+    it('does not proxy GET or PUT /api/ingest/known-gallery', async () => {
+      const got = await get('/api/ingest/known-gallery', 'friend@example.com');
+      expect(got.status).toBe(404);
+      const put = await onRequestPut({
+        request: new Request('https://pixdex.example.dev/api/ingest/known-gallery', {
+          method: 'PUT',
+          headers: {
+            'content-type': 'application/json',
+            'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
+          },
+          body: '{}',
+        }),
+        env,
+      });
+      expect([404, 405]).toContain(put.status);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+  });
+
   describe('originals', () => {
     it('returns 404 when the access check is 404, without calling the tunnel', async () => {
       accessStatus = 404;
