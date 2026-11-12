@@ -21,6 +21,8 @@ import { galleryChanged, pullGallery, pushGallery, restoreFromR2 } from './known
 import { WikimediaClient } from './known/wikimedia';
 import { wikimediaContact } from './known/userAgent';
 import { checkList, entityProblems, fetchCandidates, loadList, PersonSchema, saveList, searchWikidata } from './known/list';
+import { createCandidateStore, gatherCandidates, isQid } from './known/pick/candidates';
+import { createPickApp, newToken, startPickServer } from './known/pick/server';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
 
 const UPSERT_BATCH = 500;
@@ -135,6 +137,91 @@ function flagValues(args: string[], flag: string): string[] {
     if (args[i] === flag && i + 1 < args.length) values.push(args[++i]);
   }
   return values;
+}
+
+const PICK_CACHE_DIR = path.resolve(path.dirname(GALLERY_PATH), 'known-pick-cache');
+
+async function runKnownPick(args: string[]): Promise<number> {
+  try {
+    const ids: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] !== '--id') continue;
+      while (i + 1 < args.length && !args[i + 1].startsWith('--')) ids.push(args[++i]);
+    }
+    const bad = ids.filter((id) => !isQid(id));
+    if (bad.length > 0) {
+      console.error(`Error: invalid --id value(s): ${bad.join(', ')}`);
+      return 1;
+    }
+    const portArg = flagValues(args, '--port')[0];
+    const port = portArg === undefined ? 0 : Number(portArg);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) {
+      console.error('Usage: pixdex-agent known-pick [--id <Q-id>...] [--port <n>]');
+      return 1;
+    }
+    const config = loadConfig();
+    const sidecar = createFaceSidecar(config);
+    if (!sidecar) {
+      console.error('Error: FACE_SIDECAR_URL is not set (start the sidecar, see agent/sidecar/README.md)');
+      return 1;
+    }
+    const list = PeopleSchema.parse(JSON.parse(await fs.readFile(peoplePath(), 'utf8'))) as KnownPerson[];
+    const before = await loadGallery(GALLERY_PATH);
+    if (!before) {
+      console.error('Error: no known gallery found; run build-known-gallery first');
+      return 1;
+    }
+    const wanted = ids.length > 0 ? ids : (before.excluded ?? []).map((e) => e.id);
+    const people = wanted.map((id) => list.find((p) => p.id === id)).filter((p): p is KnownPerson => p !== undefined);
+    if (people.length < wanted.length) console.warn(`Warning: ${wanted.length - people.length} id(s) are not in the people list and are skipped.`);
+    if (people.length === 0) {
+      console.log('Nobody to pick for (no excluded people).');
+      return 0;
+    }
+    const { contact, warning } = wikimediaContact();
+    if (warning) console.warn(warning);
+    const wikimedia = new WikimediaClient(fetch, { contact });
+    wikimedia.onRateLimit = (seconds) => console.log(`  Wikimedia asked to slow down: waiting ${seconds}s`);
+    const store = createCandidateStore({
+      cacheDir: PICK_CACHE_DIR,
+      gather: (person) => {
+        console.log(`Fetching candidates for ${person.name} (${person.id})`);
+        return gatherCandidates(person, { wikimedia, sidecar, download: (url) => wikimedia.download(url), onProgress: (m) => console.log(m) });
+      },
+      onError: (person, error) => console.warn(`  FAILED ${person.id}: ${error instanceof Error ? error.message : String(error)}`),
+    });
+    let finish!: () => void;
+    const finished = new Promise<void>((resolve) => (finish = resolve));
+    const token = newToken();
+    const app = createPickApp({
+      token,
+      people,
+      store,
+      loadGallery: () => loadGallery(GALLERY_PATH),
+      saveGallery: (g) => saveGallery(GALLERY_PATH, g),
+      onDone: () => setTimeout(finish, 200),
+    });
+    const server = await startPickServer(app, { token, port });
+    console.log(`Known picker for ${people.length} people. Open (127.0.0.1 only):\n  ${server.url}\nPress Ctrl+C or the Done button to finish.`);
+    process.once('SIGINT', finish);
+    await finished;
+    await server.close();
+    const after = await loadGallery(GALLERY_PATH);
+    const summary = app.summary();
+    console.log(`Saved ${summary.saved.length}, skipped ${summary.skipped.length}.`);
+    if (after && galleryChanged(before, after)) {
+      try {
+        const size = await pushGallery(new CloudflareClient(config), GALLERY_PATH);
+        console.log(`Gallery backed up to R2 (${(size / 1024 / 1024).toFixed(1)} MB)`);
+      } catch (error) {
+        console.warn(`Warning: could not back up the gallery to R2 (${error instanceof Error ? error.message : String(error)}). The local file is saved; run known-gallery-push to retry.`);
+      }
+    }
+    return 0;
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
 }
 
 async function runKnownSearch(args: string[]): Promise<number> {
@@ -315,6 +402,7 @@ export async function runCli(argv: string[]): Promise<number> {
   if (command === 'backfill-known') return runBackfillKnown(argv.slice(1));
   if (command === 'known-gallery-push') return runKnownGalleryPush();
   if (command === 'known-gallery-pull') return runKnownGalleryPull(argv.slice(1));
+  if (command === 'known-pick') return runKnownPick(argv.slice(1));
   if (command === 'known-search') return runKnownSearch(argv.slice(1));
   if (command === 'known-add') return runKnownAdd(argv.slice(1));
   if (command === 'known-check') return runKnownCheck(argv.slice(1));
@@ -402,7 +490,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore] [--page-size <n>]\n       pixdex-agent known-gallery-push\n       pixdex-agent known-gallery-pull [--force]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore] [--page-size <n>]\n       pixdex-agent known-gallery-push\n       pixdex-agent known-gallery-pull [--force]\n       pixdex-agent known-pick [--id <Q...>] [--port <n>]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive\n       pixdex-agent serve-originals'
     );
     return 1;
   }

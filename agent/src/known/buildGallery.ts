@@ -48,14 +48,14 @@ export interface BuildGalleryDeps {
   onCheckpoint?: (gallery: Gallery) => Promise<void>;
 }
 
-function dot(a: Float32Array, b: Float32Array): number {
+export function dot(a: Float32Array, b: Float32Array): number {
   let s = 0;
   for (let i = 0; i < a.length; i++) s += a[i] * b[i];
   return s;
 }
 
 /** Elementwise median of the refs, L2-normalised. */
-function medianReference(refs: Float32Array[]): Float32Array {
+export function medianReference(refs: Float32Array[]): Float32Array {
   const dim = refs[0].length;
   const out = new Float32Array(dim);
   const col = new Array<number>(refs.length);
@@ -112,18 +112,24 @@ function pickGroupFace(faces: Float32Array[], anchors: Float32Array[]): { face: 
   return { face: bestFace, cosine: best };
 }
 
-async function collectRefs(
-  person: KnownPerson,
-  deps: BuildGalleryDeps
-): Promise<{ refs: Float32Array[]; groupRefs: number }> {
-  const { wikimedia, sidecar, download, onProgress } = deps;
-  // Wikimedia failures (including a persistent 429) propagate: the caller marks the person failed.
+/** Wikidata portrait plus Commons category files for the person, raster only, deduplicated. Wikimedia errors propagate. */
+export async function candidateTitles(person: KnownPerson, wikimedia: WikimediaClient): Promise<string[]> {
   const candidates: string[] = [];
   const portrait = await wikimedia.portrait(person.id);
   if (portrait && isRasterTitle(portrait)) candidates.push(portrait);
   for (const title of await wikimedia.categoryFiles(person.id, { maxDepth: CATEGORY_DEPTH, limit: CATEGORY_LIMIT })) {
     if (isRasterTitle(title) && !candidates.includes(title)) candidates.push(title);
   }
+  return candidates;
+}
+
+async function collectRefs(
+  person: KnownPerson,
+  deps: BuildGalleryDeps
+): Promise<{ refs: Float32Array[]; groupRefs: number }> {
+  const { wikimedia, sidecar, download, onProgress } = deps;
+  // Wikimedia failures (including a persistent 429) propagate: the caller marks the person failed.
+  const candidates = await candidateTitles(person, wikimedia);
 
   // One request for up to 50 titles; the loop below stops early once enough faces are in hand.
   const infos = wikimedia.fileInfos ? await wikimedia.fileInfos(candidates) : undefined;

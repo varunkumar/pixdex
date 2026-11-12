@@ -20,6 +20,17 @@ All commands run from `agent/` as `npx tsx --env-file=.env src/cli.ts <command>`
 
 Note: a rescan (`index-*`, `backfill-faces --recrop`) on a machine without the gallery file resets known matches on the rescanned unassigned and auto faces; a normal `backfill-known` restores them.
 
+## Pick faces by hand (excluded people)
+
+`known-pick [--id <Q-id>...] [--port <n>]` (from `agent/`, needs the sidecar and `WIKIMEDIA_CONTACT` like the build) works through the people recorded as excluded, or only the `--id` ones. It prints a URL on `127.0.0.1` with a random per-run token; open it. For each person it shows the same candidates as the build (Wikidata portrait plus Commons category files, raster, openly licensed only, license shown under each photo) with numbered boxes on every detected face.
+
+- Single-face photos start picked. In group photos the face closest to the current picks (max cosine) is outlined with a dashed amber box as a suggestion; it is not picked until you click it. Click a box (or Tab to it and press Space) to toggle.
+- Save (Enter) needs at least 3 picks; at most 10 are stored. Skip (S) leaves the person excluded. Done (D) or Ctrl+C ends the run.
+- Saved people are trusted: no outlier filter. A picked face with cosine below 0.3 against the median of the other picks gets a red box and a warning.
+- Saving writes the gallery file atomically (temp file, then rename), removes the person from the excluded record and never touches other people. On exit, if the gallery changed, it is pushed to R2 (a failure only warns; run `known-gallery-push`).
+- Crawls run one at a time; the next person is fetched in the background. Images, face boxes and embeddings are cached under `agent/.index-state/known-pick-cache/` (uncommitted), so a restart reuses them. Delete that folder to refetch.
+- Run `backfill-known --rescore` afterwards so already indexed faces see the new references.
+
 ## Remove a person
 
 Delete the entry from `people.json`, run `build-known-gallery` (the person leaves the gallery), then `backfill-known --rescore` to clear their old matches.
