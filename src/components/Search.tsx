@@ -147,14 +147,26 @@ const Search = () => {
     return () => clearInterval(id);
   }, [expansion.isPending]);
 
+  // Bumped by every explicit write that sets q or leaves AI mode (Enter, a pick that trims the text, a keyword
+  // write). An expansion that finishes after one of those is stale and must not undo it. The mutation is never
+  // reset for this, so a second Ask AI still cannot start while the model runs.
+  const generation = useRef(0);
+  const bump = () => {
+    generation.current += 1;
+  };
+
   const askAi = () => {
     // Never parsed for dates: the whole text is the request.
     const request = text.trim();
     if (!request || expansion.isPending) return;
     // Only a successful expansion replaces the keywords; an error leaves the URL as it was.
     // A per-call onSuccess does not fire after unmount, so leaving mid-run cannot navigate back here.
+    const started = generation.current;
     expansion.mutate(request, {
-      onSuccess: (result) => patchLatest({ mode: 'ai', q: request, kw: result.keywords.join(',') }),
+      onSuccess: (result) => {
+        if (generation.current !== started) return;
+        patchLatest({ mode: 'ai', q: request, kw: result.keywords.join(',') });
+      },
     });
   };
 
@@ -164,6 +176,7 @@ const Search = () => {
   const writeKw = (next: string[]) => {
     const kw = normalizeKeywords(next.join(',')).join(',');
     writtenKw.current = kw;
+    bump();
     patchLatest({ mode: 'ai', kw });
   };
   const searchAgain = (next: string[]) => {
@@ -175,12 +188,14 @@ const Search = () => {
       if (kw) void aiSearch.refetch();
     } else if (kw !== writtenKw.current) {
       writtenKw.current = kw;
+      bump();
       patchLatest({ mode: 'ai', kw });
     }
     writtenKw.current = null;
   };
 
   const submit = () => {
+    bump();
     const parsed = parseDateQuery(text);
     // A typed date wins over the picker; with none typed, the picker stays as it is. Enter always leaves AI mode.
     update(
@@ -203,6 +218,7 @@ const Search = () => {
     if (patch.onThisDay !== undefined) next.onThisDay = patch.onThisDay;
     if (patch.from !== undefined || patch.to !== undefined || patch.onThisDay !== undefined) setPending(null);
     if (nextText !== undefined) {
+      bump();
       next.q = nextText;
       setText(nextText);
     }

@@ -331,11 +331,19 @@ describe('Search (plain mode)', () => {
 });
 
 describe('Search without the Prompt API', () => {
-  it('has no Ask AI control', async () => {
-    renderWithProviders(<Search />, { route: '/search?q=lion' });
-    await waitFor(() => expect(getPromptApiStatus).toHaveBeenCalled());
-    await waitFor(() => expect(workerApiClient.searchPage).toHaveBeenCalled());
+  it('has no Ask AI control once support has resolved', async () => {
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [], total: 0 });
+    // /search?mode=ai renders only after support resolves; unsupported then strips it and runs the plain search.
+    const { router } = go('/search?mode=ai&q=lion');
+    await waitFor(() => expect(router.state.location.search).toBe('?q=lion'));
+    expect(await screen.findByText(/no photos match/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Ask AI/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the Ask AI control when supported', async () => {
+    vi.mocked(getPromptApiStatus).mockResolvedValue('available');
+    renderWithProviders(<Search />, { route: '/search?q=lion' });
+    expect(await screen.findByRole('button', { name: /Ask AI/ })).toBeInTheDocument();
   });
 
   it('strips the AI params from /search?mode=ai and runs a plain search', async () => {
@@ -542,6 +550,52 @@ describe('Search (AI mode)', () => {
         expect.anything()
       )
     );
+  });
+
+  const pendingExpansion = () => {
+    const ctl: { finish: (v: { occasion: string; keywords: string[] }) => void } = { finish: () => {} };
+    vi.mocked(expandRequest).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          ctl.finish = resolve;
+        })
+    );
+    return ctl;
+  };
+
+  it('Enter with new text while the model runs is not undone when it completes', async () => {
+    const ctl = pendingExpansion();
+    const { router } = go('/search');
+    await askAi('Xmas');
+    await waitFor(() => expect(expandRequest).toHaveBeenCalledTimes(1));
+
+    const input = await box();
+    fireEvent.change(input, { target: { value: 'lion' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(router.state.location.search).toBe('?q=lion'));
+
+    await act(async () => ctl.finish({ occasion: 'xmas', keywords: ['xmas'] }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(router.state.location.search).toBe('?q=lion');
+    expect(screen.getByRole('combobox', { name: 'Search' })).toHaveValue('lion');
+    expect(runAiSearch).not.toHaveBeenCalled();
+  });
+
+  it('a chip pick that trims the text while the model runs is not overwritten', async () => {
+    const ctl = pendingExpansion();
+    const { router } = go('/search');
+    await waitFor(() => expect(workerApiClient.getKnownPeople).toHaveBeenCalled());
+    await askAi('Xmas');
+    await waitFor(() => expect(expandRequest).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(await box(), { target: { value: 'beach dho' } });
+    fireEvent.click(await screen.findByRole('option', { name: /MS Dhoni/ }));
+    await waitFor(() => expect(router.state.location.search).toBe('?known=ms&q=beach'));
+
+    await act(async () => ctl.finish({ occasion: 'xmas', keywords: ['xmas'] }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(router.state.location.search).toBe('?known=ms&q=beach');
+    expect(screen.getByRole('combobox', { name: 'Search' })).toHaveValue('beach');
   });
 
   it('Ask AI twice while the model runs calls it once', async () => {
