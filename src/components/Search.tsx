@@ -261,7 +261,8 @@ const Search = () => {
 
   return (
     <Stack gap="lg">
-      <Card withBorder>
+      {/* Card clips its content by default; visible so the suggestion panel can hang below it. */}
+      <Card withBorder style={{ overflow: 'visible' }} data-testid="search-card">
         <Stack gap="md">
           <Omnibox
             text={text}

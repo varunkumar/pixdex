@@ -86,6 +86,12 @@ describe('Search (plain mode)', () => {
     expect(screen.queryByPlaceholderText('Anyone')).not.toBeInTheDocument();
   });
 
+  it('lets the suggestion panel overflow the search card instead of being clipped', async () => {
+    renderWithProviders(<Search />, { route: '/search' });
+    await box();
+    expect(screen.getByTestId('search-card')).toHaveStyle({ overflow: 'visible' });
+  });
+
   it('does not search and shows a prompt when there is no query or album', async () => {
     renderWithProviders(<Search />, { route: '/search' });
     expect(await screen.findByText(/enter a search term or pick an album/i)).toBeInTheDocument();

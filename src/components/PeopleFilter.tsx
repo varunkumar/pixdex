@@ -10,7 +10,7 @@ import {
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { MdVerified } from 'react-icons/md';
-import { KNOWN_COLOR, OWN_COLOR } from './chipStyle';
+import { inkColor, KNOWN_COLOR, OWN_COLOR } from './chipStyle';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { personOptions } from '../services/peopleKeys';
 import { MAX_PEOPLE_FILTER } from '../services/peopleSelection';
@@ -109,11 +109,11 @@ const PeopleFilter = ({ people, known, onChange }: Props) => {
         const k = isKnown(option.value);
         return (
           <Group gap="xs" wrap="nowrap" justify="space-between" w="100%">
-            <Text component="span" size="sm" c={`${k ? KNOWN_COLOR : OWN_COLOR}.7`}>
+            <Text component="span" size="sm" c={inkColor(k ? KNOWN_COLOR : OWN_COLOR)}>
               {option.label}
             </Text>
             {k && (
-              <Group component="span" gap={2} wrap="nowrap" c={`${KNOWN_COLOR}.7`}>
+              <Group component="span" gap={2} wrap="nowrap" c={inkColor(KNOWN_COLOR)}>
                 <MdVerified aria-hidden size={12} />
                 <Text component="span" size="xs" fw={500} c="inherit">
                   known

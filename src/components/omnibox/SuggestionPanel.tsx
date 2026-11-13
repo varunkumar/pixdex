@@ -1,7 +1,7 @@
 import { Box, Group, Paper, Stack, Text, VisuallyHidden } from '@mantine/core';
 import { MdVerified } from 'react-icons/md';
 import type { CandidateKind } from '../../services/omnibox/matcher';
-import { kindColor } from '../chipStyle';
+import { inkColor, kindColor } from '../chipStyle';
 
 export interface PanelItem {
   key: string;
@@ -67,7 +67,8 @@ export default function SuggestionPanel({ id, layout, sections, highlighted, opt
           borderRadius: layout === 'chips' ? 'var(--mantine-radius-xl)' : 'var(--mantine-radius-sm)',
           background:
             layout === 'chips' || active ? `var(--mantine-color-${color}-light)` : undefined,
-          color: `var(--mantine-color-${color}-light-color)`,
+          // A chip sits on its tint; a list row usually does not, so it needs the ink colour to stay readable in dark.
+          color: layout === 'chips' ? `var(--mantine-color-${color}-light-color)` : inkColor(color),
           outline: active ? `2px solid var(--mantine-color-${color}-filled)` : undefined,
         }}
       >
