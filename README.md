@@ -38,9 +38,14 @@ machine. Originals stay on local disk or Google Drive.
   taken. In IST, a photo taken between midnight and 05:29 shows under the
   previous day (and month or year at the boundary), and "Today" can miss this
   morning's early photos. See [Architecture](docs/architecture.md).
-- **Try AI Search (Chrome only).** Describe an occasion or mood in a sentence and a
-  small on-device model turns it into keywords, then PixdeX ranks matching photos.
-  See [AI Search](#ai-search).
+- **Search with one box.** The Search page is an omnibox: albums, people, known
+  personalities and dates become removable chips. Type a name and, from 3 characters
+  after a short pause (150 ms), matching names appear as suggestions
+  (at most 3 per typed phrase, then "+N more"); typing alone never filters, a pick
+  turns the words into a chip. When two typed names both match, an "Add both" chip
+  shows the real photo count. Enter runs a plain search. In Chrome with the Prompt
+  API, "Ask AI" (or Cmd/Ctrl+Enter) turns a sentence into keywords instead. See
+  [AI Search](#ai-search).
 - **Browse albums.** Cover photos, counts and average ratings, sorted by date,
   name, size or rating.
 - **Get a daily pick.** One nature or wildlife photo a day (no people), chosen from
@@ -201,6 +206,7 @@ album shows up there as a new path on the next run.
 | Where | Command | What it does |
 |---|---|---|
 | root | `npm run dev` | Vite dev server with the `/api` proxy |
+| root | `PIXDEX_MOCK=1 npm run dev` | Dev server with dummy data (no secrets, no Worker; for checking the UI) |
 | root | `npm run build` | Typecheck and build the frontend to `dist` |
 | root | `npm test` | Frontend tests (Vitest) |
 | root | `npm run lint` | ESLint |
@@ -305,27 +311,34 @@ Rollout: merging applies migration `0018` before the Worker deploys. Then on you
 
 ## AI Search
 
-The `/ai-search` page turns a phrase such as "photos for a Diwali greeting" into
-keywords with Chrome's built-in Prompt API (Gemini Nano), then runs one normal
-search per keyword and ranks the photos. Photos matching rarer keywords count for
-more. The keywords are editable and the result list shows which ones each photo
-matched. Two options (both on by default, kept in the URL as `people=0` and
-`room=0` when switched off):
+AI Search is part of the Search page (there is no separate nav entry). In Chrome with
+the Prompt API, "Ask AI" (or Cmd/Ctrl+Enter) turns a phrase such as "photos for a
+Diwali greeting" into keywords with Chrome's built-in Prompt API (Gemini Nano), then
+runs one normal search per keyword and ranks the photos. Photos matching rarer
+keywords count for more. The keywords show as editable chips and the result list
+shows which ones each photo matched. Album, people, known and date chips narrow
+every keyword search (and the library total used for rarity), so "sunset" with an
+album chip ranks only inside that album. State lives in the URL: `mode=ai`, `q`
+(the sentence), `kw` (the keywords), and, when switched off, `hidePeople=0` and
+`room=0`:
 
-- **Hide photos of people**, judged from each photo's stored subjects and tags
-  (not face data).
+- **Hide people photos**, judged from each photo's stored subjects and tags
+  (not face data). The switch is hidden while a person or known chip is active
+  (filtering by a person and hiding people photos contradict each other).
 - **Leave room for text**, which favours photos with calm, empty areas where a
   caption could go, measured in the browser from the thumbnail.
 
-It only appears in browsers where the Prompt API is available; elsewhere the nav
-entry and page are absent. To enable it, use a recent desktop Chrome, turn on the
-Prompt API for Gemini Nano in `chrome://flags` (for example
-`#prompt-api-for-gemini-nano`; flag names change between Chrome builds), and
-install the model from `chrome://on-device-internals`. Everything runs in the
-browser: the phrase and the images never leave your device, and the only requests
-made are existing read routes through the same-origin proxy: `GET /api/search`
-calls with the single keywords, plus thumbnail reads. No Worker, database or
-agent changes are involved.
+Old `/ai-search` links keep working: they redirect to `/search?mode=ai...` and the old
+`people=0` becomes `hidePeople=0` (`q`, `kw`, `room` carry over). In browsers without
+the Prompt API the redirect lands on a plain search and "Ask AI" is absent. To enable
+it, use a recent desktop Chrome, turn on the Prompt API for Gemini Nano in
+`chrome://flags` (for example `#prompt-api-for-gemini-nano`; flag names change between
+Chrome builds), and install the model from `chrome://on-device-internals`. Everything
+runs in the browser: the phrase and the images never leave your device, and the only
+requests made are existing read routes through the same-origin proxy: `GET /api/search`
+(one per keyword, the "Add both" count with `limit=1`), plus thumbnail reads. No
+Worker, database, agent or Pages Function changes are involved; cost notes are in
+`docs/development.md`.
 
 ## Originals (optional)
 
@@ -351,8 +364,10 @@ a merged migration runs on production before the new code goes live. See
 ## Project Structure
 
 - `src/components` - React UI (Timeline, Search, Albums, AlbumPhotos, PhotoDetail,
-  DailySuggestion, Dashboard, Lightbox, Layout, People, AiSearch)
+  DailySuggestion, Dashboard, Lightbox, Layout, People, AiResults), `src/components/omnibox`
+  (the Search bar and suggestion panel) and `src/services/omnibox` (matcher, URL state)
 - `src/services/aiSearch` - AI Search keyword expansion, ranking and empty-space scoring
+- `dev/mockApi.ts` - dev-only dummy API (`PIXDEX_MOCK=1 npm run dev`)
 - `src/hooks`, `src/services`, `src/types` - list/sort URL state, `WorkerApiClient`
   and helpers, API types
 - `functions/api` - Pages Function: same-origin proxy that adds the read token

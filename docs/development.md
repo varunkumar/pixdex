@@ -13,6 +13,11 @@ root (frontend), `worker/`, `agent/`. Run `npm install` in each you touch.
 
 Single test: `npx vitest run path/to/file.test.ts` inside the package.
 
+Dev mock: `PIXDEX_MOCK=1 npm run dev` serves dummy `/api/*` data from `dev/mockApi.ts` (fictional people and known
+personalities, albums, gradient SVG thumbnails) with no `.env`, no secrets and no Worker, D1 or R2 traffic. It is
+dev-server only (`vite.config.ts` reads the flag in Node), never imported by `src/`, so `npm run build` does not contain
+it. Use it for browser checks of the omnibox, light and dark.
+
 ## Pre-commit gate
 
 `.githooks/pre-commit` (enabled by root `npm install` via `core.hooksPath`) runs
@@ -192,6 +197,22 @@ licence note in `agent/sidecar/README.md`.
 
 Requires Ollama running locally. See `README.md` for the batch indexer details,
 EXIF backfill, and originals tunnel setup.
+
+## Omnibox performance (Search, phase 2)
+
+No Worker, D1, migration, agent or Pages Function change in this PR, so Worker CPU per invocation is unchanged (no new loops, JSON
+or decoding there) and only the Pages deploy runs (the Cloudflare Deployments tab check for the Worker applies only when `worker/`
+changes). The matcher runs in the browser: at most 12 words x a few hundred names, after a 150 ms debounce.
+
+| Request | When | Rows (existing plans, unchanged) |
+| --- | --- | --- |
+| `GET /people`, `GET /people/known`, `GET /albums` | once per page load, cached 5 minutes, shared with Timeline (same query keys) | as today; Search did the same three loads before |
+| `GET /search?...&limit=1` ("Add both" count) | once per shown "Add both" group after the debounce, cached by ids and filters, never per keystroke, only when two person spans are shown | one indexed filtered count; `known` uses `idx_faces_known_photo`, `people` the existing faces join; no `OFFSET`, no `COUNT(*)` beyond the `total` the route already returns |
+| AI keyword `GET /search` calls | same count as before (one per keyword plus one library total) | each now also carries the active filters, which only narrows the scans |
+
+No new query shape: the count reuses the Phase 1 `/search` plans with `limit=1`. Not measurable locally: real D1 rows read and Worker
+CPU for the count request. Measure after deploy with `cd worker && npx wrangler tail` (CPU time per `/search` while typing two
+names, and the `limit=1` count) and `npx wrangler d1 insights DB`. The only added cost on any path is that on-demand count.
 
 ## Album sharing performance notes
 
