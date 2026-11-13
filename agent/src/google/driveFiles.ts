@@ -2,7 +2,7 @@ import { createWriteStream } from 'node:fs';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-const FOLDER_MIME = 'application/vnd.google-apps.folder';
+export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
 export interface DriveListParams {
   q: string;
@@ -22,6 +22,7 @@ export interface DriveFilesClient {
         id?: string | null;
         name?: string | null;
         mimeType?: string | null;
+        parents?: string[] | null;
         sha256Checksum?: string | null;
         size?: string | number | null;
       }>;
@@ -42,6 +43,8 @@ export interface DriveFilesClient {
 export interface DriveFolderRef {
   id: string;
   name: string;
+  /** Name of the containing folder, when Drive reports one (search results only). */
+  parentName?: string;
 }
 
 export interface DriveImageRef {
@@ -93,7 +96,7 @@ export async function withDriveRetry<T>(fn: () => Promise<T>, options: RetryOpti
   }
 }
 
-const ALL_DRIVES = { corpora: 'allDrives', supportsAllDrives: true, includeItemsFromAllDrives: true } as const;
+export const ALL_DRIVES = { corpora: 'allDrives', supportsAllDrives: true, includeItemsFromAllDrives: true } as const;
 
 function escapeDriveQueryValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -106,12 +109,32 @@ export async function listDriveFolders(
 ): Promise<DriveFolderRef[]> {
   const q = `mimeType='${FOLDER_MIME}' and trashed=false and name contains '${escapeDriveQueryValue(query)}'`;
   const response = await withDriveRetry(
-    () => client.list({ q, fields: 'files(id,name)', pageSize: 50, ...ALL_DRIVES }),
+    () => client.list({ q, fields: 'files(id,name,parents)', pageSize: 50, ...ALL_DRIVES }),
     options
   );
-  return (response.data.files ?? [])
-    .filter((f): f is { id: string; name: string } => Boolean(f.id && f.name))
-    .map((f) => ({ id: f.id, name: f.name }));
+  const found = (response.data.files ?? []).filter((f): f is typeof f & { id: string; name: string } =>
+    Boolean(f.id && f.name)
+  );
+
+  // Folders often share a name ("Varun"), so show each one's parent to tell them apart: one lookup per
+  // distinct parent (at most 50). A failed lookup only loses the hint.
+  const parentNames = new Map<string, string>();
+  for (const parentId of new Set(found.flatMap((f) => f.parents ?? []))) {
+    try {
+      const parent = await withDriveRetry(
+        () => client.get({ fileId: parentId, fields: 'id,name,mimeType', supportsAllDrives: true }),
+        options
+      );
+      if (parent.data.name) parentNames.set(parentId, parent.data.name);
+    } catch {
+      // ignore
+    }
+  }
+
+  return found.map((f) => {
+    const parentName = (f.parents ?? []).map((p) => parentNames.get(p)).find(Boolean);
+    return parentName ? { id: f.id, name: f.name, parentName } : { id: f.id, name: f.name };
+  });
 }
 
 /**
@@ -140,65 +163,6 @@ export async function getDriveFolder(
   if (!id || !name) throw new Error(`Drive folder ${folderId} not found`);
   if (mimeType !== FOLDER_MIME) throw new Error(`Drive item "${name}" (${folderId}) is not a folder`);
   return { id, name };
-}
-
-/**
- * Lists every image under a folder, descending into subfolders (breadth first), like the
- * local scanner does. Each image carries its folder path so the album can follow the same
- * rule as local files.
- */
-export async function listImagesInDriveFolder(
-  client: DriveFilesClient,
-  folderId: string,
-  options: RetryOptions & { rootName?: string } = {}
-): Promise<DriveImageRef[]> {
-  const images: DriveImageRef[] = [];
-  const visited = new Set<string>([folderId]);
-  const queue: Array<{ id: string; path: string[] }> = [{ id: folderId, path: [options.rootName ?? ''] }];
-
-  for (let next = queue.shift(); next; next = queue.shift()) {
-    const folder = next;
-    let pageToken: string | undefined;
-    do {
-      const response = await withDriveRetry(
-        () =>
-          client.list({
-            q: `'${folder.id}' in parents and (mimeType contains 'image/' or mimeType='${FOLDER_MIME}') and trashed=false`,
-            fields: 'nextPageToken, files(id,name,mimeType,sha256Checksum,size)',
-            pageToken,
-            pageSize: 100,
-            ...ALL_DRIVES,
-          }),
-        options
-      );
-
-      for (const file of response.data.files ?? []) {
-        if (!file.id || !file.name || !file.mimeType) continue;
-        if (file.mimeType === FOLDER_MIME) {
-          if (!visited.has(file.id)) {
-            visited.add(file.id);
-            queue.push({ id: file.id, path: [...folder.path, file.name] });
-          }
-        } else if (!file.name.startsWith('._')) {
-          const ref: DriveImageRef = {
-            id: file.id,
-            name: file.name,
-            mimeType: file.mimeType,
-            folderPath: folder.path,
-          };
-          if (file.sha256Checksum) ref.sha256 = file.sha256Checksum.toLowerCase();
-          if (file.size !== undefined && file.size !== null && Number.isFinite(Number(file.size))) {
-            ref.size = Number(file.size); // the Drive API returns int64 as a string
-          }
-          images.push(ref);
-        }
-      }
-
-      pageToken = response.data.nextPageToken ?? undefined;
-    } while (pageToken);
-  }
-
-  return images;
 }
 
 export async function downloadDriveFile(

@@ -98,9 +98,26 @@ never leave local disk or Google Drive.
   embeddings route CPU and the D1 BLOB decode (D1 may return a number[]; `limit` at most 100 is the knob), and the backfill time, estimated
   at 1 to 3 minutes for about 5K photos: measure both with `wrangler tail` after deploy.
 - Known personalities UI status: the omnibox and the Timeline `PeopleFilter` were checked in a real browser, light and dark, against the dev mock (`PIXDEX_MOCK=1 npm run dev`); the real library has no known matches yet, so real-data behaviour is unchecked.
-- Google Drive indexing (`agent/src/google/`, `agent/src/driveCli.ts`, command `index-drive [--folder <id-or-url>]...`): recursive over
-  subfolders, includes shared drives (`corpora: 'allDrives'`, `supportsAllDrives`), album from `albumFromFolders` (same rule as
-  `albumFromPath`), skips already-indexed photos by Drive's `sha256Checksum` (equals `sha256ContentHash`) with one batched
+- Drive listing (`google/driveScan.ts`, `DriveScanner`): folders are listed 6 at a time (`concurrency`), 1000 entries per `files.list` page
+  (the API maximum; the default is 100), and each folder's photos are handed to `indexGoogleDriveFolder` as soon as that folder is
+  listed, so indexing starts after the first list call and listing overlaps with the slow Ollama work (nothing needs the whole tree:
+  the Processed rule needs one folder's full listing, `check-hashes` needs a batch, in-run dedup needs a growing set). A subfolder that
+  cannot be listed (after retries) is reported (`Failed listing ...`, counted in `failed`) and the walk continues; a failing root
+  throws. Progress lines: `Listing: N folders, M photos found so far` (every 5 s) and `Listing finished: ...`. `check-hashes` is sent
+  per batch of up to 500 not-yet-checked checksums made of every photo that arrived since the previous batch (the first batch is one
+  folder, later ones are large because indexing is slower than listing): the same rows read in total, at most about `photos / 500`
+  plus a handful of extra Worker requests compared with one global call.
+- Drive selection rules (`scanDriveFolder` in `google/driveScan.ts`, per folder, after all its listing pages): a folder with a `Processed`
+  subfolder (case-insensitive) contributes only that subfolder (its own photos and other subfolders are ignored), otherwise its own photos
+  plus every subfolder, recursively; camera RAW (`isRawFile`: extension list or `image/x-<vendor>` mime) is always ignored. The
+  `index-drive` folder search shows each result's parent name (one `get` per distinct parent, at most 50, failures only lose the hint).
+- `index-drive --dry-run` (`google/dryRunDriveFolder.ts`): directory-tree report with per-folder counts and what was ignored, no download, no Ollama, no sidecar, no writes; one
+  read-only `check-hashes` per 500 advertised checksums (a failure only warns). Worker CPU and D1: no change beyond those reads.
+- Google Drive indexing (`agent/src/google/`, `agent/src/driveCli.ts`, command `index-drive [--dry-run] [--folder <id-or-url>]...`): recursive over
+  subfolders, includes shared drives (`corpora: 'allDrives'`, `supportsAllDrives`), album from `albumFromDrivePath`
+  (the first folder under the picked one, so deep trees with generic leaf names like "001" or "FB" do not merge albums; differs from local
+  `albumFromPath`), skips folders matching `DEFAULT_EXCLUDED_FOLDERS` (`*.lrdata`, `*.aep`, `Adobe After Effects Auto-Save`, `(Footage)`,
+  `*_AME`, `allresources`, `*.collagefactoryfree`) plus any `--exclude <glob>` (never a Processed folder), skips already-indexed photos by Drive's `sha256Checksum` (equals `sha256ContentHash`) with one batched
   `check-hashes` before any download (files without a checksum are downloaded and checked as before), skips in-run duplicate content,
   retries 429, rate-limit 403, 5xx and network resets (`withDriveRetry`), and on `invalid_grant` deletes `agent/.google-token.json`
   and exits 1. Local storage (`google/staging.ts`): one photo staged at a time in `<tmpdir>/pixdex-drive-staging`, deleted after every
