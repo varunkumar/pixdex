@@ -40,6 +40,30 @@ describe('runAiSearch', () => {
     expect(workerApiClient.searchPage).toHaveBeenCalledTimes(3);
   });
 
+  it('forwards filters to every keyword call and the library total call', async () => {
+    mockSearch({ eagle: { results: [photo('a')], total: 1 }, sky: { results: [photo('b')], total: 1 } });
+    const filters = { album: 'Trip', known: ['Q1'], from: '2025-01-01', to: '2025-01-31' };
+    await runAiSearch(['eagle', 'sky'], { hidePeople: false, leaveRoom: false }, noSpace, filters);
+    expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: 'eagle', sort: 'rating', limit: 100, ...filters });
+    expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: 'sky', sort: 'rating', limit: 100, ...filters });
+    expect(workerApiClient.searchPage).toHaveBeenCalledWith({ limit: 1, ...filters });
+    expect(workerApiClient.searchPage).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not forward empty strings or empty arrays', async () => {
+    mockSearch({ eagle: { results: [photo('a')], total: 1 } });
+    await runAiSearch(['eagle'], { hidePeople: false, leaveRoom: false }, noSpace, {
+      album: '',
+      people: [],
+      known: [],
+      from: '',
+      to: '',
+      onThisDay: '',
+    });
+    expect(workerApiClient.searchPage).toHaveBeenCalledWith({ q: 'eagle', sort: 'rating', limit: 100 });
+    expect(workerApiClient.searchPage).toHaveBeenCalledWith({ limit: 1 });
+  });
+
   it('drops people photos when hidePeople and counts them', async () => {
     mockSearch({
       eagle: { results: [photo('a'), photo('b', { subjects: ['portrait'] })], total: 2 },

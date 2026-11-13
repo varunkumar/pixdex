@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { mockApiPlugin } from './dev/mockApi.ts'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -10,12 +11,15 @@ export default defineConfig(({ mode }) => {
   // Access JWT, so the proxy asserts one: DEV_VIEWER_EMAIL (to try another
   // user's view) or else OWNER_EMAIL (the album owner, dev only).
   const viewerEmail = env.DEV_VIEWER_EMAIL || env.OWNER_EMAIL;
+  // PIXDEX_MOCK=1 npm run dev: dummy /api data from dev/mockApi.ts (serve only, no .env or secrets needed, the
+  // proxy is left out). Read in Node only; the plugin has apply: 'serve', so a build never contains it.
+  const mock = (env.PIXDEX_MOCK ?? process.env.PIXDEX_MOCK) === '1';
   return {
-    plugins: [react()],
+    plugins: [react(), ...(mock ? [mockApiPlugin()] : [])],
     // Dev-time stand-in for the Pages Function in functions/api: adds the read token
     // and the viewer identity (no Access JWT check, and no per-user originals check).
     server: {
-      proxy: {
+      proxy: mock ? undefined : {
         // Must come before '/api' so originals go to the tunnel, not the Worker.
         '/api/originals': {
           target: env.ORIGINALS_BASE_URL,

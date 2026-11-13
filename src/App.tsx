@@ -2,12 +2,12 @@ import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider, ScrollRestoration } from 'react-router-dom';
-import AiSearch from './components/AiSearch';
 import AlbumPhotos from './components/AlbumPhotos';
 import Albums from './components/Albums';
 import DailySuggestion from './components/DailySuggestion';
 import Dashboard from './components/Dashboard';
 import Layout from './components/Layout';
+import LegacyAiRedirect from './components/LegacyAiRedirect';
 import People from './components/People';
 import PersonPage from './components/PersonPage';
 import PhotoDetail from './components/PhotoDetail';
@@ -43,7 +43,7 @@ const router = createBrowserRouter([
       { path: '/people', element: <People /> },
       { path: '/people/:id', element: <PersonPage /> },
       { path: '/daily', element: <DailySuggestion /> },
-      { path: '/ai-search', element: <AiSearch /> },
+      { path: '/ai-search', element: <LegacyAiRedirect /> },
     ],
   },
 ]);

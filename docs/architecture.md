@@ -28,18 +28,18 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 ### `src/` - frontend (React 19, Vite, Mantine, TanStack Query, react-router)
 
-- `components/` - Timeline (day/month/year zoom via Ctrl+wheel or pinch, state in the URL; a zoom change away from the newest month writes `to` = end of the active month in the same replace navigation, so the period being read is kept, year/month scrubber rail with a floating month label while dragging, year labels thinned to at least 12px apart, a "Back to latest" chip after a jump, and Retry buttons for a failed first or next page), Search (People filter kept in the URL as `people=<id>,<id>`; date range picker, quick chips and an "On this day" chip in the URL as `from`, `to`, `onThisDay`; typed dates such as `june 2025` parsed by `services/dateQuery.ts`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
+- `components/` - Timeline (day/month/year zoom via Ctrl+wheel or pinch, state in the URL; a zoom change away from the newest month writes `to` = end of the active month in the same replace navigation, so the period being read is kept, year/month scrubber rail with a floating month label while dragging, year labels thinned to at least 12px apart, a "Back to latest" chip after a jump, and Retry buttons for a failed first or next page), Search (one omnibox, `components/omnibox/` plus `hooks/useOmniboxData.ts` and `services/omnibox/`: chips for album (`album`), own people (`people=<id>,<id>`) and known personalities (`known=<Q-id>,...`), cap of 5 combined; typed words are matched locally after 150 ms from 3 characters and only become chips when picked; "Add both" count from one `limit=1` search; Enter is a plain search with `q`; date range picker, quick chips and an "On this day" chip in the URL as `from`, `to`, `onThisDay`; typed dates such as `june 2025` parsed by `services/dateQuery.ts`), Albums, AlbumPhotos, PhotoDetail, PhotoReview (stars
   and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
   matching), Dashboard,
-  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout.
-- AI Search (`components/AiSearch.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
-  entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available (the
-  nav entry and route are gated on it). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):
-  no new allowlist entries and no Worker, D1 or agent change. URL state: `q`, `kw`, `people=0`,
-  `room=0`. Pipeline: (1) the Prompt API expands the phrase into keywords (`promptApi.ts`);
-  (2) one `GET search` per keyword (sorted by rating, 100 per keyword) plus a library total;
+  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout. Timeline keeps `PeopleFilter`.
+- AI Search (part of Search: `components/Search.tsx`, `components/AiResults.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
+  entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI", Cmd+Enter and the plain-mode "Add keywords" button, which opens the keyword row without the model,
+  are gated on it; in AI mode the page button is "Search again", which commits a typed keyword draft and re-runs the keywords without the model, while Enter in the bar stays a plain search; there is no nav entry, and `/ai-search` is a redirect, `LegacyAiRedirect.tsx`, to `/search?mode=ai`). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):
+  no new allowlist entries and no Worker, D1 or agent change. URL state: `mode=ai`, `q`, `kw`, `hidePeople=0`,
+  `room=0`, plus the shared filters `album`, `people`, `known`, `from`, `to`, `onThisDay`. Pipeline (unchanged except filters): (1) the Prompt API expands the phrase into keywords (`promptApi.ts`);
+  (2) one `GET search` per keyword (sorted by rating, 100 per keyword) plus a library total, all carrying the active filters;
   (3) photos are scored by rarity-weighted keyword match, each hit adding `log(libraryTotal / keywordTotal)`,
   (`ranking.ts`); (4) optionally drop people photos, using stored
   `subjects` and `tags` matched against a word list (not face data); (5) the top 150 candidates are

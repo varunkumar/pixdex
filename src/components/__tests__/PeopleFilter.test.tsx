@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { renderWithProviders } from '../../test/renderWithProviders';
@@ -49,6 +49,15 @@ describe('PeopleFilter', () => {
     expect(onChange).not.toHaveBeenCalled(); // typing alone never filters
     fireEvent.click(await screen.findByRole('option', { name: /MS Dhoni/ }));
     expect(onChange).toHaveBeenCalledWith({ people: [], known: ['ms'] });
+  });
+
+  it('colours option names with the ink variables, readable in dark mode', async () => {
+    renderWithProviders(<PeopleFilter people={[]} known={[]} onChange={vi.fn()} />);
+    await typeInPeople('dhoni');
+    const knownName = within(await screen.findByRole('option', { name: /MS Dhoni/ })).getByText('MS Dhoni');
+    const ownName = within(screen.getByRole('option', { name: /^Dhoni/ })).getByText('Dhoni');
+    expect(knownName.getAttribute('style')).toContain('--pixdex-ink-violet');
+    expect(ownName.getAttribute('style')).toContain('--pixdex-ink-blue');
   });
 
   it('matches a known alias', async () => {

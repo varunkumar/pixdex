@@ -2,3 +2,20 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+
+/* Text colour for blue/violet/teal/gray text on the plain page or dropdown background (no tinted chip behind it).
+   Mantine's *-light-color is near white in dark mode (it is meant for tinted backgrounds), and shade 7 is too dark
+   on a dark dropdown, so dark mode uses shade 3 (at least 4.5:1 on the dark-6 and dark-7 backgrounds). */
+:root {
+  --pixdex-ink-blue: var(--mantine-color-blue-light-color);
+  --pixdex-ink-violet: var(--mantine-color-violet-light-color);
+  --pixdex-ink-teal: var(--mantine-color-teal-light-color);
+  --pixdex-ink-gray: var(--mantine-color-gray-light-color);
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --pixdex-ink-blue: var(--mantine-color-blue-3);
+  --pixdex-ink-violet: var(--mantine-color-violet-3);
+  --pixdex-ink-teal: var(--mantine-color-teal-3);
+  --pixdex-ink-gray: var(--mantine-color-gray-3);
+}
