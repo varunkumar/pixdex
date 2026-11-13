@@ -18,15 +18,18 @@ export interface OmniboxProps {
   text: string;
   onText: (t: string) => void;
   selection: OmniboxSelection;
-  /** One call per change, e.g. `{ people: [...] }`. */
-  onSelection: (patch: Partial<OmniboxSelection>) => void;
+  /**
+   * One call per change, e.g. `{ people: [...] }`. When a pick also trims the typed words, `nextText` carries the new
+   * text in the same call (and `onText` is not called), so the parent makes one update.
+   */
+  onSelection: (patch: Partial<OmniboxSelection>, nextText?: string) => void;
   /** Enter. */
   onSubmit: () => void;
   /** Present only where the Prompt API is supported; Cmd/Ctrl+Enter. */
   onAskAi?: () => void;
   askAiBusy?: boolean;
   /** AI mode only. */
-  keywordChips?: { terms: string[]; onChange: (terms: string[]) => void; onSearchAgain: () => void };
+  keywordChips?: { terms: string[]; onChange: (terms: string[]) => void; onSearchAgain: (terms: string[]) => void };
 }
 
 const MAX_CHIPS_PER_SPAN = 3;
@@ -50,6 +53,8 @@ export default function Omnibox(props: OmniboxProps) {
   const { candidates, labelFor, spans, bothCount } = useOmniboxData(text, selection);
   const [focused, setFocused] = useState(false);
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  // Escape closes the panel (either layout); focus, typing and ArrowDown/ArrowUp reopen it.
+  const [open, setOpen] = useState(true);
   const baseId = useId();
   const panelId = `${baseId}-panel`;
   const optionId = (key: string) => `${baseId}-opt-${key.replace(/[^\w-]/g, '_')}`;
@@ -59,10 +64,10 @@ export default function Omnibox(props: OmniboxProps) {
   const allowed = (c: Candidate) => c.kind === 'album' || canAddPerson;
 
   const pick = (c: Candidate, span?: Span) => {
-    if (c.kind === 'own') onSelection({ people: [...people, c.id] });
-    else if (c.kind === 'known') onSelection({ known: [...known, c.id] });
-    else onSelection({ album: c.id });
-    if (span) onText(removeWords(text, [span]));
+    const patch: Partial<OmniboxSelection> =
+      c.kind === 'own' ? { people: [...people, c.id] } : c.kind === 'known' ? { known: [...known, c.id] } : { album: c.id };
+    if (span) onSelection(patch, removeWords(text, [span]));
+    else onSelection(patch);
     setHighlighted(null);
   };
 
@@ -72,7 +77,9 @@ export default function Omnibox(props: OmniboxProps) {
 
   let layout: 'list' | 'chips' | null = null;
   let sections: PanelSection[] = [];
-  if (text.trim() === '') {
+  if (!open) {
+    // closed by Escape
+  } else if (text.trim() === '') {
     if (focused) {
       const group = (kind: CandidateKind, heading: string): PanelSection => ({
         key: kind,
@@ -112,11 +119,13 @@ export default function Omnibox(props: OmniboxProps) {
             kind: 'both',
             label: `Add both (${n} ${n === 1 ? 'photo' : 'photos'})`,
             pick: () => {
-              onSelection({
-                people: [...people, ...ids.filter((c) => c.kind === 'own').map((c) => c.id)],
-                known: [...known, ...ids.filter((c) => c.kind === 'known').map((c) => c.id)],
-              });
-              onText(removeWords(text, bothSpans));
+              onSelection(
+                {
+                  people: [...people, ...ids.filter((c) => c.kind === 'own').map((c) => c.id)],
+                  known: [...known, ...ids.filter((c) => c.kind === 'known').map((c) => c.id)],
+                },
+                removeWords(text, bothSpans),
+              );
               setHighlighted(null);
             },
           },
@@ -137,6 +146,11 @@ export default function Omnibox(props: OmniboxProps) {
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!open) {
+        e.preventDefault();
+        setOpen(true);
+        return;
+      }
       if (items.length === 0) return;
       e.preventDefault();
       const step = e.key === 'ArrowDown' ? 1 : -1;
@@ -144,7 +158,7 @@ export default function Omnibox(props: OmniboxProps) {
       setHighlighted(items[next].key);
     } else if (e.key === 'Escape') {
       setHighlighted(null);
-      setFocused(false);
+      setOpen(false);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if ((e.metaKey || e.ctrlKey) && onAskAi) askAi();
@@ -200,8 +214,12 @@ export default function Omnibox(props: OmniboxProps) {
               onChange={(e) => {
                 onText(e.currentTarget.value);
                 setHighlighted(null);
+                setOpen(true);
               }}
-              onFocus={() => setFocused(true)}
+              onFocus={() => {
+                setFocused(true);
+                setOpen(true);
+              }}
               onBlur={() => {
                 setFocused(false);
                 setHighlighted(null);
@@ -235,14 +253,16 @@ function KeywordRow({ terms, onChange, onSearchAgain }: NonNullable<OmniboxProps
 
   const commit = () => {
     const typed = draft.split(',').map((t) => t.trim()).filter(Boolean);
+    let next = terms;
     if (typed.length > 0) {
-      const next =
+      const merged =
         editing === null ? [...terms, ...typed] : [...terms.slice(0, editing), ...typed, ...terms.slice(editing + 1)];
-      onChange(next.filter((t, i) => next.indexOf(t) === i));
+      next = merged.filter((t, i) => merged.indexOf(t) === i);
+      onChange(next);
     }
     setDraft('');
     setEditing(null);
-    onSearchAgain();
+    onSearchAgain(next);
   };
 
   return (

@@ -80,10 +80,16 @@ export default function SuggestionPanel({ id, layout, sections, highlighted, opt
     return (
       <Stack id={id} role="listbox" aria-label="Suggestions" gap={6} mt={6}>
         {sections.map((s) => (
-          <Group key={s.key} role="group" aria-label={s.heading} gap={6}>
+          <Group
+            key={s.key}
+            role="group"
+            aria-label={s.more ? `${s.heading}, ${s.more} more not shown` : s.heading}
+            gap={6}
+          >
             {s.items.map(option)}
+            {/* Visual only: the count is in the group's name, so the listbox holds nothing but options. */}
             {s.more ? (
-              <Text size="xs" c="dimmed">
+              <Text size="xs" c="dimmed" aria-hidden>
                 +{s.more} more
               </Text>
             ) : null}

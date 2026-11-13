@@ -32,7 +32,10 @@ function Harness(props: Partial<OmniboxProps> & { initialText?: string }) {
         rest.onText?.(t);
       }}
       selection={rest.selection ?? none}
-      onSelection={rest.onSelection ?? vi.fn()}
+      onSelection={(...args: Parameters<OmniboxProps['onSelection']>) => {
+        if (args[1] !== undefined) setText(args[1]);
+        rest.onSelection?.(...args);
+      }}
       onSubmit={rest.onSubmit ?? vi.fn()}
       onAskAi={rest.onAskAi}
       askAiBusy={rest.askAiBusy}
@@ -101,15 +104,19 @@ describe('Omnibox', () => {
     renderWithProviders(<Harness onSelection={onSelection} onText={onText} />);
     await loaded();
     type('dho');
-    const chip = await screen.findByRole('option', { name: /MS Dhoni/ });
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: /MS Dhoni/ })).toHaveTextContent('MS Dhoni');
     expect(onSelection).not.toHaveBeenCalled();
     type('beach dhoni at sunset');
-    await waitFor(() => expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument());
+    const chip = await screen.findByRole('option', { name: /MS Dhoni/ });
     expect(onSelection).not.toHaveBeenCalled();
-    expect(chip).toBeTruthy();
-    fireEvent.click(screen.getByRole('option', { name: /MS Dhoni/ }));
-    expect(onSelection).toHaveBeenCalledWith({ known: ['Q1'] });
-    expect(onText).toHaveBeenLastCalledWith('beach at sunset');
+    onText.mockClear();
+    fireEvent.click(chip);
+    // One parent update: the patch and the trimmed text together, no separate onText.
+    expect(onSelection).toHaveBeenCalledTimes(1);
+    expect(onSelection).toHaveBeenCalledWith({ known: ['Q1'] }, 'beach at sunset');
+    expect(onText).not.toHaveBeenCalled();
+    expect(input()).toHaveValue('beach at sunset');
   });
 
   it('two person spans show two chips and Add both with the count, which adds both', async () => {
@@ -121,10 +128,11 @@ describe('Omnibox', () => {
     expect(await screen.findByRole('option', { name: /Virat Kohli/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument();
     const both = await screen.findByRole('option', { name: 'Add both (12 photos)' });
+    onText.mockClear();
     fireEvent.click(both);
     expect(onSelection).toHaveBeenCalledTimes(1);
-    expect(onSelection).toHaveBeenCalledWith({ people: ['p1'], known: ['Q1'] });
-    expect(onText).toHaveBeenLastCalledWith('nets');
+    expect(onSelection).toHaveBeenCalledWith({ people: ['p1'], known: ['Q1'] }, 'nets');
+    expect(onText).not.toHaveBeenCalled();
   });
 
   it('an ambiguous span shows 3 chips and +2 more', async () => {
@@ -134,6 +142,35 @@ describe('Omnibox', () => {
     await screen.findByRole('option', { name: /Anil Kumar/ });
     expect(screen.getAllByRole('option')).toHaveLength(3);
     expect(screen.getByText('+2 more')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Matches for kumar, 2 more not shown' })).toBeInTheDocument();
+  });
+
+  it('Escape closes the chips panel and typing reopens it', async () => {
+    renderWithProviders(<Harness />);
+    await loaded();
+    fireEvent.focus(input());
+    type('dhoni');
+    await screen.findByRole('option', { name: /MS Dhoni/ });
+    fireEvent.keyDown(input(), { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(input()).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.keyDown(input(), { key: 'ArrowDown' });
+    expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument();
+    fireEvent.keyDown(input(), { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    type('dhoni ');
+    expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument();
+  });
+
+  it('Escape closes the empty-input list without a blur', async () => {
+    renderWithProviders(<Harness />);
+    await loaded();
+    fireEvent.focus(input());
+    await screen.findByText('Your people');
+    fireEvent.keyDown(input(), { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    fireEvent.keyDown(input(), { key: 'ArrowDown' });
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
 
   it('offers no person chips with 5 already selected (albums still offered)', async () => {
@@ -166,6 +203,17 @@ describe('Omnibox', () => {
     expect(screen.getByRole('option', { name: /MS Dhoni/ })).toBeInTheDocument();
   });
 
+  it('the empty list offers no person rows with 5 selected, only albums', async () => {
+    const selection = { ...none, people: ['k1', 'k2', 'k3', 'k4', 'k5'] };
+    renderWithProviders(<Harness selection={selection} />);
+    await loaded();
+    fireEvent.focus(input());
+    expect(await screen.findByText('Albums')).toBeInTheDocument();
+    expect(screen.queryByText('Your people')).not.toBeInTheDocument();
+    expect(screen.queryByText('Known personalities in your photos')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Goa Trip (album)']);
+  });
+
   it('the empty list has no Albums group while an album is selected', async () => {
     renderWithProviders(<Harness selection={{ ...none, album: 'Goa Trip' }} />);
     await loaded();
@@ -195,9 +243,13 @@ describe('Omnibox', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  it('has no Ask AI button and no Cmd+Enter AI without onAskAi', () => {
-    renderWithProviders(<Harness />);
+  it('has no Ask AI button without onAskAi, and Cmd/Ctrl+Enter then submits', () => {
+    const onSubmit = vi.fn();
+    renderWithProviders(<Harness onSubmit={onSubmit} />);
     expect(screen.queryByRole('button', { name: /Ask AI/ })).not.toBeInTheDocument();
+    fireEvent.keyDown(input(), { key: 'Enter', metaKey: true });
+    fireEvent.keyDown(input(), { key: 'Enter', ctrlKey: true });
+    expect(onSubmit).toHaveBeenCalledTimes(2);
   });
 
   it('Ask AI button and Cmd/Ctrl+Enter call onAskAi when given', () => {
@@ -233,6 +285,7 @@ describe('Omnibox', () => {
     fireEvent.keyDown(kw, { key: 'Enter' });
     expect(onChange).toHaveBeenLastCalledWith(['beach', 'sunset', 'boat', 'sky']);
     expect(onSearchAgain).toHaveBeenCalledTimes(1);
+    expect(onSearchAgain).toHaveBeenLastCalledWith(['beach', 'sunset', 'boat', 'sky']);
     expect(kw).toHaveValue('');
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit keyword beach' }));
@@ -241,5 +294,9 @@ describe('Omnibox', () => {
     fireEvent.keyDown(kw, { key: 'Enter' });
     expect(onChange).toHaveBeenLastCalledWith(['shore', 'sunset']);
     expect(onSearchAgain).toHaveBeenCalledTimes(2);
+    expect(onSearchAgain).toHaveBeenLastCalledWith(['shore', 'sunset']);
+
+    fireEvent.keyDown(kw, { key: 'Enter' });
+    expect(onSearchAgain).toHaveBeenLastCalledWith(['beach', 'sunset']);
   });
 });
