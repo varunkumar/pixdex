@@ -1,6 +1,6 @@
 import { useDebouncedValue } from '@mantine/hooks';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { candidateKey, splitSpans, type Candidate, type CandidateKind, type Span } from '../services/omnibox/matcher';
 import { personOptions } from '../services/peopleKeys';
@@ -74,8 +74,10 @@ export function useOmniboxData(text: string, selection: OmniboxSelection) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, album, peopleKey, knownKey]);
 
-  const labelFor = (kind: CandidateKind, id: string): string | null =>
-    all.find((c) => c.kind === kind && c.id === id)?.label ?? null;
+  const labelFor = useCallback(
+    (kind: CandidateKind, id: string): string | null => all.find((c) => c.kind === kind && c.id === id)?.label ?? null,
+    [all],
+  );
 
   const [debounced] = useDebouncedValue(text, DEBOUNCE_MS);
   const spans = useMemo<Span[]>(() => splitSpans(debounced, candidates).spans, [debounced, candidates]);

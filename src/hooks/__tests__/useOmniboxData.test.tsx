@@ -15,11 +15,11 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
   },
 }));
 
+// One client per test, created once (not per render), so cache behaviour is real.
+let client: QueryClient;
 const wrapper = ({ children }: { children: ReactNode }) => (
   <MantineProvider>
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      {children}
-    </QueryClientProvider>
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
   </MantineProvider>
 );
 
@@ -29,6 +29,7 @@ const person = (id: string, name: string | null, photoCount = 5) => ({
 });
 
 beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.resetAllMocks();
   vi.mocked(workerApiClient.getPeople).mockResolvedValue([person('p1', 'Anita Rao'), person('p2', 'Bob Stone')]);
   vi.mocked(workerApiClient.getKnownPeople).mockResolvedValue([
@@ -43,15 +44,25 @@ const loaded = async (result: { current: ReturnType<typeof useOmniboxData> }) =>
   waitFor(() => expect(result.current.listsLoaded).toEqual({ people: true, known: true, albums: true }));
 
 describe('useOmniboxData', () => {
-  it('loads each list once across several text changes and never searches while typing', async () => {
-    const { result, rerender } = renderHook(({ t }) => useOmniboxData(t, none), { wrapper, initialProps: { t: '' } });
-    await loaded(result);
-    for (const t of ['a', 'ani', 'anita', 'anita r']) rerender({ t });
-    await waitFor(() => expect(result.current.spans.length).toBe(1));
-    expect(workerApiClient.getPeople).toHaveBeenCalledTimes(1);
-    expect(workerApiClient.getKnownPeople).toHaveBeenCalledTimes(1);
-    expect(workerApiClient.getAlbums).toHaveBeenCalledTimes(1);
-    expect(workerApiClient.searchPage).not.toHaveBeenCalled();
+  it('loads each list once across text changes and searches only after the debounce, once', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { result, rerender } = renderHook(({ t }) => useOmniboxData(t, none), { wrapper, initialProps: { t: '' } });
+      await loaded(result);
+      for (const t of ['bob', 'bob stone', 'bob stone carl', 'bob stone carl moon']) rerender({ t });
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+      expect(result.current.spans).toEqual([]);
+      expect(workerApiClient.searchPage).not.toHaveBeenCalled();
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+      await waitFor(() => expect(result.current.bothCount?.total).toBe(7));
+      expect(result.current.spans).toHaveLength(2);
+      expect(workerApiClient.searchPage).toHaveBeenCalledTimes(1);
+      expect(workerApiClient.getPeople).toHaveBeenCalledTimes(1);
+      expect(workerApiClient.getKnownPeople).toHaveBeenCalledTimes(1);
+      expect(workerApiClient.getAlbums).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('has no spans until 150 ms after the last keystroke, and none under 3 characters', async () => {
@@ -126,5 +137,38 @@ describe('useOmniboxData', () => {
     await waitFor(() => expect(capped.result.current.spans).toHaveLength(2));
     expect(capped.result.current.bothCount).toBeNull();
     expect(workerApiClient.searchPage).not.toHaveBeenCalled();
+  });
+
+  it('offers the both count at exactly the cap (3 selected + 2 new = 5) and not above it (3 + 3 = 6)', async () => {
+    const sel = { ...none, people: ['x1', 'x2', 'x3'] };
+    const at = renderHook(() => useOmniboxData('bob stone carl moon', sel), { wrapper });
+    await waitFor(() => expect(at.result.current.bothCount?.total).toBe(7));
+    expect(workerApiClient.searchPage).toHaveBeenCalledWith({
+      people: ['x1', 'x2', 'x3', 'p2'],
+      known: ['Q2'],
+      limit: 1,
+    });
+    vi.mocked(workerApiClient.searchPage).mockClear();
+    const over = renderHook(() => useOmniboxData('anita rao bob stone carl moon', sel), { wrapper });
+    await waitFor(() => expect(over.result.current.spans).toHaveLength(3));
+    expect(over.result.current.bothCount).toBeNull();
+    expect(workerApiClient.searchPage).not.toHaveBeenCalled();
+  });
+
+  it('caches the both count and re-keys it when the selected album changes', async () => {
+    const { result, rerender } = renderHook(({ t, s }) => useOmniboxData(t, s), {
+      wrapper,
+      initialProps: { t: 'bob stone carl moon', s: none },
+    });
+    await waitFor(() => expect(result.current.bothCount?.total).toBe(7));
+    rerender({ t: 'bob stone carl moon', s: { ...none } });
+    // Different typed text, same two people: the typed text is not part of the count, so no new request.
+    rerender({ t: 'bob stone carl moon zzzz', s: none });
+    await waitFor(() => expect(result.current.spans).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 250));
+    expect(workerApiClient.searchPage).toHaveBeenCalledTimes(1);
+    rerender({ t: 'bob stone carl moon', s: { ...none, album: 'Goa Trip' } });
+    await waitFor(() => expect(workerApiClient.searchPage).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(workerApiClient.searchPage).mock.calls[1][0]).toMatchObject({ album: 'Goa Trip' });
   });
 });
