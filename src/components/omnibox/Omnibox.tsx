@@ -1,5 +1,5 @@
 import { Box, Button, Group, Pill, PillsInput, TextInput, UnstyledButton } from '@mantine/core';
-import { useId, useState, type KeyboardEvent } from 'react';
+import { useId, useImperativeHandle, useState, type KeyboardEvent, type Ref } from 'react';
 import { MdAutoAwesome } from 'react-icons/md';
 import { useOmniboxData, type OmniboxSelection } from '../../hooks/useOmniboxData';
 import { removeWords, type Candidate, type CandidateKind, type Span } from '../../services/omnibox/matcher';
@@ -30,8 +30,13 @@ export interface OmniboxProps {
   askAiBusy?: boolean;
   /** Present only where the Prompt API is supported, in plain mode: opens the keyword row without the model. */
   onAddKeywords?: () => void;
-  /** AI mode only. */
-  keywordChips?: { terms: string[]; onChange: (terms: string[]) => void; onSearchAgain: (terms: string[]) => void };
+  /** AI mode only. `handle.commit()` commits the keyword draft (if any) and searches again, as Enter in the keyword box. */
+  keywordChips?: {
+    terms: string[];
+    onChange: (terms: string[]) => void;
+    onSearchAgain: (terms: string[]) => void;
+    handle?: Ref<KeywordRowHandle>;
+  };
 }
 
 const MAX_CHIPS_PER_SPAN = 3;
@@ -254,7 +259,11 @@ export default function Omnibox(props: OmniboxProps) {
   );
 }
 
-function KeywordRow({ terms, onChange, onSearchAgain }: NonNullable<OmniboxProps['keywordChips']>) {
+export interface KeywordRowHandle {
+  commit: () => void;
+}
+
+function KeywordRow({ terms, onChange, onSearchAgain, handle }: NonNullable<OmniboxProps['keywordChips']>) {
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState<number | null>(null);
 
@@ -271,6 +280,7 @@ function KeywordRow({ terms, onChange, onSearchAgain }: NonNullable<OmniboxProps
     setEditing(null);
     onSearchAgain(next);
   };
+  useImperativeHandle(handle, () => ({ commit }));
 
   return (
     <Group gap={6} mt={6} wrap="wrap">

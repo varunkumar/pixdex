@@ -404,6 +404,46 @@ describe('Search (AI mode)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Ask AI/ }));
   };
 
+  it('in AI mode the button is Search again: it re-runs the keywords without the model and stays in AI mode', async () => {
+    const { router } = go('/search?mode=ai&q=Xmas+lights&kw=diya');
+    await waitFor(() => expect(runAiSearch).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search again' }));
+
+    await waitFor(() => expect(runAiSearch).toHaveBeenCalledTimes(2));
+    expect(runAiSearch).toHaveBeenLastCalledWith(['diya'], both, undefined, expect.anything());
+    expect(expandRequest).not.toHaveBeenCalled();
+    expect(router.state.location.search).toBe('?mode=ai&q=Xmas+lights&kw=diya');
+    expect(workerApiClient.searchPage).not.toHaveBeenCalled();
+  });
+
+  it('Search again commits a typed but uncommitted keyword first', async () => {
+    const { router } = go('/search?mode=ai&kw=diya');
+    await waitFor(() => expect(runAiSearch).toHaveBeenCalledTimes(1));
+    fireEvent.change(await screen.findByLabelText('Add keywords'), { target: { value: 'rangoli' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search again' }));
+
+    await waitFor(() => expect(urlParams(router).get('kw')).toBe('diya,rangoli'));
+    expect(urlParams(router).get('mode')).toBe('ai');
+    await waitFor(() =>
+      expect(runAiSearch).toHaveBeenCalledWith(['diya', 'rangoli'], both, undefined, expect.anything())
+    );
+    expect(screen.getByLabelText('Add keywords')).toHaveValue('');
+    expect(expandRequest).not.toHaveBeenCalled();
+  });
+
+  it('in plain mode the button is still Search and runs the plain search', async () => {
+    const { router } = go('/search?q=lion&page=2');
+    await screen.findByRole('button', { name: /Ask AI/ });
+    expect(screen.queryByRole('button', { name: 'Search again' })).not.toBeInTheDocument();
+    fireEvent.change(await box(), { target: { value: 'june 2025 tiger' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?q=tiger&from=2025-06-01&to=2025-06-30'));
+    expect(runAiSearch).not.toHaveBeenCalled();
+  });
+
   it('Add keywords opens the keyword row so typed keywords search without the model', async () => {
     const { router } = go('/search?q=lion');
     fireEvent.click(await screen.findByRole('button', { name: 'Add keywords' }));

@@ -332,7 +332,9 @@ Diwali greeting" into keywords with Chrome's built-in Prompt API (Gemini Nano), 
 runs one normal search per keyword and ranks the photos. Photos matching rarer
 keywords count for more. The keywords show as editable chips and the result list
 shows which ones each photo matched. "Add keywords" (next to "Ask AI") skips the model:
-type keywords such as "diya, rangoli" and press Enter. Album, people, known and date chips narrow
+type keywords such as "diya, rangoli" and press Enter. In AI mode the button below the box
+is "Search again": it adds any keyword you typed and re-runs the keywords without the
+model (Enter in the main box still runs a plain search). Album, people, known and date chips narrow
 every keyword search (and the library total used for rarity), so "sunset" with an
 album chip ranks only inside that album. State lives in the URL: `mode=ai`, `q`
 (the sentence), `kw` (the keywords), and, when switched off, `hidePeople=0` and

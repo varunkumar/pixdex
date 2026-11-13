@@ -16,7 +16,7 @@ import { readOmniboxState, stripAiParams } from '../services/omnibox/urlState';
 import { parsePeopleSelection } from '../services/peopleSelection';
 import AiResults from './AiResults';
 import ListPagination from './ListPagination';
-import Omnibox from './omnibox/Omnibox';
+import Omnibox, { type KeywordRowHandle } from './omnibox/Omnibox';
 import PhotoGrid from './PhotoGrid';
 
 const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string }[] = [
@@ -194,6 +194,13 @@ const Search = () => {
     writtenKw.current = null;
   };
 
+  // AI mode's button: commit any keyword draft, then search the keywords again (never the model, never plain search).
+  const keywordRow = useRef<KeywordRowHandle>(null);
+  const searchKeywordsAgain = () => {
+    if (keywordRow.current) keywordRow.current.commit();
+    else searchAgain(terms);
+  };
+
   const submit = () => {
     bump();
     const parsed = parseDateQuery(text);
@@ -275,7 +282,9 @@ const Search = () => {
             onAskAi={supported ? askAi : undefined}
             askAiBusy={expansion.isPending}
             onAddKeywords={supported && !ai ? () => patchLatest({ mode: 'ai' }) : undefined}
-            keywordChips={showKeywords ? { terms, onChange: writeKw, onSearchAgain: searchAgain } : undefined}
+            keywordChips={
+              showKeywords ? { terms, onChange: writeKw, onSearchAgain: searchAgain, handle: keywordRow } : undefined
+            }
           />
 
           {expansion.isPending && (
@@ -348,12 +357,22 @@ const Search = () => {
                 />
               </Group>
             )}
-            <Button
-              onClick={submit}
-              leftSection={!ai && hasCriteria && isFetching ? <Loader size="xs" color="white" /> : <MdSearch />}
-            >
-              Search
-            </Button>
+            {ai ? (
+              <Button
+                variant="light"
+                onClick={searchKeywordsAgain}
+                leftSection={terms.length > 0 && aiSearch.isFetching ? <Loader size="xs" /> : <MdSearch />}
+              >
+                Search again
+              </Button>
+            ) : (
+              <Button
+                onClick={submit}
+                leftSection={hasCriteria && isFetching ? <Loader size="xs" color="white" /> : <MdSearch />}
+              >
+                Search
+              </Button>
+            )}
           </Group>
         </Stack>
       </Card>

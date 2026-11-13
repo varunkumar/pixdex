@@ -13,7 +13,8 @@ never leave local disk or Google Drive.
   `src/components/chipStyle.ts`, dark-mode ink vars `--pixdex-ink-*` in `src/index.css`) with a plain mode and an AI mode (Chrome Prompt API only,
   client side; "Ask AI" / Cmd+Enter and the plain-mode "Add keywords" button, which sets `mode=ai` so keywords can be typed without the
   model, exist only where supported): AI result cards in `src/components/AiResults.tsx`, logic in
-  `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`. `/ai-search` is only a redirect
+  `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`. In AI mode the page button is "Search again" (commits the
+  keyword draft through the `KeywordRowHandle` ref, then re-runs the keywords without the model; Enter in the bar stays a plain search). `/ai-search` is only a redirect
   (`src/components/LegacyAiRedirect.tsx`) to `/search?mode=ai` (old `people=0` becomes `hidePeople=0`; without support the AI params are
   stripped); there is no AI Search nav entry. AI params: `mode=ai`, `q`, `kw`, `hidePeople=0`, `room=0`. `dev/mockApi.ts` is the dev-only dummy API
 - Frontend gating (hidden, never disabled): photo review controls and the photo's face-naming controls use
