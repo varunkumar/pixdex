@@ -1,5 +1,5 @@
 import { exec } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -121,4 +121,14 @@ export async function getAuthorizedClient(
   client.setCredentials(tokens);
   await writeTokenFile(tokens as StoredToken);
   return client;
+}
+
+/** True when Google rejected the stored refresh token (revoked, or expired: apps in "testing" mode lose it after 7 days). */
+export function isInvalidGrant(error: unknown): boolean {
+  const e = error as { message?: string; response?: { data?: { error?: string } } };
+  return e?.response?.data?.error === 'invalid_grant' || /invalid_grant/.test(e?.message ?? '');
+}
+
+export async function clearStoredToken(): Promise<void> {
+  await rm(TOKEN_PATH, { force: true });
 }

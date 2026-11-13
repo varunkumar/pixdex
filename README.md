@@ -118,9 +118,23 @@ your disk.
 cd agent
 npm run dev -- index-local "/path/to/folder"   # one local folder
 npm run dev -- index-drive                      # pick a Google Drive folder (OAuth, read-only)
+npm run dev -- index-drive --folder <id-or-url> # no prompts; repeat --folder for several
 npm run dev -- index-batch /Volumes/T9/Photos   # many albums, resumable
 npm run dev -- index-status                     # progress, ETA, pending and failed
 ```
+
+`index-drive` works like `index-local`: it descends into subfolders, names the album with the same rule
+(the folder above a `Processed` folder, else the photo's own folder; files at the folder's top level use that folder),
+skips duplicate content within a run, and includes shared drives and "shared with me" folders. Drive reports a SHA-256 for
+every binary file, so photos that are already indexed are skipped from the listing alone, without being downloaded
+(a re-run of a big folder costs one listing plus one `check-hashes` request per 500 photos). Transient Drive errors
+(429, rate limits, 5xx, network resets) are retried with backoff. With `--folder` the exit code is 1 if any photo failed.
+Local disk use is bounded: photos are downloaded one at a time to `<tmpdir>/pixdex-drive-staging` and deleted right after each
+is processed (indexed, skipped or failed), so at most one photo is on disk. A photo larger than `DRIVE_STAGING_MAX_MB`
+(default 1024, set in `agent/.env`) is refused before download, and downloads left by a killed run (older than an hour)
+are removed at the start of the next one.
+If Google rejects the stored login (revoked, or expired after 7 days while the OAuth app is in "testing" mode), the
+agent deletes `agent/.google-token.json` and asks you to run the command again to sign in.
 
 `index-batch` indexes every `<album>/Processed` folder under one or more roots
 (and skips `Unprocessed`), one album at a time, and records progress in
