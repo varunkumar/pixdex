@@ -39,7 +39,11 @@ export interface IndexFileEvent {
  * album: it is indexed without one and, with no album, is visible to nobody.
  */
 export function albumFromPath(filePath: string): string | undefined {
-  const folders = path.dirname(filePath).split(path.sep).filter(Boolean);
+  return albumFromFolders(path.dirname(filePath).split(path.sep).filter(Boolean));
+}
+
+/** The album rule over folder names, outermost first (shared by local paths and Drive folder paths). */
+export function albumFromFolders(folders: string[]): string | undefined {
   const processedAt = folders.findIndex((name) => name.toLowerCase() === 'processed');
   const album = processedAt > 0 ? folders[processedAt - 1] : folders[folders.length - 1];
   return album || undefined;
