@@ -13,6 +13,7 @@ import {
   type DriveFolderRef,
 } from './google/driveFiles';
 import { indexGoogleDriveFolder as defaultIndexGoogleDriveFolder } from './google/indexGoogleDriveFolder';
+import { dryRunDriveFolder, formatDryRun } from './google/dryRunDriveFolder';
 import { CloudflareClient } from './cloudflareClient';
 import { OllamaClient } from './ollama/client';
 import { loadKnownGallery } from './known/loadKnownGallery';
@@ -29,18 +30,38 @@ export interface RunIndexDriveDeps {
   buildDriveClient?: (auth: OAuth2Client) => DriveFilesClient;
   listDriveFolders?: typeof defaultListDriveFolders;
   indexGoogleDriveFolder?: typeof defaultIndexGoogleDriveFolder;
+  dryRunDriveFolder?: typeof dryRunDriveFolder;
 }
 
-export function parseFolderArgs(args: string[]): { folders: string[]; error?: string } {
+export function parseFolderArgs(args: string[]): {
+  folders: string[];
+  dryRun: boolean;
+  exclude: string[];
+  error?: string;
+} {
   const folders: string[] = [];
+  const exclude: string[] = [];
+  let dryRun = false;
   for (let i = 0; i < args.length; i++) {
-    if (args[i] !== '--folder') return { folders, error: `Unknown argument: ${args[i]}` };
-    const id = parseDriveFolderRef(args[i + 1] ?? '');
-    if (!id) return { folders, error: `--folder needs a Drive folder id or URL (got "${args[i + 1] ?? ''}")` };
-    folders.push(id);
-    i++;
+    if (args[i] === '--dry-run') {
+      dryRun = true;
+    } else if (args[i] === '--exclude') {
+      const glob = (args[i + 1] ?? '').trim();
+      if (!glob) return { folders, dryRun, exclude, error: '--exclude needs a folder name or pattern (e.g. "video" or "*.lrdata")' };
+      exclude.push(glob);
+      i++;
+    } else if (args[i] === '--folder') {
+      const id = parseDriveFolderRef(args[i + 1] ?? '');
+      if (!id) {
+        return { folders, dryRun, exclude, error: `--folder needs a Drive folder id or URL (got "${args[i + 1] ?? ''}")` };
+      }
+      folders.push(id);
+      i++;
+    } else {
+      return { folders, dryRun, exclude, error: `Unknown argument: ${args[i]}` };
+    }
   }
-  return { folders };
+  return { folders, dryRun, exclude };
 }
 
 export async function runIndexDrive(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number> {
@@ -64,6 +85,7 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
     listDriveFolders = defaultListDriveFolders,
     getDriveFolder = defaultGetDriveFolder,
     indexGoogleDriveFolder = defaultIndexGoogleDriveFolder,
+    dryRunDriveFolder: runDryRun = dryRunDriveFolder,
   } = deps;
 
   const parsed = parseFolderArgs(args);
@@ -89,7 +111,8 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
     }
 
     console.log('Matching folders:');
-    folders.forEach((folder, i) => console.log(`  ${i + 1}. ${folder.name} (${folder.id})`));
+    folders.forEach((folder, i) => console.log(`  ${i + 1}. ${folder.name}${folder.parentName ? `  (in ${folder.parentName})` : ''}  [${folder.id}]`)
+    );
 
     const choice = Number((await prompt(`Pick a folder (1-${folders.length}): `)).trim());
     const picked = folders[choice - 1];
@@ -101,6 +124,23 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
   }
 
   const cloudflareClient = new CloudflareClient(config);
+
+  if (parsed.dryRun) {
+    // Listing only: no downloads, no Ollama, no face sidecar, nothing written anywhere.
+    for (const folder of selected) {
+      console.log(`Dry run for "${folder.name}" (nothing will be downloaded or indexed)`);
+      const result = await runDryRun(driveClient, folder.id, folder.name, {
+        cloudflareClient,
+        config,
+        onWarning: (message) => console.warn(message),
+        onProgress: (message) => console.log(message),
+        exclude: parsed.exclude,
+      });
+      formatDryRun(result).forEach((line) => console.log(line));
+    }
+    return 0;
+  }
+
   const ollamaClient = new OllamaClient(config);
   const faceSidecar = createFaceSidecar(config);
   const knownGallery = await loadKnownGallery();
@@ -115,6 +155,7 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
       faceSidecar,
       knownGallery,
       onProgress: (message) => console.log(message),
+      exclude: parsed.exclude,
     });
     if (result.failed > 0) failedAny = true;
     console.log(

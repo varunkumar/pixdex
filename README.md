@@ -123,9 +123,31 @@ npm run dev -- index-batch /Volumes/T9/Photos   # many albums, resumable
 npm run dev -- index-status                     # progress, ETA, pending and failed
 ```
 
-`index-drive` works like `index-local`: it descends into subfolders, names the album with the same rule
-(the folder above a `Processed` folder, else the photo's own folder; files at the folder's top level use that folder),
-skips duplicate content within a run, and includes shared drives and "shared with me" folders. Drive reports a SHA-256 for
+`index-drive` picks photos with these rules, applied folder by folder: if a folder has a `Processed` subfolder (any case), only
+that subfolder is used (the folder's own photos and its other subfolders are ignored); otherwise the folder's own photos count and
+every subfolder is visited, where the rule applies again. Camera RAW files (CR2, NEF, ARW, DNG, RAF, ORF, RW2 and others, by
+extension or Drive mime type) are always ignored. The album is the first folder under the one you picked, however deep the photo
+is (`Arun Marriage / Marriage Photos / 001` is the album "Arun Marriage"), so generic folder names like "001" or "Upload" never
+merge unrelated folders into one album; photos directly in the picked folder use its name. This differs from `index-local`, which
+uses the photo's own folder. Folders that only hold application files are skipped by default: names matching `*.lrdata`
+(Lightroom previews), `*.aep`, `Adobe After Effects Auto-Save`, `(Footage)`, `*_AME`, `allresources` and `*.collagefactoryfree`.
+Add your own with `--exclude <name-or-glob>` (repeatable, case-insensitive, `*` is a wildcard, whole folder name, e.g.
+`--exclude video --exclude "*backup"`); a `Processed` folder is never skipped. It also skips duplicate content within a run, and
+includes shared drives and "shared with me" folders. In the folder search, each result shows its parent folder name and id so same-named folders
+can be told apart (or paste the folder URL with `--folder`).
+
+`index-drive --dry-run` (with or without `--folder`) prints a directory tree of what would happen and changes nothing: for every
+folder visited, its photo count, size, how many are already indexed and how many exceed `DRIVE_STAGING_MAX_MB`, plus notes such as
+`[only Processed is used, ignoring 40 photos and 2 other folders outside it]` and `[3 RAW ignored]`, then a total. It downloads
+nothing and does not call Ollama or the face sidecar; the only Worker call is the read-only `check-hashes` (one request per 500
+photos).
+
+Listing is fast and overlaps with indexing: folders are listed six at a time with 1000 entries per request, and photos are
+indexed as soon as their folder has been listed, so the first photo starts after one request, not after the whole tree. While the
+tree is still being listed you see `Listing: N folders, M photos found so far`, then `Listing finished`. A folder that cannot be
+listed (for example no permission) is reported as `Failed listing ...` and the rest carries on.
+
+The rest of `index-drive`: Drive reports a SHA-256 for
 every binary file, so photos that are already indexed are skipped from the listing alone, without being downloaded
 (a re-run of a big folder costs one listing plus one `check-hashes` request per 500 photos). Transient Drive errors
 (429, rate limits, 5xx, network resets) are retried with backoff. With `--folder` the exit code is 1 if any photo failed.

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runIndexDrive } from '../src/driveCli';
+import { parseFolderArgs, runIndexDrive } from '../src/driveCli';
 import type { AgentConfig } from '../src/config';
 
 const config: AgentConfig = {
@@ -85,6 +85,59 @@ describe('runIndexDrive', () => {
       'Kanha',
       expect.any(Object)
     );
+  });
+
+  it('--dry-run lists only: it never indexes', async () => {
+    const dryRunDriveFolder = vi.fn().mockResolvedValue({
+      folders: [],
+      images: 0,
+      bytes: 0,
+      alreadyIndexed: 0,
+      unknown: 0,
+      overLimit: 0,
+      toIndex: 0,
+      hashCheck: true,
+    });
+    const indexGoogleDriveFolder = vi.fn();
+
+    const code = await runIndexDrive(config, {
+      prompt: vi.fn(),
+      args: ['--dry-run', '--folder', '1AbC_dEf-GhIjKl'],
+      getAuthorizedClient: vi.fn().mockResolvedValue({}),
+      buildDriveClient: vi.fn().mockReturnValue({ mock: 'drive-client' }),
+      getDriveFolder: vi.fn().mockResolvedValue({ id: '1AbC_dEf-GhIjKl', name: 'Kanha' }),
+      dryRunDriveFolder,
+      indexGoogleDriveFolder,
+    });
+
+    expect(code).toBe(0);
+    expect(dryRunDriveFolder).toHaveBeenCalledWith(
+      { mock: 'drive-client' },
+      '1AbC_dEf-GhIjKl',
+      'Kanha',
+      expect.objectContaining({ config })
+    );
+    expect(indexGoogleDriveFolder).not.toHaveBeenCalled();
+  });
+
+  it('parses --exclude globs and passes them to the dry run and the real run', async () => {
+    expect(parseFolderArgs(['--exclude', 'video', '--dry-run', '--exclude', '*.lrdata'])).toEqual({
+      folders: [],
+      dryRun: true,
+      exclude: ['video', '*.lrdata'],
+    });
+    expect(parseFolderArgs(['--exclude']).error).toContain('--exclude needs');
+
+    const indexGoogleDriveFolder = vi.fn().mockResolvedValue({ total: 0, indexed: 0, skipped: 0, failed: 0 });
+    await runIndexDrive(config, {
+      prompt: vi.fn(),
+      args: ['--folder', '1AbC_dEf-GhIjKl', '--exclude', 'video'],
+      getAuthorizedClient: vi.fn().mockResolvedValue({}),
+      buildDriveClient: vi.fn().mockReturnValue({}),
+      getDriveFolder: vi.fn().mockResolvedValue({ id: '1AbC_dEf-GhIjKl', name: 'K' }),
+      indexGoogleDriveFolder,
+    });
+    expect(indexGoogleDriveFolder.mock.calls[0][3]).toMatchObject({ exclude: ['video'] });
   });
 
   it('returns 1 for a malformed --folder without touching Drive', async () => {

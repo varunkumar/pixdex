@@ -229,16 +229,27 @@ describe('indexGoogleDriveFolder', () => {
   });
 
   it('indexes subfolders, naming the album like local files (Processed folder uses its parent)', async () => {
-    const [a, b] = await Promise.all([makeJpeg({ r: 1, g: 2, b: 3 }), makeJpeg({ r: 200, g: 100, b: 50 })]);
+    const [a, b, c] = await Promise.all([
+      makeJpeg({ r: 1, g: 2, b: 3 }),
+      makeJpeg({ r: 200, g: 100, b: 50 }),
+      makeJpeg({ r: 9, g: 99, b: 199 }),
+    ]);
     const byParent: Record<string, unknown[]> = {
-      root: [{ id: 'bandipur', name: 'Bandipur', mimeType: 'application/vnd.google-apps.folder' }],
+      root: [
+        { id: 'bandipur', name: 'Bandipur', mimeType: 'application/vnd.google-apps.folder' },
+        { id: 'kanha', name: 'Kanha', mimeType: 'application/vnd.google-apps.folder' },
+      ],
       bandipur: [
         { id: 'proc', name: 'Processed', mimeType: 'application/vnd.google-apps.folder' },
-        { id: 'a', name: 'a.jpg', mimeType: 'image/jpeg' },
+        { id: 'a', name: 'a.jpg', mimeType: 'image/jpeg' }, // outside Processed: ignored
       ],
-      proc: [{ id: 'b', name: 'b.jpg', mimeType: 'image/jpeg' }],
+      proc: [
+        { id: 'b', name: 'b.jpg', mimeType: 'image/jpeg' },
+        { id: 'braw', name: 'b.NEF', mimeType: 'image/x-nikon-nef' }, // RAW: ignored
+      ],
+      kanha: [{ id: 'c', name: 'c.jpg', mimeType: 'image/jpeg' }], // no Processed: its own photos count
     };
-    const bytes: Record<string, Buffer> = { a, b };
+    const bytes: Record<string, Buffer> = { a, b, c };
     const driveClient = {
       list: vi.fn().mockImplementation(async ({ q }: { q: string }) => ({
         data: { files: byParent[/'([^']+)' in parents/.exec(q)![1]] ?? [] },
@@ -264,7 +275,9 @@ describe('indexGoogleDriveFolder', () => {
     const albums = Object.fromEntries(
       cloudflareClient.ingestPhoto.mock.calls.map(([p]) => [p.driveFileId, p.album])
     );
-    expect(albums).toEqual({ a: 'Bandipur', b: 'Bandipur' });
+    expect(albums).toEqual({ b: 'Bandipur', c: 'Kanha' });
+    const downloaded = (driveClient.get as ReturnType<typeof vi.fn>).mock.calls.map(([p]) => p.fileId).sort();
+    expect(downloaded).toEqual(['b', 'c']); // a.jpg and the RAW file were never fetched
   });
 
   it('refuses a file over the staging limit before downloading it, and continues', async () => {
@@ -324,6 +337,94 @@ describe('indexGoogleDriveFolder', () => {
 
     expect(await readdir(tempRoot)).toHaveLength(0);
     expect(messages[0]).toContain('Removed 1 stale download');
+  });
+
+  it('starts indexing before the whole tree is listed, and survives a folder that cannot be listed', async () => {
+    const [first, later] = await Promise.all([makeJpeg({ r: 31, g: 41, b: 59 }), makeJpeg({ r: 26, g: 53, b: 58 })]);
+    const bytes: Record<string, Buffer> = { first, later };
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const FOLDER = 'application/vnd.google-apps.folder';
+
+    const driveClient = {
+      list: vi.fn().mockImplementation(async ({ q }: { q: string }) => {
+        const parent = /'([^']+)' in parents/.exec(q)![1];
+        if (parent === 'locked') throw new Error('The caller does not have permission');
+        if (parent === 'slow') {
+          await gate; // listed only after the first photo has been indexed
+          return { data: { files: [{ id: 'later', name: 'later.jpg', mimeType: 'image/jpeg' }] } };
+        }
+        return {
+          data: {
+            files: [
+              { id: 'slow', name: 'Slow', mimeType: FOLDER },
+              { id: 'locked', name: 'Locked', mimeType: FOLDER },
+              { id: 'first', name: 'first.jpg', mimeType: 'image/jpeg' },
+            ],
+          },
+        };
+      }),
+      get: vi.fn().mockImplementation(async ({ fileId }: { fileId: string }) => ({
+        data: Readable.from([bytes[fileId]]),
+      })),
+    } as unknown as DriveFilesClient;
+    const cloudflareClient = {
+      checkHashes: vi.fn().mockResolvedValue(new Set()),
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      // If listing were still done up front this would never run, and the test would time out.
+      ingestPhoto: vi.fn().mockImplementation(async (p: { driveFileId: string }) => {
+        if (p.driveFileId === 'first') release();
+      }),
+    };
+    const messages: string[] = [];
+
+    const result = await indexGoogleDriveFolder(driveClient, 'root', 'Trips', {
+      cloudflareClient: cloudflareClient as any,
+      ollamaClient: { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) } as any,
+      config,
+      tempDir: tempRoot,
+      retry: { sleep: async () => {} },
+      onProgress: (m) => messages.push(m),
+    });
+
+    expect(result).toEqual({ total: 2, indexed: 2, skipped: 0, failed: 1 }); // 1 failed = the locked folder
+    expect(messages.some((m) => m.startsWith('Failed listing Trips / Locked'))).toBe(true);
+    expect(messages.some((m) => m.startsWith('Listing finished: 3 folders'))).toBe(true);
+  });
+
+  it('puts photos from deep folders in the top-level folder album, so generic names never merge', async () => {
+    const [x, y] = await Promise.all([makeJpeg({ r: 77, g: 1, b: 2 }), makeJpeg({ r: 3, g: 88, b: 4 })]);
+    const FOLDER = 'application/vnd.google-apps.folder';
+    const byParent: Record<string, unknown[]> = {
+      root: [{ id: 'marriage', name: 'Arun Marriage', mimeType: FOLDER }, { id: 'eng', name: 'Engagement', mimeType: FOLDER }],
+      marriage: [{ id: 'mp', name: 'Marriage Photos', mimeType: FOLDER }],
+      mp: [{ id: 'mp001', name: '001', mimeType: FOLDER }],
+      mp001: [{ id: 'x', name: 'x.jpg', mimeType: 'image/jpeg' }],
+      eng: [{ id: 'eng001', name: '001', mimeType: FOLDER }],
+      eng001: [{ id: 'y', name: 'y.jpg', mimeType: 'image/jpeg' }],
+    };
+    const bytes: Record<string, Buffer> = { x, y };
+    const driveClient = {
+      list: vi.fn().mockImplementation(async ({ q }: { q: string }) => ({
+        data: { files: byParent[/'([^']+)' in parents/.exec(q)![1]] ?? [] },
+      })),
+      get: vi.fn().mockImplementation(async ({ fileId }: { fileId: string }) => ({ data: Readable.from([bytes[fileId]]) })),
+    } as unknown as DriveFilesClient;
+    const cloudflareClient = {
+      checkHashes: vi.fn().mockResolvedValue(new Set()),
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await indexGoogleDriveFolder(driveClient, 'root', 'Varun', {
+      cloudflareClient: cloudflareClient as any,
+      ollamaClient: { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) } as any,
+      config,
+      tempDir: tempRoot,
+    });
+
+    const albums = Object.fromEntries(cloudflareClient.ingestPhoto.mock.calls.map(([p]) => [p.driveFileId, p.album]));
+    expect(albums).toEqual({ x: 'Arun Marriage', y: 'Engagement' }); // not both '001'
   });
 
   it('skips a second copy of the same bytes within one run', async () => {

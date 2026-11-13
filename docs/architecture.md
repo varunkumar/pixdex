@@ -213,7 +213,7 @@ candidate). It returns 404 if no photo qualifies.
   login.
 - `google/` - OAuth (read-only scope) + recursive Drive folder listing (`driveFiles.ts`: breadth-first, shared drives
   included, retry with backoff, `sha256Checksum` read from the listing so already-indexed photos are skipped before any
-  download) and `indexGoogleDriveFolder.ts` (album rule shared with local files via `albumFromFolders`). Agent-only:
+  download) and `indexGoogleDriveFolder.ts` (album = first folder under the picked one, `albumFromDrivePath`; Processed, RAW and skip-list rules in `driveScan.ts`). Agent-only:
   no Worker CPU or D1 change; a re-run adds one `check-hashes` request per 500 photos and no downloads for known ones.
 - `originals/` - local server exposing full-resolution files, reached via
   `cloudflared` (`agent/cloudflared/`).
