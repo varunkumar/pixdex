@@ -206,6 +206,7 @@ async function collectRefs(
   const kept = refs.filter((r) => dot(r, median) >= OUTLIER_COSINE).slice(0, MAX_REFS);
   const anchors = kept.slice();
   let groupRefs = 0;
+  const groupFaces = new Set<Float32Array>();
   let tried = 0;
   for (const group of groups) {
     if (kept.length >= MAX_REFS || tried >= GROUP_PHOTO_LIMIT || anchors.length === 0) break;
@@ -216,10 +217,21 @@ async function collectRefs(
       continue;
     }
     kept.push(pick.face);
-    groupRefs++;
+    groupFaces.add(pick.face);
     onProgress?.(`  group ${group.title}: picked face (cos ${pick.cosine.toFixed(2)})`);
   }
-  return { refs: kept, groupRefs };
+  // Final outlier pass over everything kept: the first median came from the single-face refs only, so one wrong
+  // anchor (or a lookalike picked from a group) could slip through. Up to 3 rounds, recomputing the median each time.
+  let finalRefs = kept;
+  for (let round = 0; round < 3 && finalRefs.length > 0; round++) {
+    const m = medianReference(finalRefs);
+    const next = finalRefs.filter((r) => dot(r, m) >= OUTLIER_COSINE);
+    if (next.length === finalRefs.length) break;
+    onProgress?.(`  dropped ${finalRefs.length - next.length} inconsistent ref(s) in the final check`);
+    finalRefs = next;
+  }
+  groupRefs = finalRefs.filter((r) => groupFaces.has(r)).length;
+  return { refs: finalRefs, groupRefs };
 }
 
 /**

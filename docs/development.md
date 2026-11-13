@@ -99,7 +99,7 @@ to own your local albums.
    index) before the Worker deploys; the Pages Function deploys independently (it only adds the `people/known` read route).
 2. On the owner's machine, from `agent/`: `known-check`, then `build-known-gallery` (reports how many people reach the gallery, at least
    3 openly licensed photos each), then `backfill-known --dry-run` (writes nothing; counts, per-person top 20, score histogram, sample
-   face ids). Tune `KNOWN_THRESHOLD` (0.5) and `KNOWN_MARGIN` (0.05) in `agent/src/known/matcher.ts` from that output, then run
+   face ids). Tune `KNOWN_THRESHOLD` (0.6) and `KNOWN_MARGIN` (0.05) in `agent/src/known/matcher.ts` from that output, then run
    `backfill-known`. Use `--rescore` after a threshold change, after removing a person from `people.json`, or after `--rebuild` of one
    (the Worker only writes rows that change, so a rescore costs reads of all faces but writes only the changed ones). If the embeddings
    route nears 10 ms CPU, lower the page size with `--page-size <n>` (1 to 100). `build-known-gallery` is incremental and remembers people

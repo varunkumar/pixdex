@@ -303,7 +303,7 @@ and the partial index `idx_faces_known_photo (known_id, photo_id) WHERE known_id
 
 Flow: the agent builds a local gallery of reference embeddings from openly licensed Commons photos
 (`build-known-gallery`, `agent/.index-state/known-gallery.json`, uncommitted) and syncs the people list to the Worker
-(`POST /ingest/known-people`). Matching is cosine similarity on the agent only (threshold 0.5, margin 0.05 over the runner-up, both
+(`POST /ingest/known-people`). Matching is cosine similarity on the agent only (threshold 0.6, margin 0.05 over the runner-up, both
 initial guesses); the Worker never loops over embeddings. The gallery is matched only on the agent; its backup is one R2 object `known/gallery.json` written and read only by the agent through `PUT`/`GET /ingest/known-gallery` (ingest token, not in the Pages proxy allowlist). The Worker streams the bytes to and from R2 (64 MB cap, no parsing, no D1, no matching). `build-known-gallery` restores it when the local file is missing and pushes after a changed build or when `GET /ingest/known-gallery/status` (one R2 head) reports no backup. Performance: one R2 put per build that changed the gallery (about 11 MB for 405 people x 10 refs), one R2 get on a restore, one R2 head per unchanged build, zero D1 queries, and the Worker does no JSON work (the body is streamed through, never parsed); these are Class A (put) and Class B (get) R2 operations, a handful per month. New faces carry `known: {id, score}` (nullable) on `POST /ingest/faces`.
 Existing faces are matched by `backfill-known`, which pages stored embeddings (`POST /ingest/faces/embeddings`, raw bytes, keyset by
 rowid, `limit` at most 100 within a 5000-rowid window) and writes matches back in batches of up to 200 (`POST /ingest/faces/known`,

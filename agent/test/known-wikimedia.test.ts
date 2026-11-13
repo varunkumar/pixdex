@@ -12,12 +12,12 @@ function emptyFetch(): typeof fetch {
 describe('isOpenLicense', () => {
   const client = new WikimediaClient(emptyFetch(), { delayMs: 0 });
   it('accepts open licenses', () => {
-    for (const l of ['CC BY-SA 4.0', 'CC0', 'Public domain', 'CC BY 2.0', 'CC0 1.0', 'Public domain mark 1.0']) {
+    for (const l of ['CC BY-SA 4.0', 'CC0', 'Public domain', 'CC BY 2.0', 'CC0 1.0', 'Public domain mark 1.0', 'GODL-India', 'GODL India 1.0', 'OGL v1.0', 'OGL 3', 'No restrictions']) {
       expect(client.isOpenLicense(l), l).toBe(true);
     }
   });
   it('rejects restrictive licenses', () => {
-    for (const l of ['CC BY-NC 4.0', 'All rights reserved', 'CC BY-ND 2.0', 'CC BY-NC-SA 3.0', 'GFDL', 'GFDL 1.2', 'Fair use', '']) {
+    for (const l of ['CC BY-NC 4.0', 'All rights reserved', 'CC BY-ND 2.0', 'CC BY-NC-SA 3.0', 'GFDL', 'GFDL 1.2', 'Fair use', 'Attribution', 'Copyrighted free use', 'MIT', '']) {
       expect(client.isOpenLicense(l), l).toBe(false);
     }
   });

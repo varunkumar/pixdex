@@ -15,7 +15,7 @@ function person(id: string, ...refs: Float32Array[]) {
 
 describe('matchKnown', () => {
   it('exposes the initial thresholds', () => {
-    expect(KNOWN_THRESHOLD).toBe(0.5);
+    expect(KNOWN_THRESHOLD).toBe(0.6);
     expect(KNOWN_MARGIN).toBe(0.05);
   });
 
