@@ -1,6 +1,6 @@
 # Known people list
 
-`people.json` is the curated list of public figures the agent can recognize in your photos. Each entry is a Wikidata id, a display name and optional aliases, one object per line, sorted by name. Reference photos come only from openly licensed Wikimedia Commons images (`build-known-gallery`).
+`people.json` is the curated list of public figures the agent can recognize in your photos. Each entry is a Wikidata id, a display name and optional aliases, one object per line, sorted by name. Reference photos come only from openly licensed Wikimedia Commons images (`build-known-gallery`): CC0, CC BY, CC BY-SA, public domain, and attribution-only government licences (GODL-India, UK OGL, "No restrictions" for US government works). NC, ND, GFDL, "Attribution" without a stated licence, fair use and unknown terms are rejected. Only embeddings are stored, never the images.
 
 All commands run from `agent/` as `npx tsx --env-file=.env src/cli.ts <command>`.
 
@@ -25,7 +25,7 @@ Note: a rescan (`index-*`, `backfill-faces --recrop`) on a machine without the g
 `known-pick [--id <Q-id>...] [--port <n>]` (from `agent/`, needs the sidecar and `WIKIMEDIA_CONTACT` like the build) works through the people recorded as excluded, or only the `--id` ones. It prints a URL on `127.0.0.1` with a random per-run token; open it. For each person it shows the same candidates as the build (Wikidata portrait plus Commons category files, raster, openly licensed only, license shown under each photo) with numbered boxes on every detected face.
 
 - Single-face photos start picked. In group photos the face closest to the current picks (max cosine) is outlined with a dashed amber box as a suggestion; it is not picked until you click it. Click a box (or Tab to it and press Space) to toggle.
-- Save (Enter) needs at least 3 picks; at most 10 are stored. Skip (S) leaves the person excluded. Done (D) or Ctrl+C ends the run.
+- Save (Enter) needs at least 1 pick (you have verified every face, so this is lower than the automatic build's 3; a one-photo person matches weakly); at most 10 are stored. Skip (S) leaves the person excluded. Done (D) or Ctrl+C ends the run.
 - Saved people are trusted: no outlier filter. A picked face with cosine below 0.3 against the median of the other picks gets a red box and a warning.
 - Saving writes the gallery file atomically (temp file, then rename), removes the person from the excluded record and never touches other people. On exit, if the gallery changed, it is pushed to R2 (a failure only warns; run `known-gallery-push`).
 - Crawls run one at a time; the next person is fetched in the background. Images, face boxes and embeddings are cached under `agent/.index-state/known-pick-cache/` (uncommitted), so a restart reuses them. Delete that folder to refetch.

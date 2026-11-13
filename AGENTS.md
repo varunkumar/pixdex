@@ -71,7 +71,7 @@ never leave local disk or Google Drive.
   `POST /ingest/faces/known`; `--rescore` also clears matches that no longer hold and is needed after a threshold change, after removing a
   person or after `--rebuild` of one; `--page-size` 1 to 100 is the page `limit` knob). A rescan (`index-*`, `backfill-faces --recrop`) on a machine
   WITHOUT the gallery file resets known matches on the rescanned unassigned and auto faces; a normal `backfill-known` restores them. The
-  committed list is validated with the Worker's limits (name 1 to 200, up to 20 aliases of 1 to 100 characters) by `known-check`. `KNOWN_THRESHOLD` 0.5 and `KNOWN_MARGIN` 0.05
+  committed list is validated with the Worker's limits (name 1 to 200, up to 20 aliases of 1 to 100 characters) by `known-check`. `KNOWN_THRESHOLD` 0.6 (raised from 0.5 after a dry-run on a family library matched only children at 0.50 to 0.54) and `KNOWN_MARGIN` 0.05
   (`agent/src/known/matcher.ts`) are initial guesses: tune them from `backfill-known --dry-run` before the real run. The seed list
   is 405 people; how many reach the gallery is reported by the first `build-known-gallery` and is not yet known.
 - Gallery build group photos: after the single-face pass, photos with 2 to `MAX_GROUP_FACES` (12) faces contribute the one face whose max cosine over the accepted single-face refs (anchors; at least one required) is at least `GROUP_MIN_COSINE` (0.5) and leads the next face by `GROUP_MARGIN` (0.1), at most `GROUP_PHOTO_LIMIT` (15) photos per person, never beyond `MAX_REFS`; constants in `agent/src/known/buildGallery.ts`, report field `groupRefs`. Batched Wikimedia requests are chunked to `MAX_QUERY_CHARS` (6000) encoded characters plus 50 items (HTTP 414 fix). Agent-side only: no Worker CPU or D1 impact.

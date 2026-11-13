@@ -315,13 +315,18 @@ export class WikimediaClient {
   }
 
   /**
-   * CC0, CC BY, CC BY-SA and public domain (including "Public domain mark") only; NC, ND, GFDL, fair use
-   * and unknown terms are rejected.
+   * CC0, CC BY, CC BY-SA, public domain (including "Public domain mark"), GODL-India (Government Open Data
+   * License, India), OGL (UK Open Government Licence) and "No restrictions" (US government works) only; the government
+   * licences need only attribution; NC, ND, GFDL, fair use and unknown
+   * terms are rejected.
    */
   isOpenLicense(license: string): boolean {
     const l = license.trim().toLowerCase();
     if (/^cc0\b/.test(l)) return true;
     if (/^(public domain|pd)\b/.test(l)) return true;
+    if (/^godl[ -]india\b/.test(l)) return true;
+    if (/^ogl\b/.test(l)) return true;
+    if (l === 'no restrictions') return true;
     return /^cc[ -]by([ -]sa)?([ -]\d|$)/.test(l);
   }
 }

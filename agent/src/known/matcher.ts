@@ -1,7 +1,7 @@
 import type { Gallery } from './gallery';
 
 /** Initial values, to be tuned by the dry run. */
-export const KNOWN_THRESHOLD = 0.5;
+export const KNOWN_THRESHOLD = 0.6;
 export const KNOWN_MARGIN = 0.05;
 
 function dot(a: Float32Array, b: Float32Array): number {

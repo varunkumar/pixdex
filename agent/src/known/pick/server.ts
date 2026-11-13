@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { MAX_REFS, MIN_REFS } from '../buildGallery';
+import { MAX_REFS } from '../buildGallery';
 import type { Gallery, GalleryPerson, KnownPerson } from '../gallery';
 import { isQid, type CandidateStore } from './candidates';
 import { PAGE_HTML } from './page';
@@ -10,6 +10,8 @@ import { lowCosinePicks, preselected, suggest, type FaceRef } from './scoring';
 export const BIND_HOST = '127.0.0.1';
 const MAX_BODY = 64 * 1024;
 const MAX_PICKS = 200;
+/** Human-verified picks need fewer refs than the automatic build (3), down to a single photo: the owner has checked every face. */
+export const MANUAL_MIN_PICKS = 1;
 
 export interface PickRequest {
   method: string;
@@ -87,7 +89,7 @@ export function createPickApp(deps: PickAppDeps) {
     const c = entry.candidates;
     const picks = parsePicks((req.body as { picks?: unknown } | undefined)?.picks, c.photos);
     if (typeof picks === 'string') return err(400, picks);
-    if (picks.length < MIN_REFS) return err(400, `Pick at least ${MIN_REFS} faces (you have ${picks.length})`);
+    if (picks.length < MANUAL_MIN_PICKS) return err(400, `Pick at least ${MANUAL_MIN_PICKS} faces (you have ${picks.length})`);
     const used = picks.slice(0, MAX_REFS);
     const result = saving.then(async () => {
       const gallery = await deps.loadGallery();
@@ -132,7 +134,7 @@ export function createPickApp(deps: PickAppDeps) {
         const first = deps.people.find((p) => !done.has(p.id));
         if (first) deps.store.request(first);
         return json(200, {
-          min: MIN_REFS,
+          min: MANUAL_MIN_PICKS,
           max: MAX_REFS,
           people: deps.people.map((p) => ({ ...p, state: done.get(p.id) ?? 'pending' })),
         });

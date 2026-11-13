@@ -132,12 +132,12 @@ describe('pick app', () => {
     expect(img.body.toString()).toBe('img-File:a.jpg');
   });
 
-  it('refuses to save fewer than 3 picks and leaves the file alone', async () => {
+  it('refuses to save with no picks and leaves the file alone', async () => {
     const app = makeApp();
     await app.handle(req('/api/person/Q1'));
     await settle();
     const before = await fs.readFile(galleryFile, 'utf8');
-    const r = await app.handle(req('/api/person/Q1/save', { method: 'POST', body: { picks: [{ photo: 0, face: 0 }, { photo: 1, face: 0 }] } }));
+    const r = await app.handle(req('/api/person/Q1/save', { method: 'POST', body: { picks: [] } }));
     expect(r.status).toBe(400);
     expect(await fs.readFile(galleryFile, 'utf8')).toBe(before);
   });
