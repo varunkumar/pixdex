@@ -32,7 +32,7 @@ export interface DriveFilesClient {
   get(
     params: { fileId: string; alt: 'media'; supportsAllDrives?: boolean },
     options: { responseType: 'stream' }
-  ): Promise<{ data: Readable }>;
+  ): Promise<{ data: Readable; headers?: Record<string, unknown> }>;
   get(params: {
     fileId: string;
     fields: string;
@@ -179,4 +179,23 @@ export async function downloadDriveFile(
     // A retry reopens destPath, which truncates any partial bytes from the failed attempt.
     await pipeline(response.data, createWriteStream(destPath));
   }, options);
+}
+
+/** Opens a Drive file as a stream (no disk staging); the caller pipes it. Retries only the open. */
+export async function openDriveFileStream(
+  client: DriveFilesClient,
+  fileId: string,
+  options: RetryOptions = {}
+): Promise<{ stream: Readable; contentType: string | null; contentLength: number | null }> {
+  const response = await withDriveRetry(
+    () => client.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'stream' }),
+    options
+  );
+  const type = response.headers?.['content-type'];
+  const length = Number(response.headers?.['content-length']);
+  return {
+    stream: response.data,
+    contentType: typeof type === 'string' ? type : null,
+    contentLength: Number.isFinite(length) && length > 0 ? length : null,
+  };
 }

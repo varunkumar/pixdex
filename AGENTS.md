@@ -64,7 +64,11 @@ never leave local disk or Google Drive.
   Worker `GET /access/photo/:id` (READ_TOKEN, not in the browser allowlist) for every user
 - `functions/_lib/` - shared Function code: Access JWT verification (`access.ts`, JWKS cached in module memory)
 - `worker/` - Hono Worker: ingest + read API, D1 migrations, FTS5 search
-- `agent/` - local Node/TS indexing CLI, originals server, and the `move-album` script
+- `agent/` - local Node/TS indexing CLI, originals server, and the `move-album` script. The originals server serves
+  local files and Google Drive files (`openDriveFileStream` in `google/driveFiles.ts`, agent's stored OAuth token, lazily built, piped
+  with no staging; a missing/invalid token or Drive failure is a 404; no Range support yet); the frontend uses `/api/originals/:id`
+  for both sources (`src/services/originals.ts`) and the photo page shows "Open in Google Drive" via `getDriveUrl` (owner only).
+  Agent-only: no Worker CPU or D1 change, one Drive API call per original view
 - `agent/known/people.json` - curated known-people list (Wikidata ids, sorted by name, one object per line, at least 200
   entries); manage it only through the CLI (`known-search`, `known-add`, `known-check [--offline]`, logic in
   `agent/src/known/list.ts`), never type ids from memory; process in `agent/known/README.md`
