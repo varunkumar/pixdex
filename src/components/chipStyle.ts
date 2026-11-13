@@ -3,3 +3,7 @@
 export const OWN_COLOR = 'blue';
 export const KNOWN_COLOR = 'violet';
 export const ALBUM_COLOR = 'teal';
+
+/** Chip colour for a suggestion or selected filter kind; anything else (dates, "Add both") is gray. */
+export const kindColor = (kind: string): string =>
+  kind === 'own' ? OWN_COLOR : kind === 'known' ? KNOWN_COLOR : kind === 'album' ? ALBUM_COLOR : 'gray';
