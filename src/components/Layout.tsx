@@ -13,10 +13,9 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import type { IconType } from 'react-icons';
-import { MdAlbum, MdAutoAwesome, MdDarkMode, MdHome, MdLightMode, MdLogout, MdPeople, MdPhoto, MdSearch, MdTimeline } from 'react-icons/md';
+import { MdAlbum, MdDarkMode, MdHome, MdLightMode, MdLogout, MdPeople, MdPhoto, MdSearch, MdTimeline } from 'react-icons/md';
 import { Link, Outlet, useMatch } from 'react-router-dom';
 import { useMe } from '../hooks/useMe';
-import { usePromptApiSupport } from '../hooks/usePromptApiSupport';
 import { BRAND, HEADER_GRADIENT } from '../theme';
 import { UserAvatar } from './UserAvatar';
 
@@ -35,8 +34,6 @@ const LINKS: NavItem[] = [
   { to: '/people', label: 'People', icon: MdPeople, end: false },
   { to: '/daily', label: 'Daily Pick', icon: MdPhoto, end: false },
 ];
-
-const AI_SEARCH_LINK: NavItem = { to: '/ai-search', label: 'AI Search', icon: MdAutoAwesome, end: false };
 
 const HeaderLink = ({ to, label, icon: Icon, end }: NavItem) => {
   const active = useMatch({ path: to, end }) !== null;
@@ -75,7 +72,6 @@ const Layout = () => {
   const { setColorScheme } = useMantineColorScheme();
   const scheme = useComputedColorScheme('light');
   const { email } = useMe();
-  const links = usePromptApiSupport() === 'supported' ? [...LINKS, AI_SEARCH_LINK] : LINKS;
 
   return (
     <AppShell
@@ -109,7 +105,7 @@ const Layout = () => {
               </Text>
             </Link>
             <Group gap={4} visibleFrom="sm" wrap="nowrap">
-              {links.map((item) => (
+              {LINKS.map((item) => (
                 <HeaderLink key={item.to} {...item} />
               ))}
             </Group>
@@ -160,7 +156,7 @@ const Layout = () => {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
-        {links.map((item) => (
+        {LINKS.map((item) => (
           <DrawerLink key={item.to} {...item} onNavigate={close} />
         ))}
         {email && (
