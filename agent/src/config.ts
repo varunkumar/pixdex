@@ -12,6 +12,9 @@ const configSchema = z.object({
   OLLAMA_MODEL: z.string().min(1).default('qwen3.5:27b-mlx'),
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+  // Drive indexing stages one photo at a time in a temp folder; a photo bigger than this many MB is refused
+  // before download. Unset means 1024 (1 GB).
+  DRIVE_STAGING_MAX_MB: z.coerce.number().positive().optional(),
   ORIGINALS_PORT: z.coerce.number().int().positive().default(8787),
   ORIGINALS_TOKEN: z.string().min(1).optional(),
   FACE_SIDECAR_URL: z

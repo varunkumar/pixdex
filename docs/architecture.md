@@ -211,7 +211,10 @@ candidate). It returns 404 if no photo qualifies.
 - `batch/` - resumable multi-folder indexing with state in
   `agent/.index-state/` (gitignored). `scripts/install-launchd.sh` runs it at
   login.
-- `google/` - OAuth + folder-scoped Drive listing (read-only scope).
+- `google/` - OAuth (read-only scope) + recursive Drive folder listing (`driveFiles.ts`: breadth-first, shared drives
+  included, retry with backoff, `sha256Checksum` read from the listing so already-indexed photos are skipped before any
+  download) and `indexGoogleDriveFolder.ts` (album rule shared with local files via `albumFromFolders`). Agent-only:
+  no Worker CPU or D1 change; a re-run adds one `check-hashes` request per 500 photos and no downloads for known ones.
 - `originals/` - local server exposing full-resolution files, reached via
   `cloudflared` (`agent/cloudflared/`).
 

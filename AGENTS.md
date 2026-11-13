@@ -97,6 +97,15 @@ never leave local disk or Google Drive.
   embeddings route CPU and the D1 BLOB decode (D1 may return a number[]; `limit` at most 100 is the knob), and the backfill time, estimated
   at 1 to 3 minutes for about 5K photos: measure both with `wrangler tail` after deploy.
 - Known personalities UI status: the omnibox and the Timeline `PeopleFilter` were checked in a real browser, light and dark, against the dev mock (`PIXDEX_MOCK=1 npm run dev`); the real library has no known matches yet, so real-data behaviour is unchecked.
+- Google Drive indexing (`agent/src/google/`, `agent/src/driveCli.ts`, command `index-drive [--folder <id-or-url>]...`): recursive over
+  subfolders, includes shared drives (`corpora: 'allDrives'`, `supportsAllDrives`), album from `albumFromFolders` (same rule as
+  `albumFromPath`), skips already-indexed photos by Drive's `sha256Checksum` (equals `sha256ContentHash`) with one batched
+  `check-hashes` before any download (files without a checksum are downloaded and checked as before), skips in-run duplicate content,
+  retries 429, rate-limit 403, 5xx and network resets (`withDriveRetry`), and on `invalid_grant` deletes `agent/.google-token.json`
+  and exits 1. Local storage (`google/staging.ts`): one photo staged at a time in `<tmpdir>/pixdex-drive-staging`, deleted after every
+  photo; a file over `DRIVE_STAGING_MAX_MB` (optional env, default 1024) is refused before download (listing `size`) and again after
+  (actual size); `pixdex-drive-*` files older than 1 hour are swept at the start of each run (orphans of a killed run). Agent-only: no Worker route, CPU or D1 change (the Worker sees the same `POST /ingest/photo`; fewer `check-hashes`
+  calls per file, now one per 500 photos plus one per checksum-less file).
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
 - `docs/` - internal docs, plus `superpowers/` plans and specs and `screenshots/`
   (README images made from dummy data: gradient placeholders, no real photos or people)
