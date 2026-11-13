@@ -100,6 +100,25 @@ describe('scanFaces', () => {
     near(cloudflareClient.ingestFaces.mock.calls[0][2][0].bbox, { x: 0.2, y: 0.7, w: 0.3, h: 0.2 });
   });
 
+  it('writes upright-frame boxes unchanged with boxFrame upright, matching an upright thumbnail', async () => {
+    const rotated = path.join(dir, 'rot2.jpg');
+    await sharp({ create: { width: 200, height: 100, channels: 3, background: { r: 1, g: 2, b: 3 } } })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toFile(rotated);
+    const sidecar = {
+      detect: vi.fn().mockResolvedValue({
+        model: 'm',
+        width: 100,
+        height: 200,
+        faces: [{ bbox: [10, 40, 30, 100], detScore: 0.9, embedding: 'e' }],
+      }),
+    };
+    const cloudflareClient = { ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }) };
+    await scanFaces(rotated, 'h', { sidecar: sidecar as any, cloudflareClient: cloudflareClient as any, boxFrame: 'upright' });
+    near(cloudflareClient.ingestFaces.mock.calls[0][2][0].bbox, { x: 0.1, y: 0.2, w: 0.2, h: 0.3 });
+  });
+
   it('keeps only the largest faces when there are more than the per-request cap', async () => {
     const faces = Array.from({ length: MAX_FACES_PER_PHOTO + 5 }, (_, i) => ({
       bbox: [0, 0, 10 + i, 10 + i],

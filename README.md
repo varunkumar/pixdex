@@ -89,7 +89,7 @@ Indexing runs on your machine through the agent CLI (`agent/`), never through th
 web UI. For each photo the agent:
 
 1. Hashes the file and skips it if that hash is already indexed.
-2. Reads EXIF (camera, lens, exposure, GPS) and cuts a thumbnail with `sharp`.
+2. Reads EXIF (camera, lens, exposure, GPS) and cuts an upright (EXIF-rotated) thumbnail with `sharp`.
 3. Asks the **vision model** (Ollama) for a structured description: subjects,
    colors, patterns, tags, season, environment and watermark. It then asks for a
    1-10 aesthetic score with a 3-4 word title, and finally writes a caption and
