@@ -219,7 +219,9 @@ const Search = () => {
     if (patch.from !== undefined || patch.to !== undefined || patch.onThisDay !== undefined) setPending(null);
     if (nextText !== undefined) {
       bump();
-      next.q = nextText;
+      // The trimmed words leave q only when they were part of the submitted search; otherwise the leftover typing
+      // stays local (picking "dhoni" from "dhoni be" must not search for "be").
+      if (text.trim() === rawQ.trim()) next.q = nextText;
       setText(nextText);
     }
     update(next, { resetPage: true });
@@ -272,6 +274,7 @@ const Search = () => {
             onSubmit={submit}
             onAskAi={supported ? askAi : undefined}
             askAiBusy={expansion.isPending}
+            onAddKeywords={supported && !ai ? () => patchLatest({ mode: 'ai' }) : undefined}
             keywordChips={showKeywords ? { terms, onChange: writeKw, onSearchAgain: searchAgain } : undefined}
           />
 

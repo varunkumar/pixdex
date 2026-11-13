@@ -28,6 +28,8 @@ export interface OmniboxProps {
   /** Present only where the Prompt API is supported; Cmd/Ctrl+Enter. */
   onAskAi?: () => void;
   askAiBusy?: boolean;
+  /** Present only where the Prompt API is supported, in plain mode: opens the keyword row without the model. */
+  onAddKeywords?: () => void;
   /** AI mode only. */
   keywordChips?: { terms: string[]; onChange: (terms: string[]) => void; onSearchAgain: (terms: string[]) => void };
 }
@@ -49,7 +51,7 @@ const words = (t: string) => t.split(/\s+/).filter(Boolean);
  * never changes the selection; only picking a suggestion does. No request per keystroke (the hook debounces and caches).
  */
 export default function Omnibox(props: OmniboxProps) {
-  const { text, onText, selection, onSelection, onSubmit, onAskAi, askAiBusy = false, keywordChips } = props;
+  const { text, onText, selection, onSelection, onSubmit, onAskAi, askAiBusy = false, onAddKeywords, keywordChips } = props;
   const { candidates, labelFor, spans, bothCount } = useOmniboxData(text, selection);
   const [focused, setFocused] = useState(false);
   const [highlighted, setHighlighted] = useState<string | null>(null);
@@ -188,7 +190,7 @@ export default function Omnibox(props: OmniboxProps) {
   return (
     <Box pos="relative">
       <Group gap="xs" wrap="nowrap" align="flex-start">
-        <PillsInput style={{ flex: 1 }} aria-label="Search">
+        <PillsInput style={{ flex: 1 }}>
           <Pill.Group>
             {album !== '' && chip('album', 'album', album, () => onSelection({ album: '' }))}
             {people.map((id) =>
@@ -236,6 +238,11 @@ export default function Omnibox(props: OmniboxProps) {
             onClick={askAi}
           >
             Ask AI
+          </Button>
+        )}
+        {onAddKeywords && (
+          <Button variant="subtle" onClick={onAddKeywords}>
+            Add keywords
           </Button>
         )}
       </Group>

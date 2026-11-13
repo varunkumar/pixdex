@@ -35,7 +35,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   matching), Dashboard,
   DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout. Timeline keeps `PeopleFilter`.
 - AI Search (part of Search: `components/Search.tsx`, `components/AiResults.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
-  entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI" and Cmd+Enter
+  entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI", Cmd+Enter and the plain-mode "Add keywords" button, which opens the keyword row without the model,
   are gated on it; there is no nav entry, and `/ai-search` is a redirect, `LegacyAiRedirect.tsx`, to `/search?mode=ai`). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):
   no new allowlist entries and no Worker, D1 or agent change. URL state: `mode=ai`, `q`, `kw`, `hidePeople=0`,
   `room=0`, plus the shared filters `album`, `people`, `known`, `from`, `to`, `onThisDay`. Pipeline (unchanged except filters): (1) the Prompt API expands the phrase into keywords (`promptApi.ts`);

@@ -11,7 +11,8 @@ never leave local disk or Google Drive.
   the Search page is one omnibox (`src/components/Search.tsx`; bar `src/components/omnibox/Omnibox.tsx`, panel `SuggestionPanel.tsx`,
   data `src/hooks/useOmniboxData.ts`, matcher `src/services/omnibox/matcher.ts`, URL state `src/services/omnibox/urlState.ts`, colours
   `src/components/chipStyle.ts`, dark-mode ink vars `--pixdex-ink-*` in `src/index.css`) with a plain mode and an AI mode (Chrome Prompt API only,
-  client side; "Ask AI" / Cmd+Enter exist only where supported): AI result cards in `src/components/AiResults.tsx`, logic in
+  client side; "Ask AI" / Cmd+Enter and the plain-mode "Add keywords" button, which sets `mode=ai` so keywords can be typed without the
+  model, exist only where supported): AI result cards in `src/components/AiResults.tsx`, logic in
   `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`. `/ai-search` is only a redirect
   (`src/components/LegacyAiRedirect.tsx`) to `/search?mode=ai` (old `people=0` becomes `hidePeople=0`; without support the AI params are
   stripped); there is no AI Search nav entry. AI params: `mode=ai`, `q`, `kw`, `hidePeople=0`, `room=0`. `dev/mockApi.ts` is the dev-only dummy API
@@ -166,8 +167,10 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
   matches anywhere inside a name or alias word, case and accent insensitive, no fuzzy matching, longest span wins, a person never used twice,
   at most 3 ambiguous chips per span plus "+N more"); typing alone never filters; Enter is a plain search, "Ask AI" / Cmd+Enter only where the
   Prompt API exists. "Add both" (shown for two person spans, only if the cap of 5 allows) carries the real count from one `GET /search?limit=1`
-  fired once after the debounce and cached by ids and filters, never per keystroke. Binding rules: `onSelection(patch, nextText?)` is ONE URL
-  update per pick (never two in a row); while any people or known chip is active the "Hide people photos" switch is not rendered and the
+  per distinct set of top matches after each 150 ms pause in typing, cached by ids and filters, never per keystroke. Binding rules:
+  `onSelection(patch, nextText?)` is ONE URL update per pick (never two in a row), and the trimmed text is written to `q` only when the
+  box held the submitted `q` (otherwise only the box is trimmed, so leftover typing is never searched); in AI mode every chip change
+  re-runs the whole pipeline (no extra calls per run); while any people or known chip is active the "Hide people photos" switch is not rendered and the
   pipeline gets `hidePeople: false` (the URL value is kept); the AI library-total call receives the same filters as the keyword calls
   (`AiFilters`: album, people, known, from, to, onThisDay) with no extra calls; album is one at a time and album suggestions hide while one is chosen;
   colours come only from `chipStyle.ts` (`OWN_COLOR`, `KNOWN_COLOR`, `ALBUM_COLOR`) and the `--pixdex-ink-*` variables.

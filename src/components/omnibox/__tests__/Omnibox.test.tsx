@@ -93,6 +93,13 @@ describe('Omnibox', () => {
     expect(onSelection).toHaveBeenCalledTimes(4);
   });
 
+  it('labels only the combobox as Search (no aria-label on the wrapper)', () => {
+    const { container } = renderWithProviders(<Harness />);
+    const labelled = container.querySelectorAll('[aria-label="Search"]');
+    expect(labelled).toHaveLength(1);
+    expect(labelled[0]).toBe(screen.getByRole('combobox', { name: 'Search' }));
+  });
+
   it('shows one On this day chip', async () => {
     renderWithProviders(<Harness selection={{ ...none, onThisDay: '11-13' }} />);
     expect(screen.getByRole('button', { name: /^Remove On this day/ })).toBeInTheDocument();

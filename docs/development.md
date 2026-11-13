@@ -207,12 +207,25 @@ changes). The matcher runs in the browser: at most 12 words x a few hundred name
 | Request | When | Rows (existing plans, unchanged) |
 | --- | --- | --- |
 | `GET /people`, `GET /people/known`, `GET /albums` | once per page load, cached 5 minutes, shared with Timeline (same query keys) | as today; Search did the same three loads before |
-| `GET /search?...&limit=1` ("Add both" count) | once per shown "Add both" group after the debounce, cached by ids and filters, never per keystroke, only when two person spans are shown | one indexed filtered count; `known` uses `idx_faces_known_photo`, `people` the existing faces join; no `OFFSET`, no `COUNT(*)` beyond the `total` the route already returns |
+| `GET /search?...&limit=1` ("Add both" count) | one per distinct set of top matches, after each 150 ms pause in typing while two person spans are shown (so retyping can fire a new one for a new pair), cached by ids and filters, never per keystroke | one indexed filtered count; `known` uses `idx_faces_known_photo`, `people` the existing faces join; no `OFFSET`, no `COUNT(*)` beyond the `total` the route already returns |
 | AI keyword `GET /search` calls | same count as before (one per keyword plus one library total) | each now also carries the active filters, which only narrows the scans |
+
+In AI mode every chip added or removed (album, person, known, date) re-runs the whole pipeline: N keyword searches, one library
+total and up to 150 thumbnail measures (each thumbnail is one D1 read through the scoped thumbnail route). That is no more calls
+than a normal AI search, but filters now trigger a re-run where before only keyword or switch changes did. "Add keywords" (plain
+mode, Prompt API only) just sets `mode=ai`; it makes no request until a keyword is entered, and never calls the model.
 
 No new query shape: the count reuses the Phase 1 `/search` plans with `limit=1`. Not measurable locally: real D1 rows read and Worker
 CPU for the count request. Measure after deploy with `cd worker && npx wrangler tail` (CPU time per `/search` while typing two
 names, and the `limit=1` count) and `npx wrangler d1 insights DB`. The only added cost on any path is that on-demand count.
+
+`EXPLAIN QUERY PLAN` of the count shape (album plus people, known and dates, against the test D1): no combination scans `photos` or
+`faces`. `photos` uses `idx_photos_album_cover` (album and `date_time` range), people use `idx_faces_person_status_created`, known
+uses the covering `idx_faces_known_photo`; temp b-trees appear for the people `GROUP BY` and `count(DISTINCT)` and for the row
+query's `ORDER BY`. The existing `scopeFor` visibility subquery scans `albums` plus `json_each(shared_with)` (albums is small).
+`onThisDay` (`substr(date_time)`) is not indexable, so only `idx_photos_album` applies and cost follows the album's size. The
+`COUNT(*)` that fills `total` covers every matching row, so `limit=1` does not make the count cheaper. The test D1 has no `ANALYZE`
+statistics, so production plans may differ: confirm with `wrangler tail` and `wrangler d1 insights`.
 
 ## Album sharing performance notes
 

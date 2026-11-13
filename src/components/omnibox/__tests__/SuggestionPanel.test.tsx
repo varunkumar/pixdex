@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { screen } from '@testing-library/react';
+import { afterEach } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../../../test/renderWithProviders';
 import SuggestionPanel, { type PanelSection } from '../SuggestionPanel';
@@ -37,5 +38,37 @@ describe('SuggestionPanel colours', () => {
       expect(css).toContain(`--pixdex-ink-${c}: var(--mantine-color-${c}-light-color)`);
       expect(dark).toContain(`--pixdex-ink-${c}: var(--mantine-color-${c}-3)`);
     }
+  });
+});
+
+describe('SuggestionPanel scrolling', () => {
+  const original = Element.prototype.scrollIntoView;
+  afterEach(() => {
+    Element.prototype.scrollIntoView = original;
+  });
+
+  it('scrolls the highlighted option into view', () => {
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    const ui = (h: string | null) => (
+      <SuggestionPanel id="s" layout="list" sections={sections} highlighted={h} optionId={(k) => `s-${k}`} />
+    );
+    const first = renderWithProviders(ui(null));
+    expect(spy).not.toHaveBeenCalled();
+    first.unmount();
+    renderWithProviders(ui('album:g'));
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(spy.mock.contexts[0]).toBe(screen.getByRole('option', { name: /Goa/ }));
+  });
+
+  it('does not throw where scrollIntoView is missing', () => {
+    // @ts-expect-error jsdom leaves it undefined
+    Element.prototype.scrollIntoView = undefined;
+    expect(() =>
+      renderWithProviders(
+        <SuggestionPanel id="s" layout="list" sections={sections} highlighted="own:a" optionId={(k) => `s-${k}`} />,
+      ),
+    ).not.toThrow();
   });
 });

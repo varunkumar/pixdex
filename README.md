@@ -44,7 +44,8 @@ machine. Originals stay on local disk or Google Drive.
   (at most 3 per typed phrase, then "+N more"); typing alone never filters, a pick
   turns the words into a chip. When two typed names both match, an "Add both" chip
   shows the real photo count. Enter runs a plain search. In Chrome with the Prompt
-  API, "Ask AI" (or Cmd/Ctrl+Enter) turns a sentence into keywords instead. See
+  API, "Ask AI" (or Cmd/Ctrl+Enter) turns a sentence into keywords instead, and
+  "Add keywords" lets you type keywords yourself without the model. See
   [AI Search](#ai-search).
 - **Browse albums.** Cover photos, counts and average ratings, sorted by date,
   name, size or rating.
@@ -316,7 +317,8 @@ the Prompt API, "Ask AI" (or Cmd/Ctrl+Enter) turns a phrase such as "photos for 
 Diwali greeting" into keywords with Chrome's built-in Prompt API (Gemini Nano), then
 runs one normal search per keyword and ranks the photos. Photos matching rarer
 keywords count for more. The keywords show as editable chips and the result list
-shows which ones each photo matched. Album, people, known and date chips narrow
+shows which ones each photo matched. "Add keywords" (next to "Ask AI") skips the model:
+type keywords such as "diya, rangoli" and press Enter. Album, people, known and date chips narrow
 every keyword search (and the library total used for rarity), so "sunset" with an
 album chip ranks only inside that album. State lives in the URL: `mode=ai`, `q`
 (the sentence), `kw` (the keywords), and, when switched off, `hidePeople=0` and

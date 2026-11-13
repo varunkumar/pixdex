@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Box, Group, Paper, Stack, Text, VisuallyHidden } from '@mantine/core';
 import { MdVerified } from 'react-icons/md';
 import type { CandidateKind } from '../../services/omnibox/matcher';
@@ -48,6 +49,13 @@ interface Props {
  * suggestion chips per matched span. Focus stays on the input (aria-activedescendant), so mousedown never blurs it.
  */
 export default function SuggestionPanel({ id, layout, sections, highlighted, optionId }: Props) {
+  // Arrow keys move the highlight; keep that option visible inside the scrolling list (jsdom has no scrollIntoView).
+  useEffect(() => {
+    if (highlighted === null) return;
+    const el = document.getElementById(optionId(highlighted));
+    if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
+  }, [highlighted, optionId]);
+
   const option = (item: PanelItem) => {
     const active = item.key === highlighted;
     const color = kindColor(item.kind);
