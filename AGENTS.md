@@ -8,8 +8,15 @@ never leave local disk or Google Drive.
 ## Layout
 
 - `src/` - React 19 + Vite + Mantine frontend (calls same-origin `/api/*`);
-  the `/ai-search` page (Chrome Prompt API only, client side): page in `src/components/AiSearch.tsx`, logic in
-  `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`
+  the Search page is one omnibox (`src/components/Search.tsx`; bar `src/components/omnibox/Omnibox.tsx`, panel `SuggestionPanel.tsx`,
+  data `src/hooks/useOmniboxData.ts`, matcher `src/services/omnibox/matcher.ts`, URL state `src/services/omnibox/urlState.ts`, colours
+  `src/components/chipStyle.ts`, dark-mode ink vars `--pixdex-ink-*` in `src/index.css`) with a plain mode and an AI mode (Chrome Prompt API only,
+  client side; "Ask AI" / Cmd+Enter and the plain-mode "Add keywords" button, which sets `mode=ai` so keywords can be typed without the
+  model, exist only where supported): AI result cards in `src/components/AiResults.tsx`, logic in
+  `src/services/aiSearch/`, support gate in `src/hooks/usePromptApiSupport.ts`. In AI mode the page button is "Search again" (commits the
+  keyword draft through the `KeywordRowHandle` ref, then re-runs the keywords without the model; Enter in the bar stays a plain search). `/ai-search` is only a redirect
+  (`src/components/LegacyAiRedirect.tsx`) to `/search?mode=ai` (old `people=0` becomes `hidePeople=0`; without support the AI params are
+  stripped); there is no AI Search nav entry. AI params: `mode=ai`, `q`, `kw`, `hidePeople=0`, `room=0`. `dev/mockApi.ts` is the dev-only dummy API
 - Frontend gating (hidden, never disabled): photo review controls and the photo's face-naming controls use
   `photo.canEdit` (the user owns the album); album cover and Share use the album's `role === 'owner'` (the album page reads it from
   its `album-summary` query); rename, delete, matching and covers on a person use that person's `canEdit` (the user created it).
@@ -90,7 +97,7 @@ never leave local disk or Google Drive.
   (scales with the global count of matched faces); the `known=` filter is one more subquery on `idx_faces_known_photo`. UNMEASURED: the
   embeddings route CPU and the D1 BLOB decode (D1 may return a number[]; `limit` at most 100 is the knob), and the backfill time, estimated
   at 1 to 3 minutes for about 5K photos: measure both with `wrangler tail` after deploy.
-- Known personalities UI status: verified only in jsdom; the colour and dark-mode look of `PeopleFilter` is not yet checked in a browser.
+- Known personalities UI status: the omnibox and the Timeline `PeopleFilter` were checked in a real browser, light and dark, against the dev mock (`PIXDEX_MOCK=1 npm run dev`); the real library has no known matches yet, so real-data behaviour is unchecked.
 - Drive listing (`google/driveScan.ts`, `DriveScanner`): folders are listed 6 at a time (`concurrency`), 1000 entries per `files.list` page
   (the API maximum; the default is 100), and each folder's photos are handed to `indexGoogleDriveFolder` as soon as that folder is
   listed, so indexing starts after the first list call and listing overlaps with the slow Ollama work (nothing needs the whole tree:
@@ -125,7 +132,7 @@ never leave local disk or Google Drive.
 
 Root, `worker/`, and `agent/` are separate npm packages.
 
-- Frontend: `npm run dev`, `npm test`, `npm run lint`, `npm run build`
+- Frontend: `npm run dev` (`PIXDEX_MOCK=1 npm run dev` serves dummy data from `dev/mockApi.ts`: dev only, needs no `.env` or secrets, never in the build), `npm test`, `npm run lint`, `npm run build`
 - Worker: `cd worker && npm test && npm run typecheck`
 - Agent: `cd agent && npm test && npm run typecheck`
 - Face sidecar (Python, optional): `pip install -r agent/sidecar/requirements.txt`, then
@@ -182,12 +189,24 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - `known=<Q1,Q2>` on `/search`, `/timeline` and `/timeline/buckets` (`worker/src/db/known.ts`: `parseKnown`, `knownFilterSql`) is an AND
   filter: the photo needs a face matched to every id (with or without a person). It shares the cap of 5 with `people` (people take slots
   first, extra known ids are silently dropped, never a 400), ids are bound, and the subquery walks `idx_faces_known_photo`; an unknown id is just zero results.
-- Frontend People filter: Search and Timeline both render `src/components/PeopleFilter.tsx` (one Mantine `MultiSelect`, values `p:<id>` own
+- Search omnibox (`src/components/omnibox/`): the bar shows album, own-people (blue), known (violet, "known" marker) and date chips; typed words
+  become suggestions through the shared matcher (`src/services/omnibox/matcher.ts`: debounce 150 ms, from 3 characters per span, each word
+  matches anywhere inside a name or alias word, case and accent insensitive, no fuzzy matching, longest span wins, a person never used twice,
+  at most 3 ambiguous chips per span plus "+N more"); typing alone never filters; Enter is a plain search, "Ask AI" / Cmd+Enter only where the
+  Prompt API exists. "Add both" (shown for two person spans, only if the cap of 5 allows) carries the real count from one `GET /search?limit=1`
+  per distinct set of top matches after each 150 ms pause in typing, cached by ids and filters, never per keystroke. Binding rules:
+  `onSelection(patch, nextText?)` is ONE URL update per pick (never two in a row), and the trimmed text is written to `q` only when the
+  box held the submitted `q` (otherwise only the box is trimmed, so leftover typing is never searched); in AI mode every chip change
+  re-runs the whole pipeline (no extra calls per run); while any people or known chip is active the "Hide people photos" switch is not rendered and the
+  pipeline gets `hidePeople: false` (the URL value is kept); the AI library-total call receives the same filters as the keyword calls
+  (`AiFilters`: album, people, known, from, to, onThisDay) with no extra calls; album is one at a time and album suggestions hide while one is chosen;
+  colours come only from `chipStyle.ts` (`OWN_COLOR`, `KNOWN_COLOR`, `ALBUM_COLOR`) and the `--pixdex-ink-*` variables.
+- Frontend People filter: Timeline renders `src/components/PeopleFilter.tsx` (Search now uses the omnibox above; one Mantine `MultiSelect`, values `p:<id>` own
   and `k:<id>` known, groups "Your people" then "Known personalities in your photos", own entries blue and known violet with a "known"
   marker so colour is not the only signal; `renderPill` styles picked tags). It loads `['people']` and `['known-people']` itself
   (staleTime 5 minutes, so one extra `GET /people/known` per page load), matches locally with `matchesQuery` over name plus aliases
   (no request per keystroke; typing alone never filters; each typed word matches anywhere inside a name word, so "esh" finds "Ganesh"; from 3 characters only ("m" shows nothing, "man" finds "Rahman"; an empty box lists everyone); a list that has not loaded yet has its ids carried through unchanged), shows when either list is non-empty, caps at 5 combined and drops ids in neither
-  list. URL params `people` and `known` are parsed by `src/services/peopleSelection.ts`; changing either resets the Search page.
+  list. URL params `people` and `known` are parsed by `src/services/peopleSelection.ts`; changing either resets the page (Search and Timeline).
 - Do not commit `.env`, `credentials/`, or `agent/.index-state/`.
 
 ## Performance review is mandatory (CPU and DB)

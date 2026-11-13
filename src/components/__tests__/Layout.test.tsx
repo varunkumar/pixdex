@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPromptApiStatus } from '../../services/aiSearch/promptApi';
 import { renderWithProviders } from '../../test/renderWithProviders';
@@ -44,18 +44,12 @@ describe('Layout', () => {
     expect(screen.getByRole('button', { name: /toggle colour scheme/i })).toBeInTheDocument();
   });
 
-  it('hides the AI Search link when the Prompt API is unsupported', async () => {
+  it.each(['unsupported', 'available'] as const)('has no AI Search link when the Prompt API is %s', async (status) => {
+    vi.mocked(getPromptApiStatus).mockResolvedValue(status);
     renderWithProviders(<Layout />);
-    await waitFor(() => expect(getPromptApiStatus).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByRole('link', { name: 'AI Search' })).toBeNull();
-  });
-
-  it('shows the AI Search link in header and drawer when supported', async () => {
-    vi.mocked(getPromptApiStatus).mockResolvedValue('available');
-    renderWithProviders(<Layout />);
-    const links = await screen.findAllByRole('link', { name: 'AI Search' });
-    expect(links.length).toBeGreaterThanOrEqual(2);
-    links.forEach((l) => expect(l).toHaveAttribute('href', '/ai-search'));
+    expect(screen.queryByText('AI Search')).toBeNull();
+    expect(screen.getAllByRole('link', { name: 'Search' }).length).toBeGreaterThanOrEqual(1);
   });
 });

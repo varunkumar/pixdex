@@ -34,16 +34,41 @@ export interface AiSearchResult {
 
 const finite = (n: number) => (Number.isFinite(n) ? n : 0);
 
+export interface AiFilters {
+  album?: string;
+  people?: string[];
+  known?: string[];
+  from?: string;
+  to?: string;
+  onThisDay?: string;
+}
+
+// Drop empty strings and empty arrays so they are never sent to the Worker.
+function cleanFilters(filters: AiFilters | undefined): AiFilters {
+  const out: AiFilters = {};
+  if (!filters) return out;
+  if (filters.album) out.album = filters.album;
+  if (filters.people?.length) out.people = filters.people;
+  if (filters.known?.length) out.known = filters.known;
+  if (filters.from) out.from = filters.from;
+  if (filters.to) out.to = filters.to;
+  if (filters.onThisDay) out.onThisDay = filters.onThisDay;
+  return out;
+}
+
 export async function runAiSearch(
   terms: string[],
   options: AiSearchOptions,
-  measure: (url: string) => Promise<TextSpace> = measureTextSpace
+  measure: (url: string) => Promise<TextSpace> = measureTextSpace,
+  filters?: AiFilters
 ): Promise<AiSearchResult> {
+  const f = cleanFilters(filters);
   const [settled, library] = await Promise.all([
     Promise.allSettled(
-      terms.map((term) => workerApiClient.searchPage({ q: term, sort: 'rating', limit: PER_KEYWORD_LIMIT }))
+      terms.map((term) => workerApiClient.searchPage({ q: term, sort: 'rating', limit: PER_KEYWORD_LIMIT, ...f }))
     ),
-    workerApiClient.searchPage({ limit: 1 }).then(
+    // The library total gets the same filters so rarity weights stay relative to the narrowed set.
+    workerApiClient.searchPage({ limit: 1, ...f }).then(
       (r) => r.total,
       () => 0
     ),
