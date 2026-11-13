@@ -2,6 +2,7 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createOriginalsServer } from '../src/originals/server';
 import type { AgentConfig } from '../src/config';
@@ -73,8 +74,34 @@ describe('originals server', () => {
     expect(response.status).toBe(401);
   });
 
-  it('returns 404 for a Drive-sourced photo, since there is no local path to serve', async () => {
-    await start({ fetchIndexedPhoto: vi.fn().mockResolvedValue({ source: 'google_drive', path: null }) });
+  it('streams a Drive-sourced photo through the Drive client', async () => {
+    const openDriveFile = vi.fn().mockResolvedValue({
+      stream: Readable.from([Buffer.from('drive bytes')]),
+      contentType: 'image/jpeg',
+      contentLength: 11,
+    });
+    await start({
+      fetchIndexedPhoto: vi.fn().mockResolvedValue({ source: 'google_drive', path: null, driveFileId: 'f1' }),
+      openDriveFile,
+    });
+    const response = await fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/jpeg');
+    expect(await response.text()).toBe('drive bytes');
+    expect(openDriveFile).toHaveBeenCalledWith(config, 'f1');
+  });
+
+  it('returns 404 for a Drive photo without a file id', async () => {
+    await start({ fetchIndexedPhoto: vi.fn().mockResolvedValue({ source: 'google_drive', path: null, driveFileId: null }) });
+    const response = await fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH });
+    expect(response.status).toBe(404);
+  });
+
+  it('returns 404 when Drive cannot open the file', async () => {
+    await start({
+      fetchIndexedPhoto: vi.fn().mockResolvedValue({ source: 'google_drive', path: null, driveFileId: 'f1' }),
+      openDriveFile: vi.fn().mockRejectedValue(new Error('boom')),
+    });
     const response = await fetch(`${baseUrl}/originals/photo-1`, { headers: AUTH });
     expect(response.status).toBe(404);
   });

@@ -9,7 +9,7 @@ describe('fetchIndexedPhoto', () => {
 
     const result = await fetchIndexedPhoto('https://example.workers.dev', 'photo-1', 'the-read-token', fetchMock);
 
-    expect(result).toEqual({ source: 'local', path: '/photos/a.jpg' });
+    expect(result).toEqual({ source: 'local', path: '/photos/a.jpg', driveFileId: null });
     expect(fetchMock).toHaveBeenCalledWith('https://example.workers.dev/photos/photo-1', {
       headers: { Authorization: 'Bearer the-read-token' },
     });

@@ -22,7 +22,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
-import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
+import { getDriveUrl, getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import FaceOverlay from './FaceOverlay';
 import Lightbox from './Lightbox';
 import PhotoFaces from './PhotoFaces';
@@ -128,6 +128,7 @@ const PhotoDetail = () => {
   }
 
   const originalUrl = getOriginalUrl(photo);
+  const driveUrl = getDriveUrl(photo);
   const date = formatPhotoDate(photo.dateTime);
   const gps = mapsUrl(photo);
   const exposure = exposureSummary(photo);
@@ -218,6 +219,11 @@ const PhotoDetail = () => {
             {originalUrl && (
               <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer" size="sm">
                 View Original
+              </Anchor>
+            )}
+            {driveUrl && (
+              <Anchor href={driveUrl} target="_blank" rel="noopener noreferrer" size="sm">
+                Open in Google Drive
               </Anchor>
             )}
           </Stack>

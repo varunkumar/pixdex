@@ -224,7 +224,10 @@ candidate). It returns 404 if no photo qualifies.
 2. Worker stores rows in D1 (with FTS5 text) and thumbnails in R2.
 3. Browser -> Pages `/api/*` -> Pages Function adds token -> Worker read route.
 4. "View Original": browser -> `/api/originals/:id` -> tunnel -> agent server
-   (local files) or a Drive deep-link (Drive files).
+   (local files, or Drive files streamed with the agent's Google token via
+   `files.get alt=media`, nothing staged on disk). The photo page adds an
+   "Open in Google Drive" link (album owner only: `driveFileId` is `canEdit`-gated).
+   Agent-only change: no Worker CPU or D1 change.
 
 ## Faces and people
 

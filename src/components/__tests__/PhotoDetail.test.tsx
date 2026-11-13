@@ -18,6 +18,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
 const originals = vi.hoisted(() => ({
   getOriginalUrl: vi.fn(),
   getOriginalImageUrl: vi.fn(),
+  getDriveUrl: vi.fn(),
 }));
 vi.mock('../../services/originals', () => originals);
 
@@ -171,7 +172,20 @@ describe('PhotoDetail', () => {
     expect(screen.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', '/api/originals/p1');
   });
 
-  it('does not prefetch for Drive photos and the lightbox still opens safely', async () => {
+  it('shows an extra Open in Google Drive link for Drive photos', async () => {
+    originals.getDriveUrl.mockReturnValue('https://drive.google.com/file/d/x/view');
+    vi.mocked(workerApiClient.getPhoto).mockResolvedValue(
+      makePhoto({ filename: 'drive.jpg', source: 'google_drive', driveFileId: 'x' })
+    );
+    renderWithRouter(routes, ['/photos/p1']);
+    expect(await screen.findByRole('link', { name: 'Open in Google Drive' })).toHaveAttribute(
+      'href',
+      'https://drive.google.com/file/d/x/view'
+    );
+    expect(screen.getByRole('link', { name: 'View Original' })).toHaveAttribute('href', '/api/originals/p1');
+  });
+
+  it('does not prefetch when there is no original image URL and the lightbox still opens safely', async () => {
     originals.getOriginalImageUrl.mockReturnValue(null);
     originals.getOriginalUrl.mockReturnValue('https://drive.google.com/file/d/x/view');
     vi.mocked(workerApiClient.getPhoto).mockResolvedValue(

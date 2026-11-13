@@ -1,6 +1,8 @@
 export interface IndexedPhotoLookup {
   source: string;
   path: string | null;
+  /** Set for Google Drive photos (the Worker returns it to the album owner, the agent's viewer). */
+  driveFileId: string | null;
 }
 
 export async function fetchIndexedPhoto(
@@ -22,6 +24,6 @@ export async function fetchIndexedPhoto(
     throw new Error(`Failed to look up photo ${id}: ${response.status}`);
   }
 
-  const body = (await response.json()) as { source?: string; path?: string | null };
-  return { source: body.source ?? '', path: body.path ?? null };
+  const body = (await response.json()) as { source?: string; path?: string | null; driveFileId?: string | null };
+  return { source: body.source ?? '', path: body.path ?? null, driveFileId: body.driveFileId ?? null };
 }
