@@ -10,6 +10,7 @@ import {
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { MdVerified } from 'react-icons/md';
+import { KNOWN_COLOR, OWN_COLOR } from './chipStyle';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { personOptions } from '../services/peopleKeys';
 import { MAX_PEOPLE_FILTER } from '../services/peopleSelection';
@@ -18,10 +19,6 @@ import { matchesQuery } from '../services/personMatch';
 const FIVE_MINUTES = 5 * 60 * 1000;
 const OWN_GROUP = 'Your people';
 const KNOWN_GROUP = 'Known personalities in your photos';
-// Own entries are blue, known ones violet. Known ones also carry a "known" marker and the group heading,
-// so colour is never the only signal (light and dark themes, colour-blind users).
-const OWN_COLOR = 'blue';
-const KNOWN_COLOR = 'violet';
 
 interface Props {
   people: string[];
