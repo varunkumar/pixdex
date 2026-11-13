@@ -87,6 +87,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
         sidecar: deps.faceSidecar,
         cloudflareClient,
         gallery: deps.knownGallery,
+        boxFrame: 'upright',
         onWarning: (message) => console.warn(message),
       });
     } catch (error) {

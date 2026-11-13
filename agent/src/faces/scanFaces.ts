@@ -58,7 +58,7 @@ interface Box {
 
 /**
  * Maps a normalised point in the upright (EXIF-rotated) image back to the raw
- * sensor frame, which is what stored thumbnails use (they are not rotated).
+ * sensor frame, which is what thumbnails made before upright thumbnails use (they are not rotated).
  * 1 or undefined is the identity.
  */
 function uprightToRaw(orientation: number | undefined, u: number, v: number): [number, number] {
@@ -103,10 +103,16 @@ export async function scanFaces(
     cloudflareClient: CloudflareClient;
     /** Known-personalities gallery; absent means no known matching. */
     gallery?: Gallery;
+    /**
+     * The frame the stored boxes are in, which must match the photo's stored thumbnail: `upright` for
+     * thumbnails made by the current `generateThumbnail`, `raw` (the default) for older ones that were
+     * never rotated. `processFile` passes `upright`; `backfill-faces` keeps `raw`.
+     */
+    boxFrame?: 'raw' | 'upright';
     onWarning?: (message: string) => void;
   }
 ): Promise<number> {
-  const { sidecar, cloudflareClient, onWarning } = deps;
+  const { sidecar, cloudflareClient, onWarning, boxFrame = 'raw' } = deps;
   let { gallery } = deps;
   const detection = await sidecar.detect(await prepareFaceImage(filePath));
   const { width, height } = detection;
@@ -130,7 +136,7 @@ export async function scanFaces(
     const upright = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
     return {
       upright,
-      bbox: uprightBoxToRaw(upright, orientation),
+      bbox: boxFrame === 'upright' ? upright : uprightBoxToRaw(upright, orientation),
       detScore: face.detScore,
       embedding: face.embedding,
     };

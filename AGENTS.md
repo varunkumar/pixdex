@@ -128,6 +128,11 @@ never leave local disk or Google Drive.
   photo; a file over `DRIVE_STAGING_MAX_MB` (optional env, default 1024) is refused before download (listing `size`) and again after
   (actual size); `pixdex-drive-*` files older than 1 hour are swept at the start of each run (orphans of a killed run). Agent-only: no Worker route, CPU or D1 change (the Worker sees the same `POST /ingest/photo`; fewer `check-hashes`
   calls per file, now one per 500 photos plus one per checksum-less file).
+- Thumbnail orientation (`agent/src/thumbnail.ts`): new thumbnails are stored upright (`.rotate()` applies the EXIF orientation, sharp drops the tag),
+  so phone photos are no longer sideways. Thumbnails indexed before this change are still in the raw sensor frame and are left as they are. Face boxes
+  must be in the same frame as the photo's thumbnail (the UI draws them over it): `scanFaces(..., { boxFrame })` is `upright` from `processFile` and `raw`
+  (the default) from `backfill-faces`, so a post-change photo whose scan was missed at index time gets raw boxes from `backfill-faces` (wrong for a rotated
+  photo; re-index it instead). Agent-only: no Worker route, CPU or D1 change; one extra in-memory rotate per thumbnail.
 - `agent/sidecar/` - local Python InsightFace service (face detection and embeddings), see its README
 - `docs/` - internal docs, plus `superpowers/` plans and specs and `screenshots/`
   (README images made from dummy data: gradient placeholders, no real photos or people)

@@ -37,4 +37,15 @@ describe('generateThumbnail', () => {
     const buffer = await generateThumbnail(filePath);
     expect(buffer.byteLength).toBeLessThan(MAX_THUMBNAIL_BYTES);
   });
+
+  it('applies the EXIF orientation: a landscape file tagged 6 gives a portrait thumbnail', async () => {
+    const rotated = path.join(dir, 'rot.jpg');
+    await sharp({ create: { width: 2000, height: 1000, channels: 3, background: { r: 9, g: 9, b: 9 } } })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toFile(rotated);
+    const metadata = await sharp(await generateThumbnail(rotated)).metadata();
+    expect(metadata.height).toBeGreaterThan(metadata.width ?? 0);
+    expect(metadata.orientation).toBeUndefined();
+  });
 });
