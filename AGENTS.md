@@ -111,6 +111,11 @@ never leave local disk or Google Drive.
   per batch of up to 500 not-yet-checked checksums made of every photo that arrived since the previous batch (the first batch is one
   folder, later ones are large because indexing is slower than listing): the same rows read in total, at most about `photos / 500`
   plus a handful of extra Worker requests compared with one global call.
+- `index-drive` log lines (for measuring throughput): every line starts with an ISO-8601 UTC timestamp (added in `driveCli.ts`). An `Indexed:` line
+  carries the album, folder path, file size, download / index / total time and the running `#N`; `Skipping` and `Failed` lines carry the folder path
+  and size. A `Progress:` line every 5 minutes and a final `Summary:` line give indexed / skipped / failed counts, photos per minute overall and over
+  the last 20 indexed, queued vs found photos, folders listed, elapsed time and an upper-bound ETA for the queued photos (some will be skipped, and
+  the listing may still be running). Agent-only: no Worker CPU or D1 change.
 - Drive selection rules (`scanDriveFolder` in `google/driveScan.ts`, per folder, after all its listing pages): a folder with a `Processed`
   subfolder (case-insensitive) contributes only that subfolder (its own photos and other subfolders are ignored), otherwise its own photos
   plus every subfolder, recursively; camera RAW (`isRawFile`: extension list or `image/x-<vendor>` mime) is always ignored. The

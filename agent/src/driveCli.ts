@@ -147,19 +147,19 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
 
   let failedAny = false;
   for (const folder of selected) {
-    console.log(`Indexing "${folder.name}"`);
+    console.log(`${new Date().toISOString()} Indexing "${folder.name}"`);
     const result = await indexGoogleDriveFolder(driveClient, folder.id, folder.name, {
       cloudflareClient,
       ollamaClient,
       config,
       faceSidecar,
       knownGallery,
-      onProgress: (message) => console.log(message),
+      onProgress: (message) => console.log(`${new Date().toISOString()} ${message}`),
       exclude: parsed.exclude,
     });
     if (result.failed > 0) failedAny = true;
     console.log(
-      `Done. Total: ${result.total}, Indexed: ${result.indexed}, Skipped: ${result.skipped}, Failed: ${result.failed}`
+      `${new Date().toISOString()} Done. Total: ${result.total}, Indexed: ${result.indexed}, Skipped: ${result.skipped}, Failed: ${result.failed}`
     );
   }
   return failedAny && parsed.folders.length > 0 ? 1 : 0;

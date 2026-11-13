@@ -280,6 +280,45 @@ describe('indexGoogleDriveFolder', () => {
     expect(downloaded).toEqual(['b', 'c']); // a.jpg and the RAW file were never fetched
   });
 
+  it('logs album, size, timings and a throughput summary for measuring speed', async () => {
+    const [a, b] = await Promise.all([makeJpeg({ r: 4, g: 5, b: 6 }), makeJpeg({ r: 70, g: 80, b: 90 })]);
+    const bytes: Record<string, Buffer> = { a, b };
+    const driveClient = {
+      list: vi.fn().mockResolvedValue({
+        data: {
+          files: [
+            { id: 'a', name: 'a.jpg', mimeType: 'image/jpeg', size: String(2 * 1048576) },
+            { id: 'b', name: 'b.jpg', mimeType: 'image/jpeg', size: String(1048576) },
+          ],
+        },
+      }),
+      get: vi.fn().mockImplementation(async ({ fileId }: { fileId: string }) => ({ data: Readable.from([bytes[fileId]]) })),
+    } as unknown as DriveFilesClient;
+    const cloudflareClient = {
+      checkHashes: vi.fn().mockResolvedValue(new Set()),
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+    };
+    let t = 0;
+    const messages: string[] = [];
+
+    await indexGoogleDriveFolder(driveClient, 'root', 'Trips', {
+      cloudflareClient: cloudflareClient as any,
+      ollamaClient: { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) } as any,
+      config,
+      tempDir: tempRoot,
+      now: () => (t += 10000), // every clock read is 10 s later
+      onProgress: (m) => messages.push(m),
+    });
+
+    const indexedLines = messages.filter((m) => m.startsWith('Indexed:'));
+    expect(indexedLines).toHaveLength(2);
+    expect(indexedLines[0]).toMatch(/^Indexed: a\.jpg \| album Trips \| Trips \| 2\.0 MB \| download \d+s, index \d+s, total \d+s \| #1$/);
+    expect(indexedLines[1]).toContain('#2');
+    const summary = messages.at(-1)!;
+    expect(summary).toMatch(/^Summary: 2 indexed, 0 skipped, 0 failed \| [\d.]+ photos\/min overall, [\d.]+ last 2 \| 0 queued of 2 found, 1 folders listed \| elapsed /);
+  });
+
   it('refuses a file over the staging limit before downloading it, and continues', async () => {
     const jpegBytes = await makeJpeg({ r: 11, g: 22, b: 33 });
     const driveClient = {
