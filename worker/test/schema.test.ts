@@ -110,3 +110,26 @@ describe('known people schema', () => {
     expect(row).toEqual({ known_id: null, known_score: null });
   });
 });
+
+describe('access_requests schema', () => {
+  it('rejects a non-lowercase access_requests email', async () => {
+    await expect(
+      env.DB.prepare("INSERT INTO access_requests (email, created_at) VALUES ('Foo@x.com', '2026-11-15T00:00:00.000Z')").run()
+    ).rejects.toThrow(/lowercase/);
+  });
+
+  it('rejects an unknown access_requests status', async () => {
+    await expect(
+      env.DB.prepare(
+        "INSERT INTO access_requests (email, status, created_at) VALUES ('a@x.com', 'bogus', '2026-11-15T00:00:00.000Z')"
+      ).run()
+    ).rejects.toThrow();
+  });
+
+  it('access_requests status listing uses idx_access_requests_status_created', async () => {
+    const r = await env.DB.prepare(
+      "EXPLAIN QUERY PLAN SELECT id FROM access_requests WHERE status = 'pending' ORDER BY created_at DESC LIMIT 200"
+    ).all<{ detail: string }>();
+    expect(r.results.map((x) => x.detail).join(' ')).toContain('idx_access_requests_status_created');
+  });
+});
