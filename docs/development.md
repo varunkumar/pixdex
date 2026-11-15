@@ -233,6 +233,8 @@ npm run dev -- index-local "/path/to/folder"
 npm run dev -- index-batch <roots...>   # resumable, see README
 npm run dev -- index-status
 npm run dev -- backfill-faces [folder]    # follows the index; needs the face sidecar, see agent/sidecar/README.md
+npm run dev -- build-species-regions      # GBIF species lists per region (agent/species/regions.json), once
+npm run dev -- backfill-species [--list] [--dry-run] [--album <name>]... [--limit <n>]   # follows the index (local and Drive); needs the species sidecar
 npm run move-album -- <from> <to> [--dry-run] [--index-only]   # move an album folder and update the index
 npm run dev -- serve-originals          # needs cloudflared, see agent/cloudflared/README.md
 ```
@@ -246,6 +248,18 @@ python3 agent/sidecar/server.py   # 127.0.0.1:8799
 
 Then set `FACE_SIDECAR_URL=http://127.0.0.1:8799` in `agent/.env`. Details and
 licence note in `agent/sidecar/README.md`.
+
+Species sidecar (optional, for species during indexing and `backfill-species`):
+
+```bash
+pip install -r agent/sidecar/requirements-species.txt   # no virtualenv; may upgrade this Python's torch
+python3 agent/sidecar/species_server.py                 # 127.0.0.1:8800
+```
+
+Then set `SPECIES_SIDECAR_URL=http://127.0.0.1:8800` in `agent/.env`. Migration `0020_species.sql`
+(two columns on `photos`) deploys with the Worker like any other; the backfill needs the new Worker routes
+live first. First backfill run: use `--limit 200` and check the D1 cost with `wrangler d1 insights` (the FTS
+index rows rewritten per photo cannot be measured locally) before scaling up.
 
 Requires Ollama running locally. See `README.md` for the batch indexer details,
 EXIF backfill, and originals tunnel setup.

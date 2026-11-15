@@ -55,6 +55,31 @@ export interface IngestPhotoPayload {
   aestheticScore?: number;
   /** 3-4 word title; omitted when the model gave none. */
   shortCaption?: string;
+  /** Species found by the species model; absent keeps what the photo already has. An empty list means scanned, nothing found. */
+  species?: SpeciesEntry[];
+  speciesModel?: string;
+}
+
+/** One animal found in a photo. box is [x0, y0, x1, y1] as fractions of the image. */
+export interface SpeciesEntry {
+  common: string;
+  scientific: string;
+  score: number;
+  box?: [number, number, number, number];
+}
+
+/** A photo the Worker says still needs a species scan (local by path or Google Drive by file id). */
+export interface PendingSpeciesPhoto {
+  contentHash: string;
+  source: 'local' | 'google_drive';
+  path: string | null;
+  driveFileId: string | null;
+  album: string | null;
+  filename: string;
+  latitude: number | null;
+  longitude: number | null;
+  /** The vision model's subjects, for choosing what is worth scanning. */
+  subjects: string[];
 }
 
 export class CloudflareClient {
@@ -125,6 +150,48 @@ export class CloudflareClient {
       throw new Error(`ingest/faces/unscanned failed: ${response.status}`);
     }
     return (await response.json()) as { items: { contentHash: string; path: string }[]; nextCursor: number | null };
+  }
+
+  /** One page (at most 100) of indexed photos, local or Google Drive, not yet species-scanned with this model. */
+  async speciesPending(
+    model: string,
+    opts: { cursor?: number; album?: string; limit?: number } = {}
+  ): Promise<{ items: PendingSpeciesPhoto[]; nextCursor: number | null }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/species/pending`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ model, limit: 100, ...opts }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/species/pending failed: ${response.status}`);
+    }
+    return (await response.json()) as { items: PendingSpeciesPhoto[]; nextCursor: number | null };
+  }
+
+  /** Per album: photo count and how many still need a species scan with this model. */
+  async speciesSummary(model: string): Promise<{ album: string | null; total: number; pending: number }[]> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/species/summary`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ model }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/species/summary failed: ${response.status}`);
+    }
+    return ((await response.json()) as { albums: { album: string | null; total: number; pending: number }[] }).albums;
+  }
+
+  /** Sets the species of up to 100 photos by content hash (an empty list marks a photo scanned with nothing found). */
+  async ingestSpecies(model: string, photos: { contentHash: string; species: SpeciesEntry[] }[]): Promise<{ updated: number; unknown: number }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/species`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ model, photos }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/species failed: ${response.status}`);
+    }
+    return (await response.json()) as { updated: number; unknown: number };
   }
 
   /**

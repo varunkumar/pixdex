@@ -238,6 +238,9 @@ BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
   `CREATE TRIGGER IF NOT EXISTS access_requests_email_lower_bu BEFORE UPDATE OF email ON access_requests
 WHEN new.email <> lower(new.email)
 BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
+  // Mirrors 0020_species.sql.
+  "ALTER TABLE photos ADD COLUMN species TEXT NOT NULL DEFAULT '[]';",
+  'ALTER TABLE photos ADD COLUMN species_model TEXT;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

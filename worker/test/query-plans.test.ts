@@ -4,6 +4,7 @@ import { MATCHABLE_SQL } from '../src/people/matching';
 import { KNOWN_COUNTS_SQL } from '../src/routes/known';
 import { knownFilterSql } from '../src/db/known';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
+import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
 const U = { email: 'owner@example.com' };
 
@@ -129,5 +130,13 @@ describe('person label resolution', () => {
     expect(k).toMatch(/SEARCH p USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
     const n = await plan('SELECT k.id, k.name, k.aliases FROM json_each(?) j JOIN known_people k ON k.id = j.value', '[]');
     expect(n).toMatch(/SEARCH k USING INDEX sqlite_autoindex_known_people_1 \(id=\?\)/);
+  });
+
+  it('species: rows come from the unique content_hash index and pending pages walk a rowid range', async () => {
+    const byHash = await plan(SPECIES_ROWS_BY_HASH_SQL, '[]');
+    expect(byHash).toMatch(/SEARCH photos USING (COVERING )?INDEX sqlite_autoindex_photos_\d \(content_hash=\?\)/);
+    const pending = await plan(pendingSpeciesSql(), 'bioclip-2', 0, 100);
+    expect(pending).toMatch(/SEARCH photos USING INTEGER PRIMARY KEY \(rowid>\?\)/);
+    expect(pending).not.toMatch(/USE TEMP B-TREE FOR ORDER BY/);
   });
 });

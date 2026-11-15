@@ -95,6 +95,27 @@ describe('PhotoDetail', () => {
     expect(workerApiClient.getPhoto).toHaveBeenCalledWith('p1');
   });
 
+  it('lists the species the model found, with scientific name and confidence', async () => {
+    vi.mocked(workerApiClient.getPhoto).mockResolvedValue({
+      ...tiger,
+      species: [
+        { common: 'Jungle myna', scientific: 'Acridotheres fuscus', score: 0.999 },
+        { common: 'Spotted Deer', scientific: 'Axis axis', score: 0.65 },
+      ],
+    });
+    renderWithRouter(routes, ['/photos/p1']);
+
+    expect(await screen.findByText('Species')).toBeInTheDocument();
+    expect(screen.getByText('Jungle myna · Acridotheres fuscus · 100%')).toBeInTheDocument();
+    expect(screen.getByText('Spotted Deer · Axis axis · 65%')).toBeInTheDocument();
+  });
+
+  it('shows no species section when there are none', async () => {
+    renderWithRouter(routes, ['/photos/p1']);
+    await screen.findByText('A long and detailed description of a tiger on a rock.');
+    expect(screen.queryByText('Species')).not.toBeInTheDocument();
+  });
+
   it('shows the file name as its own field next to the short caption title', async () => {
     vi.mocked(workerApiClient.getPhoto).mockResolvedValue({ ...tiger, shortCaption: 'Tiger on a rock' });
     renderWithRouter(routes, ['/photos/p1']);

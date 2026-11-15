@@ -13,6 +13,7 @@ import type { CloudflareClient } from '../cloudflareClient';
 import type { AgentConfig } from '../config';
 import type { Gallery } from '../known/gallery';
 import type { FaceSidecarClient } from '../faces/sidecarClient';
+import type { SpeciesDeps } from '../species/identify';
 
 /** Same cap as CloudflareClient.checkHashes: one request per 500 checksums. */
 const CHECK_HASHES_BATCH = 500;
@@ -34,6 +35,7 @@ export interface IndexGoogleDriveFolderDeps {
   ollamaClient: OllamaClient;
   config: AgentConfig;
   faceSidecar?: FaceSidecarClient;
+  species?: SpeciesDeps;
   knownGallery?: Gallery;
   onProgress?: (message: string) => void;
   /** Structured per-file outcome, for callers that track progress durably. */
@@ -75,7 +77,7 @@ export async function indexGoogleDriveFolder(
   folderName: string,
   deps: IndexGoogleDriveFolderDeps
 ): Promise<IndexGoogleDriveFolderResult> {
-  const { cloudflareClient, ollamaClient, config, faceSidecar, knownGallery, onProgress, tempDir = defaultStagingDir(), retry } = deps;
+  const { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, onProgress, tempDir = defaultStagingDir(), retry } = deps;
   // Disk use is bounded: one photo is staged at a time and removed right after it is processed
   // (success, skip or failure), a photo bigger than the limit is refused before it is downloaded,
   // and leftovers from a killed earlier run are swept now.
@@ -235,7 +237,7 @@ export async function indexGoogleDriveFolder(
             filename: image.name,
             album: albumFromDrivePath(image.folderPath),
           },
-          { cloudflareClient, ollamaClient, config, faceSidecar, knownGallery }
+          { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery }
         );
         indexed++;
         const finishedAt = now();

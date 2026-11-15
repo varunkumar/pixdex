@@ -90,6 +90,40 @@ describe('CloudflareClient', () => {
     await expect(client.facesUnscanned('buffalo_l')).rejects.toThrow('500');
   });
 
+  it('speciesPending posts the model, cursor, limit and album and returns the page', async () => {
+    const item = { contentHash: 'h1', source: 'local', path: '/a/1.jpg', driveFileId: null, album: 'A', filename: '1.jpg', latitude: null, longitude: null, subjects: ['bird'] };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ items: [item], nextCursor: 4 }), { status: 200 }));
+
+    const page = await client.speciesPending('bioclip-2', { cursor: 2, album: 'A' });
+
+    expect(page).toEqual({ items: [item], nextCursor: 4 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/species/pending');
+    expect(JSON.parse(init.body)).toEqual({ model: 'bioclip-2', limit: 100, cursor: 2, album: 'A' });
+  });
+
+  it('speciesSummary returns the per-album counts', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ albums: [{ album: 'A', total: 3, pending: 2 }] }), { status: 200 }));
+    await expect(client.speciesSummary('bioclip-2')).resolves.toEqual([{ album: 'A', total: 3, pending: 2 }]);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://example.workers.dev/ingest/species/summary');
+  });
+
+  it('ingestSpecies posts the batch and returns the counts', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ updated: 1, unknown: 0 }), { status: 200 }));
+    const photos = [{ contentHash: 'h1', species: [{ common: 'Peafowl', scientific: 'Pavo cristatus', score: 0.99 }] }];
+    await expect(client.ingestSpecies('bioclip-2', photos)).resolves.toEqual({ updated: 1, unknown: 0 });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://example.workers.dev/ingest/species');
+    expect(JSON.parse(init.body)).toEqual({ model: 'bioclip-2', photos });
+  });
+
+  it('the species calls throw on a failed response', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
+    await expect(client.speciesPending('m')).rejects.toThrow('500');
+    await expect(client.speciesSummary('m')).rejects.toThrow('500');
+    await expect(client.ingestSpecies('m', [])).rejects.toThrow('500');
+  });
+
   it('ingestFaces posts the faces and returns the stored face ids', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ stored: 1, kept: 0, matched: 0, faceIds: ['f1'] }), { status: 200 }));
     const faces = [{ bbox: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, detScore: 0.9, embedding: 'e' }];

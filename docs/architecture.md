@@ -240,6 +240,35 @@ candidate). It returns 404 if no photo qualifies.
    "Open in Google Drive" link (album owner only: `driveFileId` is `canEdit`-gated).
    Agent-only change: no Worker CPU or D1 change.
 
+## Species identification
+
+Why: the vision model is unreliable at naming birds, so an optional local sidecar (`SPECIES_SIDECAR_URL`,
+`agent/sidecar/species_server.py`) runs BioCLIP 2.5 Huge (fp16, about 3 GB resident) on the whole frame and on each OWLv2-detected bird.
+`POST /species?region=` returns raw candidates; `agent/src/species/decide.ts` chooses what to store
+(whole-frame answer for mammals and other animals, bird boxes for birds, a species once with its best
+score, both animals of a two-animal photo, score below 0.5 dropped; thresholds from a labelled evaluation).
+The region (`species/regions.ts`, `agent/species/regions.json`) comes from the EXIF position (boxes), else the
+album name, else the default, and selects a GBIF species list (`build-species-regions`, local files under
+`agent/.index-state/species-regions/`). `identifySpecies` (`species/identify.ts`) is shared by indexing and the backfill.
+
+Storage: `photos.species` (JSON `[{common, scientific, score, box?}]`, default `[]`) and `photos.species_model`
+(NULL until scanned; set even when nothing was found), migration `0020_species.sql`. `subjects` is untouched
+(the ingest upsert overwrites it on every re-index). Search: the names go into `search_primary` (bm25 weight
+4 in `/search`) and `search_text` (`speciesWords` in `worker/src/db/photos.ts`), except when the owner has set
+`user_subjects` (their words win; the species stay stored and shown). `POST /ingest/photo` accepts `species`
+and `speciesModel` (absent keeps the stored ones). Routes (ingest token only, outside the Pages proxy allowlist):
+`POST /ingest/species` (up to 100 photos by content hash, one SELECT by the unique hash index plus one batched
+UPDATE each, search text rebuilt from the row so repeats never pile up), `POST /ingest/species/pending` (rowid
+cursor, up to 100, local and `google_drive` photos not scanned with this model, optional `album`) and
+`POST /ingest/species/summary` (per album total and pending, one pass over `photos`, for `backfill-species --list`).
+
+`backfill-species` is driven by D1 like `backfill-faces`, so it needs no folders: it pages the pending photos,
+opens each original from its local path or from Google Drive (`species/driveReader.ts`: stored login only,
+never a sign-in, `DRIVE_STAGING_MAX_MB` cap, in memory, no staging file), and writes batches of 25. Missing
+files and Drive photos without a login stay pending; five failures in a row stop the run (sidecar down).
+Agent-only except the routes above: no new Worker loop over embeddings, CPU is a short JSON parse and string
+build per photo.
+
 ## Faces and people
 
 Flow: after the Ollama analysis, the agent posts the image to the local sidecar
@@ -348,7 +377,7 @@ Licence: InsightFace pretrained weights are non-commercial, personal use only.
 | Where | Variables |
 | --- | --- |
 | Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (both required); `TURNSTILE_SECRET`, `TURNSTILE_SITE_KEY` (enroll page; both required or enroll is off); local dev only: `DEV_VIEWER_EMAIL` |
-| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (the album owner: required to index, sent as `ownerEmail`; also the viewer for `serve-originals` and `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
+| `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (the album owner: required to index, sent as `ownerEmail`; also the viewer for `serve-originals` and `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset), optional `SPECIES_SIDECAR_URL` (species identification is off when unset) |
 | Worker secrets | `READ_TOKEN`, `INGEST_TOKEN`, `ADMIN_EMAIL`, `CF_API_TOKEN`, `CF_ACCOUNT_ID`, `CF_ACCESS_GROUP_ID` (the Worker never reads `OWNER_EMAIL`; an old Worker secret of that name can be deleted; `CF_API_TOKEN` is as sensitive as the admin login) |
 | `worker/wrangler.toml` | `[[ratelimits]]` binding `ENROLL_LIMITER` (5 per 60 s); `namespace_id`: 7410061 is a valid id; change it only if the account already has a rate limiter with that id |
 

@@ -85,6 +85,16 @@ describe('people schema', () => {
   });
 });
 
+describe('species schema', () => {
+  it('photos has a species JSON column defaulting to [] and a nullable species_model', async () => {
+    const r = await env.DB.prepare('PRAGMA table_info(photos)').all<{ name: string; notnull: number; dflt_value: string | null }>();
+    const cols = Object.fromEntries(r.results.map((c) => [c.name, c]));
+    expect(cols.species.notnull).toBe(1);
+    expect(cols.species.dflt_value).toBe("'[]'");
+    expect(cols.species_model.notnull).toBe(0);
+  });
+});
+
 describe('known people schema', () => {
   it('known_people has the expected columns', async () => {
     const r = await env.DB.prepare('PRAGMA table_info(known_people)').all<{ name: string; notnull: number; dflt_value: string | null; pk: number }>();
