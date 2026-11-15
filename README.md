@@ -293,9 +293,23 @@ Setup (the Pages Function does the identity check, so Cloudflare Access must sit
    `docs/development.md`.
 2. Deploy the Function and Worker, then run `cd worker && npm run backfill-owner` once. It stamps `OWNER_EMAIL` (from the
    environment or `agent/.env`) on every existing album and person (`--dry-run` prints the SQL, `--local` targets the local
-   D1). Until it runs nothing is visible to you. Then change the Access policy from "only me" to allow any Google account.
+   D1). Until it runs nothing is visible to you. Then follow the invite-only steps below (do not open Access to every Google account).
 3. Share an album from its card or page by entering the person's Google sign-in email. Removing the email revokes
    access, though images already cached in their browser may stay visible for a while.
+
+### Invite-only access
+
+PixdeX is invite-only. The Cloudflare Access application allows only the Access group `pixdex-approved`, so strangers are stopped at
+the edge. Anyone can ask for access on the public `/enroll` page (Turnstile protected); the admin (`ADMIN_EMAIL`) approves, denies or
+revokes on `/admin/access`, and approving adds the email to the group through the Cloudflare API. Sharing an album does not grant
+login. Setup in short (full order in `docs/development.md`, "Rollout order for invite-only access"):
+
+1. Create the group, a Bypass Access application for exactly `/enroll` and `/api/enroll`, and a Turnstile widget.
+2. Pages variables: `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET`. Worker secrets: `ADMIN_EMAIL`, `CF_API_TOKEN` (one permission:
+   "Access: Organizations, Identity Providers, and Groups Write"), `CF_ACCOUNT_ID`, `CF_ACCESS_GROUP_ID`. Give the `ENROLL_LIMITER`
+   binding in `worker/wrangler.toml` an account-unique `namespace_id`.
+3. After merging, `cd worker && npm run seed-access -- --dry-run`, then `npm run seed-access`, and only then switch the Access
+   policy to the group.
 
 For local development, set `DEV_VIEWER_EMAIL` in `.env` to preview the app as a person an album is shared with.
 
