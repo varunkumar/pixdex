@@ -290,3 +290,10 @@ requests or an `album_shares(email, album)` lookup table are the next steps.
   immutable). Server-side access is revoked immediately.
 - The Vite dev proxy forwards a client `X-Viewer-Email` when neither `DEV_VIEWER_EMAIL` nor `OWNER_EMAIL` (root `.env`) is set
   (dev only).
+
+## Cloudflare Access API token (invite-only access)
+
+The Worker's `CF_API_TOKEN` (`worker/src/cf/accessApi.ts`) needs one account-scoped permission,
+"Access: Organizations, Identity Providers, and Groups Write". It covers both `PUT /accounts/{id}/access/groups/{group}`
+(add or remove an invited email) and `POST /accounts/{id}/access/organizations/revoke_user` (end a revoked user's sessions).
+Called only from owner-only admin routes: 2 Cloudflare subrequests per add or remove, 1 per session revoke, no D1.
