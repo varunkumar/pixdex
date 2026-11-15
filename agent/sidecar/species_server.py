@@ -206,7 +206,8 @@ def bird_boxes(image):
     inputs = processor(text=[["a bird"]], images=image, return_tensors="pt")
     with torch.no_grad():
         out = detector(**inputs)
-    res = processor.post_process_object_detection(out, threshold=THRESH, target_sizes=torch.tensor([[side, side]]))[0]
+    # On the image processor: transformers 5 removed the method from the processor itself.
+    res = processor.image_processor.post_process_object_detection(out, threshold=THRESH, target_sizes=torch.tensor([[side, side]]))[0]
     if len(res["scores"]) == 0:
         return []
     boxes = res["boxes"].clone()
