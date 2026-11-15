@@ -20,7 +20,7 @@ never leave local disk or Google Drive.
 - Frontend gating (hidden, never disabled): photo review controls and the photo's face-naming controls use
   `photo.canEdit` (the user owns the album); album cover and Share use the album's `role === 'owner'` (the album page reads it from
   its `album-summary` query); rename, delete, matching and covers on a person use that person's `canEdit` (the user created it).
-  `useMe()` (`src/hooks/useMe.ts`, `GET /me`, `staleTime: Infinity`) returns only `{ email, loading }`. The share dialog is
+  `useMe()` (`src/hooks/useMe.ts`, `GET /me`, `staleTime: Infinity`) returns only `{ email, admin, loading }`. The admin page `src/components/AdminAccess.tsx` (route `/admin/access`, "Access" nav link in `Layout.tsx`, both hidden unless `admin`) lists access requests per status tab (`GET /admin/requests?status=`, query key `['access-requests', status]`, no polling, only enabled for an admin) and approves, denies or revokes through `decideAccessRequest` (POST with a JSON body `{}`; one decision at a time, all buttons disabled while one is pending; the note is plain text only). The share dialog is
   `src/components/ShareAlbumModal.tsx` (a people list: owner, then sharees with remove buttons). Avatars are drawn locally from the
   email (`UserAvatar.tsx`, helpers in `avatarUtils.ts`); never call an external avatar service. `GET /albums` gives a viewer the
   album's `ownerEmail` (never the other sharees); the owner gets `sharedWith`.

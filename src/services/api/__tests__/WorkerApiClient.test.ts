@@ -21,6 +21,23 @@ describe('WorkerApiClient', () => {
     });
   });
 
+  it('decideAccessRequest POSTs a JSON body {} with the JSON content type and returns the request', async () => {
+    const request = { id: 7, email: 'a@example.com', status: 'approved' };
+    fetchMock.mockResolvedValue({ ok: true, type: 'basic', json: async () => ({ request }) });
+    await expect(client.decideAccessRequest(7, 'approve')).resolves.toEqual(request);
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/requests/7/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+  });
+
+  it('listAccessRequests passes the optional status', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ requests: [], pendingCount: 0, queueFull: false })));
+    await client.listAccessRequests('denied');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin/requests?status=denied');
+  });
+
   it('updatePhoto throws on a failed save', async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 400 });
     await expect(client.updatePhoto('p1', { userRating: 4 })).rejects.toThrow('Could not save: 400');

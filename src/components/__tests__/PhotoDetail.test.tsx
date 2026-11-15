@@ -9,7 +9,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
     getPhoto: vi.fn(),
     getPhotoFaces: vi.fn(() => Promise.resolve([])),
-    getMe: vi.fn(() => Promise.resolve({ email: 'owner@example.com' })),
+    getMe: vi.fn(() => Promise.resolve({ email: 'owner@example.com', admin: false })),
     getPeople: vi.fn(() => Promise.resolve([])),
     thumbnailUrl: vi.fn(() => '/api/thumbnails/h1'),
   },

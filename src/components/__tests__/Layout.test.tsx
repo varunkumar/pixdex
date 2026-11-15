@@ -1,15 +1,19 @@
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPromptApiStatus } from '../../services/aiSearch/promptApi';
+import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import Layout from '../Layout';
 
 vi.mock('../../services/aiSearch/promptApi', () => ({ getPromptApiStatus: vi.fn() }));
+vi.mock('../../services/api/WorkerApiClient', () => ({ workerApiClient: { getMe: vi.fn() } }));
 
 describe('Layout', () => {
   beforeEach(() => {
     vi.mocked(getPromptApiStatus).mockReset();
     vi.mocked(getPromptApiStatus).mockResolvedValue('unsupported');
+    vi.mocked(workerApiClient.getMe).mockReset();
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'u@example.com', admin: false });
   });
 
   it('shows the PixdeX brand linking home', () => {
@@ -51,5 +55,19 @@ describe('Layout', () => {
     expect(screen.queryByRole('link', { name: 'AI Search' })).toBeNull();
     expect(screen.queryByText('AI Search')).toBeNull();
     expect(screen.getAllByRole('link', { name: 'Search' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('hides the Access link for a non-admin', async () => {
+    renderWithProviders(<Layout />);
+    await screen.findByRole('button', { name: /account menu/i });
+    expect(screen.queryByRole('link', { name: 'Access' })).toBeNull();
+  });
+
+  it('shows the Access link in the header and the drawer for an admin', async () => {
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'a@example.com', admin: true });
+    renderWithProviders(<Layout />);
+    const links = await screen.findAllByRole('link', { name: 'Access' });
+    expect(links).toHaveLength(2);
+    for (const l of links) expect(l).toHaveAttribute('href', '/admin/access');
   });
 });

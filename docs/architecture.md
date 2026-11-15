@@ -33,7 +33,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
   matching), Dashboard,
-  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout. Timeline keeps `PeopleFilter`.
+  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
 - AI Search (part of Search: `components/Search.tsx`, `components/AiResults.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
   entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI", Cmd+Enter and the plain-mode "Add keywords" button, which opens the keyword row without the model,
   are gated on it; in AI mode the page button is "Search again", which commits a typed keyword draft and re-runs the keywords without the model, while Enter in the bar stays a plain search; there is no nav entry, and `/ai-search` is a redirect, `LegacyAiRedirect.tsx`, to `/search?mode=ai`). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):

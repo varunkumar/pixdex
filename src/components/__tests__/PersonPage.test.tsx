@@ -46,7 +46,7 @@ const show = () => renderWithProviders(<PersonPage />, { route: '/people/pe1', p
 describe('PersonPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com' });
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com', admin: false });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, canEdit: true, cover: null },
