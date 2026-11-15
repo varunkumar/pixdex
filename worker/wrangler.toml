@@ -12,3 +12,11 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "THUMBNAILS"
 bucket_name = "pixdex-thumbnails"
+
+# Public enroll rate limit: 5 requests per 60 s per client IP (key = X-Client-IP).
+# namespace_id is a placeholder-looking unique integer string: change it if it collides with
+# another rate limiter in the account.
+[[ratelimits]]
+name = "ENROLL_LIMITER"
+namespace_id = "7410061"
+simple = { limit = 5, period = 60 }

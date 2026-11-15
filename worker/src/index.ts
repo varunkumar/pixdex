@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
-import { requireIngestToken, requireReadToken } from './auth';
+import { requireIngestToken, requireProxyToken, requireReadToken } from './auth';
+import { enrollRoute } from './routes/access-requests';
 import { guardedWrites } from './access';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
 import { ingestFacesRoute, pendingFacesRoute, putFaceCropRoute, unscannedFacesRoute } from './routes/ingest-faces';
@@ -116,6 +117,10 @@ app.get('/access/photo/:id', accessPhotoRoute);
 
 app.use('/me', requireReadToken);
 app.get('/me', meRoute);
+
+// Public enroll: bearer proxy token only (no viewer identity); not a guardedWrite.
+app.use('/enroll', requireProxyToken);
+app.post('/enroll', enrollRoute);
 
 app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);
