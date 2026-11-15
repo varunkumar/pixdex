@@ -270,6 +270,45 @@ describe('POST /admin/requests/:id/revoke', () => {
   });
 });
 
+describe('a padded, mixed-case ADMIN_EMAIL', () => {
+  const PADDED = { ...env, ADMIN_EMAIL: '  Owner@Example.com ' };
+
+  it.each([
+    ['deny', 'pending'],
+    ['revoke', 'approved'],
+  ])('%s still refuses the admin row with 400 and no Cloudflare call', async (action, status) => {
+    const id = await insert(ADMIN, status);
+    const res = await app.request(`/admin/requests/${id}/${action}`, { method: 'POST', headers: readHeaders() }, PADDED);
+    expect(res.status).toBe(400);
+    expect(calls).toEqual([]);
+    expect((await rowOf(id))!.status).toBe(status);
+  });
+});
+
+describe('a race lost during the Cloudflare call', () => {
+  const SENTINEL = '2020-05-05T05:05:05.000Z';
+  it.each([
+    // Another tab approved (or revoked) the row first; its decided_at is the sentinel below.
+    ['approve', 'pending', 'approved', (c: Call) => c.method === 'PUT'],
+    ['revoke', 'approved', 'revoked', (c: Call) => c.url === REVOKE_URL],
+  ] as const)('%s answers 409 and keeps the status the other writer set', async (action, from, other, during) => {
+    if (action === 'revoke') include = [{ email: { email: 'a@example.com' } }];
+    const id = await insert('a@example.com', from);
+    const stubbed = fetch as (url: string, init: RequestInit) => Promise<Response>;
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      const res = await stubbed(url, init);
+      // Another writer (a second tab) decides the same row while this request waits on Cloudflare.
+      if (during(calls[calls.length - 1])) {
+        await env.DB.prepare('UPDATE access_requests SET status = ?, decided_at = ? WHERE id = ?').bind(other, SENTINEL, id).run();
+      }
+      return res;
+    });
+    const res = await req('POST', `/admin/requests/${id}/${action}`);
+    expect(res.status).toBe(409);
+    expect(await rowOf(id)).toMatchObject({ status: other, decided_at: SENTINEL });
+  });
+});
+
 describe('unknown ids', () => {
   it.each(['approve', 'deny', 'revoke'])('%s 404s an unknown or non-numeric id', async (action) => {
     expect((await req('POST', `/admin/requests/999999/${action}`)).status).toBe(404);

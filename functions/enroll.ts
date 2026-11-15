@@ -1,4 +1,4 @@
-// Public enroll page: GET /enroll. Outside Cloudflare Access (Bypass application on /enroll and
+// Public enroll page: GET /enroll (HEAD too; every other method answers 405). Outside Cloudflare Access (Bypass application on /enroll and
 // /api/enroll), so it cannot use the React bundle under /assets/* (that stays behind Access). The page is
 // self-contained: inline CSS and script, each allowed only by a per-response CSP nonce, plus the Turnstile
 // widget from challenges.cloudflare.com. It posts JSON to /api/enroll (functions/api/enroll.ts).
@@ -10,6 +10,11 @@
 interface Env {
   TURNSTILE_SECRET?: string;
   TURNSTILE_SITE_KEY?: string;
+}
+
+interface Context {
+  request: Request;
+  env: Env;
 }
 
 const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
@@ -171,3 +176,13 @@ export const onRequestGet = ({ env }: { env: Env }): Response => {
     },
   });
 };
+
+// Every other method answers 405 here instead of falling through to another handler (mirrors
+// functions/api/enroll.ts). HEAD is served by the GET handler; the runtime drops the body.
+export const onRequest = (ctx: Context): Response =>
+  ctx.request.method === 'GET' || ctx.request.method === 'HEAD'
+    ? onRequestGet(ctx)
+    : new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', Allow: 'GET, HEAD' },
+      });

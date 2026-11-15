@@ -29,7 +29,8 @@ const formatDate = (iso: string): string => {
 /** Admin-only list of access requests with approve, deny and revoke. */
 const AdminAccess = () => {
   const queryClient = useQueryClient();
-  const { admin, loading } = useMe();
+  const { email: myEmail, admin, loading } = useMe();
+  const me = myEmail?.toLowerCase() ?? null;
   const [status, setStatus] = useState<Status>('pending');
   const tab = TABS.find((t) => t.status === status) ?? TABS[0];
 
@@ -101,19 +102,22 @@ const AdminAccess = () => {
               </Stack>
             </Group>
             <Group gap="xs" wrap="nowrap">
-              {tab.actions.map((action) => (
-                <Button
-                  key={action}
-                  size="xs"
-                  variant={action === 'approve' ? 'filled' : 'light'}
-                  color={action === 'approve' ? undefined : 'red'}
-                  aria-label={`${LABEL[action]} ${r.email}`}
-                  disabled={busy}
-                  onClick={() => decide.mutate({ id: r.id, action })}
-                >
-                  {LABEL[action]}
-                </Button>
-              ))}
+              {/* Hidden, never disabled: the admin cannot revoke themselves (the Worker answers 400 too). */}
+              {tab.actions
+                .filter((action) => !(action === 'revoke' && r.email.toLowerCase() === me))
+                .map((action) => (
+                  <Button
+                    key={action}
+                    size="xs"
+                    variant={action === 'approve' ? 'filled' : 'light'}
+                    color={action === 'approve' ? undefined : 'red'}
+                    aria-label={`${LABEL[action]} ${r.email}`}
+                    disabled={busy}
+                    onClick={() => decide.mutate({ id: r.id, action })}
+                  >
+                    {LABEL[action]}
+                  </Button>
+                ))}
             </Group>
           </Group>
         </Card>

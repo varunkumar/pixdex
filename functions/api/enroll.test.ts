@@ -3,7 +3,7 @@
 // Cloudflare Access, so these tests treat every input as hostile.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_BODY_BYTES, onRequest, onRequestPost } from './enroll';
-import { onRequestGet as enrollPage } from '../enroll';
+import { onRequest as enrollPageAny, onRequestGet as enrollPage } from '../enroll';
 import { SITEVERIFY_URL } from '../_lib/turnstile';
 
 const env = {
@@ -149,6 +149,26 @@ describe('POST /api/enroll', () => {
     expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
+  it.each([401, 404, 500, 503, 302])(
+    'maps a Worker %i to a generic 502 with nothing from the upstream in it',
+    async (status) => {
+      worker = async () =>
+        new Response('{"error":"Unauthorized: READ_TOKEN mismatch at worker.internal"}', {
+          status,
+          headers: { 'content-type': 'application/json', 'set-cookie': 'a=b', 'x-internal': 'leak' },
+        });
+      const res = await post(valid());
+      expect(res.status).toBe(502);
+      expect(res.headers.get('content-type')).toBe('application/json');
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(res.headers.get('set-cookie')).toBeNull();
+      expect(res.headers.get('x-internal')).toBeNull();
+      const text = await res.text();
+      expect(JSON.parse(text)).toEqual({ error: 'Upstream unavailable' });
+      expect(text).not.toMatch(/READ_TOKEN|Unauthorized|worker\.internal/);
+    },
+  );
+
   it('returns 400 for malformed JSON without calling anything', async () => {
     const res = await post('{"email":');
     expect(res.status).toBe(400);
@@ -290,6 +310,24 @@ describe('GET /enroll', () => {
 
     const other = (await page()).headers.get('content-security-policy');
     expect(other).not.toBe(csp);
+  });
+
+  it.each(['POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'])('refuses %s with 405, Allow: GET, HEAD and no-store', async (method) => {
+    const res = await enrollPageAny({ request: new Request('https://pixdex.example.dev/enroll', { method }), env });
+    expect(res.status).toBe(405);
+    expect(res.headers.get('allow')).toBe('GET, HEAD');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('still serves the page for GET and does not refuse HEAD through the catch-all handler', async () => {
+    const get = await enrollPageAny({ request: new Request('https://pixdex.example.dev/enroll'), env });
+    expect(get.status).toBe(200);
+    expect(await get.text()).toContain('data-sitekey');
+    const head = await enrollPageAny({ request: new Request('https://pixdex.example.dev/enroll', { method: 'HEAD' }), env });
+    expect(head.status).not.toBe(405);
+    expect(head.status).toBe(200);
+    expect(head.headers.get('cache-control')).toBe('no-store');
   });
 
   it('escapes a hostile site key into the attribute', async () => {

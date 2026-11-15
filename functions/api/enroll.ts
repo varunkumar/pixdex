@@ -31,6 +31,8 @@ interface Context {
 export const MAX_BODY_BYTES = 4096;
 const MAX_EMAIL_LENGTH = 254;
 const MAX_NOTE_LENGTH = 200;
+// The only Worker statuses passed through to the public client; every other one becomes a generic 502.
+const RELAYED_STATUSES = new Set([202, 400, 429]);
 // Shape only; the Worker does the real email validation.
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+$/;
 
@@ -135,7 +137,10 @@ export const onRequestPost = async ({ request, env }: Context): Promise<Response
   } catch {
     return json(502, { error: 'Upstream unavailable' });
   }
-  // Only the status and the Worker's small JSON body are relayed; no upstream header (set-cookie included).
+  // Only 202, 400 and 429 are relayed, with the Worker's small JSON body and no upstream header (set-cookie
+  // included). Any other status (401, 404, 500, ...) means misconfiguration or an outage; it becomes a generic
+  // 502 so nothing about the upstream is disclosed to an anonymous client.
+  if (!RELAYED_STATUSES.has(status)) return json(502, { error: 'Upstream unavailable' });
   return new Response(body, { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 };
 

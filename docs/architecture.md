@@ -350,6 +350,6 @@ Licence: InsightFace pretrained weights are non-commercial, personal use only.
 | Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (both required); `TURNSTILE_SECRET`, `TURNSTILE_SITE_KEY` (enroll page; both required or enroll is off); local dev only: `DEV_VIEWER_EMAIL` |
 | `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (the album owner: required to index, sent as `ownerEmail`; also the viewer for `serve-originals` and `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
 | Worker secrets | `READ_TOKEN`, `INGEST_TOKEN`, `ADMIN_EMAIL`, `CF_API_TOKEN`, `CF_ACCOUNT_ID`, `CF_ACCESS_GROUP_ID` (the Worker never reads `OWNER_EMAIL`; an old Worker secret of that name can be deleted; `CF_API_TOKEN` is as sensitive as the admin login) |
-| `worker/wrangler.toml` | `[[ratelimits]]` binding `ENROLL_LIMITER` (5 per 60 s); its `namespace_id` must be unique in the account |
+| `worker/wrangler.toml` | `[[ratelimits]]` binding `ENROLL_LIMITER` (5 per 60 s); `namespace_id`: 7410061 is a valid id; change it only if the account already has a rate limiter with that id |
 
 Never prefix server-side secrets with `VITE_`.

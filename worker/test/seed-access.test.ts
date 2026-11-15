@@ -54,7 +54,7 @@ describe('planSeed', () => {
   it('builds exactly the expected SQL', () => {
     const rows = [{ owner: ADMIN, shared: JSON.stringify(['friend@example.com']) }];
     expect(planSeed(rows, ADMIN, NOW).sql).toBe(
-      "INSERT OR IGNORE INTO access_requests (email, status, created_at, decided_at) VALUES ('admin@example.com', 'approved', '2026-11-15T10:00:00.000Z', '2026-11-15T10:00:00.000Z'), ('friend@example.com', 'approved', '2026-11-15T10:00:00.000Z', '2026-11-15T10:00:00.000Z');"
+      "INSERT INTO access_requests (email, status, created_at, decided_at) VALUES ('admin@example.com', 'approved', '2026-11-15T10:00:00.000Z', '2026-11-15T10:00:00.000Z'), ('friend@example.com', 'approved', '2026-11-15T10:00:00.000Z', '2026-11-15T10:00:00.000Z') ON CONFLICT(email) DO UPDATE SET status = 'approved', decided_at = excluded.decided_at WHERE access_requests.status = 'pending';"
     );
   });
 
@@ -68,6 +68,50 @@ describe('planSeed', () => {
       { email: 'admin@example.com', status: 'approved', created_at: NOW, decided_at: NOW },
       { email: 'friend@example.com', status: 'approved', created_at: NOW, decided_at: NOW },
     ]);
+  });
+});
+
+describe('planSeed SQL against existing rows', () => {
+  const EARLIER = '2026-11-14T09:00:00.000Z';
+  const DECIDED = '2026-11-14T09:30:00.000Z';
+  const seedSql = () => planSeed([{ owner: ADMIN, shared: JSON.stringify(['friend@example.com']) }], ADMIN, NOW).sql;
+  const all = async () =>
+    (await env.DB.prepare('SELECT email, note, status, created_at, decided_at FROM access_requests ORDER BY email').all()).results;
+  async function existing(email: string, status: string, decidedAt: string | null) {
+    await env.DB.prepare('INSERT INTO access_requests (email, note, status, created_at, decided_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(email, 'from the enroll page', status, EARLIER, decidedAt)
+      .run();
+  }
+
+  it('upgrades a pending row (enrolled before the seed ran) to approved with the seed decided_at', async () => {
+    await env.DB.prepare('DELETE FROM access_requests').run();
+    await existing('friend@example.com', 'pending', null);
+    await env.DB.prepare(seedSql()).run();
+    expect(await all()).toEqual([
+      { email: 'admin@example.com', note: null, status: 'approved', created_at: NOW, decided_at: NOW },
+      { email: 'friend@example.com', note: 'from the enroll page', status: 'approved', created_at: EARLIER, decided_at: NOW },
+    ]);
+  });
+
+  it.each(['approved', 'denied', 'revoked'])('leaves an existing %s row untouched', async (status) => {
+    await env.DB.prepare('DELETE FROM access_requests').run();
+    await existing('friend@example.com', status, DECIDED);
+    await env.DB.prepare(seedSql()).run();
+    expect(await all()).toEqual([
+      { email: 'admin@example.com', note: null, status: 'approved', created_at: NOW, decided_at: NOW },
+      { email: 'friend@example.com', note: 'from the enroll page', status, created_at: EARLIER, decided_at: DECIDED },
+    ]);
+  });
+
+  it('a second run (even with a later timestamp) changes nothing', async () => {
+    await env.DB.prepare('DELETE FROM access_requests').run();
+    await existing('friend@example.com', 'pending', null);
+    await env.DB.prepare(seedSql()).run();
+    const after = await all();
+    const later = planSeed([{ owner: ADMIN, shared: JSON.stringify(['friend@example.com']) }], ADMIN, '2026-11-16T10:00:00.000Z').sql;
+    const res = await env.DB.prepare(later).run();
+    expect(res.meta.changes).toBe(0);
+    expect(await all()).toEqual(after);
   });
 });
 

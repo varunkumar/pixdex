@@ -74,17 +74,21 @@ never leave local disk or Google Drive.
   on a conflict); revoke removes it and then calls the Access revoke-user-sessions API, so an open session ends at once; deny only sets the
   status. A revoke whose second step fails leaves the row `approved` while the email may already be out of the group (retry recovers; both
   calls are idempotent). Concurrent approvals of different emails can lose a group update (read-modify-write); the admin UI runs one
-  action at a time. `POST /enroll` is the one write exempt from `guardedWrite`/`guardedWrites` (it authorizes by token, not by album or
+  action at a time. A concurrent revoke and approve from two browser tabs can likewise re-add a revoked email (the group edit is
+  GET-then-PUT; one tab runs one action at a time, two tabs can still race); recovery is to revoke again. The admin page hides Revoke on
+  the admin's own row (the Worker answers 400 too). `POST /enroll` is the one write exempt from `guardedWrite`/`guardedWrites` (it authorizes by token, not by album or
   person; `worker/test/sharing-writes.test.ts` lists it as an explicit exception). Config: Worker secrets `ADMIN_EMAIL`, `CF_API_TOKEN`,
   `CF_ACCOUNT_ID`, `CF_ACCESS_GROUP_ID`; Pages variables `TURNSTILE_SECRET` and `TURNSTILE_SITE_KEY` (the site key is public); the
-  `[[ratelimits]]` binding in `worker/wrangler.toml` (its `namespace_id` is a placeholder integer: it must be unique in the account). The
+  `[[ratelimits]]` binding in `worker/wrangler.toml` (`namespace_id`: 7410061 is a valid id; change it only if the account already has a rate limiter with that id). The
   Cloudflare token (one permission, "Access: Organizations, Identity Providers, and Groups Write") can add anyone to the group, so it is as
   sensitive as the admin login: Worker secret only, never in Pages, the browser or a `VITE_` variable. Rollout (order matters) and the seed
   script `cd worker && npm run seed-access` (dry-run first; requires exactly two distinct addresses; fills `access_requests`, NOT the Access
-  group, which is filled by hand) are in `docs/development.md`. Performance: enroll is at most 1 indexed count over at most 200
-  pending rows plus at most 1 write (0 writes for a duplicate or a full queue), trivial CPU; admin list is 2 statements in one batch, at most
-  200 rows, no OFFSET; admin actions are 1 primary-key read and at most 1 write plus 2 Cloudflare calls for approve and 3 for revoke (deny
-  none); `/me` still reads no D1 (one env var); the browse hot path is unchanged, and strangers now cost nothing because Access stops them
+  group, which is filled by hand; an upsert that inserts two `approved` rows and upgrades a `pending` row for those two addresses to
+  `approved`, leaving an approved, denied or revoked row untouched) are in `docs/development.md`. Performance: enroll is one rate-limit binding call plus at most 1 indexed count over at most
+  200 pending rows plus at most 1 write (0 writes for a duplicate or a full queue), trivial CPU; the public `POST /api/enroll` relays only
+  the Worker's 202, 400 and 429 and maps every other Worker status to a generic 502 `Upstream unavailable`; admin list is 2 statements in one batch, at most
+  200 rows, no OFFSET; admin actions are 1 primary-key read and at most 1 write plus Cloudflare calls: approve 2 (1 if already a member, 4 on a
+  conflict retry), revoke 3 (2 if not a member, 5 with a retry), deny none; `/me` still reads no D1 (one env var); the browse hot path is unchanged, and strangers now cost nothing because Access stops them
   at the edge. Turnstile, the Access API, the bypass behaviour and the rate-limit binding cannot be measured locally.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
   include `GET timeline`, `GET timeline/buckets`, `GET people/known` and `GET me`; also

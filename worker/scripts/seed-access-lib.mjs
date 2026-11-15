@@ -40,7 +40,14 @@ export function planSeed(rows, adminEmail, nowIso) {
   }
   if (typeof nowIso !== 'string' || !/^[0-9T:.\-Z+]+$/.test(nowIso)) throw new Error(`Invalid timestamp: ${JSON.stringify(nowIso)}`);
   const values = emails.map((e) => `('${e}', 'approved', '${nowIso}', '${nowIso}')`).join(', ');
-  return { emails, sql: `INSERT OR IGNORE INTO access_requests (email, status, created_at, decided_at) VALUES ${values};` };
+  // Upsert: a person who enrolled (pending) before the seed ran becomes approved; an existing approved,
+  // denied or revoked row is left untouched, so a second run changes nothing.
+  return {
+    emails,
+    sql:
+      `INSERT INTO access_requests (email, status, created_at, decided_at) VALUES ${values} ` +
+      `ON CONFLICT(email) DO UPDATE SET status = 'approved', decided_at = excluded.decided_at WHERE access_requests.status = 'pending';`,
+  };
 }
 
 /** Parses `wrangler d1 execute --json` output: a list of result objects, each with a `results` array. */

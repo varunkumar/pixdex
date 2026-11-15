@@ -128,4 +128,17 @@ describe('AdminAccess', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Revoked' }));
     expect(await screen.findByRole('button', { name: 'Approve e@example.com' })).toBeInTheDocument();
   });
+
+  it('hides Revoke on the signed-in admin own row (any letter case) and keeps it on other rows', async () => {
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'Admin@Example.com', admin: true });
+    show();
+    await screen.findByText('a@example.com');
+    vi.mocked(workerApiClient.listAccessRequests).mockResolvedValue(
+      list([row(6, 'admin@example.com', 'approved'), row(7, 'c@example.com', 'approved')])
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Approved' }));
+    expect(await screen.findByRole('button', { name: 'Revoke c@example.com' })).toBeInTheDocument();
+    expect(screen.getByText('admin@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Revoke admin@example.com' })).not.toBeInTheDocument();
+  });
 });

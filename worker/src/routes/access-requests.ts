@@ -8,6 +8,7 @@ import {
   revokeUserSessions,
   type AccessApiConfig,
 } from '../cf/accessApi';
+import { adminEmail } from '../admin';
 import type { Env } from '../types';
 
 /** Open pending requests at most; beyond this a new email is silently dropped. */
@@ -177,7 +178,7 @@ async function decide(c: Context<{ Bindings: Env }>, action: Action): Promise<Re
   const row = await db.prepare(`SELECT ${COLUMNS} FROM access_requests WHERE id = ?`).bind(id).first<DbRow>();
   if (!row) return c.json({ error: 'Not found' }, 404);
   if (!action.from.includes(row.status)) return conflict(c);
-  if (action.refuseAdmin && row.email === (c.env.ADMIN_EMAIL ?? '').trim().toLowerCase()) {
+  if (action.refuseAdmin && row.email === adminEmail(c.env)) {
     return c.json({ error: 'The admin email cannot be denied or revoked' }, 400);
   }
 

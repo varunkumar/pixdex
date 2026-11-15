@@ -306,10 +306,10 @@ login. Setup in short (full order in `docs/development.md`, "Rollout order for i
 
 1. Create the group, a Bypass Access application for exactly `/enroll` and `/api/enroll`, and a Turnstile widget.
 2. Pages variables: `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET`. Worker secrets: `ADMIN_EMAIL`, `CF_API_TOKEN` (one permission:
-   "Access: Organizations, Identity Providers, and Groups Write"), `CF_ACCOUNT_ID`, `CF_ACCESS_GROUP_ID`. Give the `ENROLL_LIMITER`
-   binding in `worker/wrangler.toml` an account-unique `namespace_id`.
-3. After merging, `cd worker && npm run seed-access -- --dry-run`, then `npm run seed-access`, and only then switch the Access
-   policy to the group.
+   "Access: Organizations, Identity Providers, and Groups Write"), `CF_ACCOUNT_ID`, `CF_ACCESS_GROUP_ID`. The `ENROLL_LIMITER`
+   binding in `worker/wrangler.toml` has `namespace_id = "7410061"`: 7410061 is a valid id; change it only if the account already has a rate limiter with that id.
+3. After merging, `cd worker && npm run seed-access -- --dry-run`, then `npm run seed-access` (it also upgrades a `pending`
+   row for those two addresses to `approved`), and only then switch the Access policy to the group.
 
 For local development, set `DEV_VIEWER_EMAIL` in `.env` to preview the app as a person an album is shared with.
 

@@ -112,16 +112,18 @@ exists to keep the owner from being locked out. Use real addresses only in the d
    lets strangers reach the Function).
 4. Create the API token with the single permission "Access: Organizations, Identity Providers, and Groups Write" (account scope, see
    below). Set the Worker secrets: `cd worker && npx wrangler secret put ADMIN_EMAIL` (same address as the agent's `OWNER_EMAIL`),
-   then the same for `CF_API_TOKEN`, `CF_ACCOUNT_ID` and `CF_ACCESS_GROUP_ID`. Before deploying, replace the placeholder
-   `namespace_id` of the `[[ratelimits]]` binding (`ENROLL_LIMITER`) in `worker/wrangler.toml` with an integer string unique in your
-   account. If it collides with another rate limiter in the account, the two share one counter and throttle each other.
+   then the same for `CF_API_TOKEN`, `CF_ACCOUNT_ID` and `CF_ACCESS_GROUP_ID`. Check the
+   `namespace_id` of the `[[ratelimits]]` binding (`ENROLL_LIMITER`) in `worker/wrangler.toml`: 7410061 is a valid id; change it only if the account already has a rate limiter with that id. If it
+   collided with another rate limiter in the account, the two would share one counter and throttle each other.
 5. Merge. Migration `0019_access_requests.sql` (additive) applies before the new Worker goes live. The Access policy is still
    unchanged, so nothing is blocked yet.
 6. Seed the existing users: `cd worker && npm run seed-access -- --dry-run`. It reads the REMOTE database read-only (a `SELECT` of
    `albums.owner_email` and `shared_with`, no write) and prints the addresses and the SQL. The CLI has not been run end to end by
    its implementers, so read the dry-run output carefully: it must list exactly the two addresses from step 1 (it refuses unless there
    are exactly two distinct ones; the admin address comes from `ADMIN_EMAIL`, `OWNER_EMAIL` or `agent/.env`). Then run
-   `npm run seed-access` (idempotent `INSERT OR IGNORE` of two `approved` rows; `-- --local` targets the local D1). It writes
+   `npm run seed-access` (an idempotent upsert: inserts two `approved` rows, upgrades a `pending` row for those two addresses to `approved`
+   for anyone who enrolled before the seed ran, and leaves an existing approved, denied or revoked row untouched; `-- --local` targets the
+   local D1). It writes
    `access_requests` only; the Access group is the one from step 1.
 7. Only now switch the PixdeX Access application policy from "any Google account" to Allow: group `pixdex-approved`.
 8. Verify: a Google account that is not in the group is blocked at the edge (no Function call); enroll through `/enroll` while
@@ -133,14 +135,20 @@ Behaviour to know:
   `approved` although the email may already be out of the group; retry the revoke (both calls are idempotent).
 - Concurrent approvals of different emails can lose a group update (read-modify-write on the group, one retry on a conflict). The
   admin page runs one action at a time; do not approve from two tabs at once.
+- A concurrent revoke and approve from two browser tabs can re-add a revoked email (the group edit is GET-then-PUT). The UI runs one
+  action at a time, but two tabs can still race. Recovery: revoke again.
+- The admin page hides Revoke on the admin's own row; the Worker refuses it with 400 anyway.
+- The public `POST /api/enroll` relays only the Worker's 202, 400 and 429; any other Worker status (401, 404, 500, ...) becomes a generic
+  502 `Upstream unavailable`, so misconfiguration is never disclosed. `/enroll` answers 405 to every method but GET and HEAD.
 - Local dev: the Vite dev proxy does not serve `/enroll` or `/api/enroll` (they are Pages Functions). The admin page works against the dev
   mock (`PIXDEX_MOCK=1 npm run dev`, which answers `/me` with `admin: true` and keeps requests in memory).
 - Cannot be measured locally: Turnstile, the Cloudflare Access API, the Access bypass behaviour and the rate-limit binding. After
   deploy, measure with `wrangler tail` (Worker), the Access logs in Zero Trust, and an end-to-end check on the deployed site (the
   step 8 list, plus six enroll posts in a minute from one IP to see the 429).
-- Cost: browse hot path unchanged. Enroll is at most 1 indexed count over at most 200 pending rows plus at most 1 write (none for a
-  duplicate or a full queue); admin list 2 statements, at most 200 rows; admin actions 1 read, 1 write, 2 Cloudflare calls for approve and
-  3 for revoke; `/me` reads no D1.
+- Cost: browse hot path unchanged. Enroll is one rate-limit binding call plus at most 1 indexed count over at most 200 pending rows
+  plus at most 1 write (none for a duplicate or a full queue); admin list 2 statements, at most 200 rows; admin actions 1 read, 1 write,
+  and Cloudflare calls: approve 2 (1 if already a member, 4 on a conflict retry), revoke 3 (2 if not a member, 5 with a retry), deny none;
+  `/me` reads no D1.
 
 ### Rollout order for known personalities (phase 1)
 
@@ -340,4 +348,5 @@ requests or an `album_shares(email, album)` lookup table are the next steps.
 The Worker's `CF_API_TOKEN` (`worker/src/cf/accessApi.ts`) needs one account-scoped permission,
 "Access: Organizations, Identity Providers, and Groups Write". It covers both `PUT /accounts/{id}/access/groups/{group}`
 (add or remove an invited email) and `POST /accounts/{id}/access/organizations/revoke_user` (end a revoked user's sessions).
-Called only from owner-only admin routes: 2 Cloudflare subrequests per add or remove, 1 per session revoke, no D1.
+Called only from owner-only admin routes: 2 Cloudflare subrequests per add or remove (1 when the group needs no change, 4 with one
+conflict retry), 1 per session revoke, no D1.
