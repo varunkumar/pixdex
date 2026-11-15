@@ -16,6 +16,17 @@ export const exifFieldsSchema = z.object({
 
 export type ExifFields = z.infer<typeof exifFieldsSchema>;
 
+/** One animal found in a photo by the agent's species model. box is [x0, y0, x1, y1] as fractions of the image. */
+export const speciesEntrySchema = z.object({
+  common: z.string().check(z.minLength(1), z.maxLength(200)),
+  scientific: z.string().check(z.minLength(1), z.maxLength(200)),
+  score: z.number().check(z.minimum(0), z.maximum(1)),
+  box: z.optional(z.tuple([z.number(), z.number(), z.number(), z.number()])),
+});
+export const speciesListSchema = z.array(speciesEntrySchema).check(z.maxLength(12));
+export const speciesModelSchema = z.string().check(z.minLength(1), z.maxLength(60));
+export type SpeciesEntry = z.infer<typeof speciesEntrySchema>;
+
 export const ingestPhotoSchema = z.extend(z.object({
   id: z.uuid(),
   /** The album owner the agent indexes for; stamped on the album by the first photo that creates it. */
@@ -48,6 +59,9 @@ export const ingestPhotoSchema = z.extend(z.object({
   aestheticScore: z.optional(z.number().check(z.minimum(1), z.maximum(10))),
   // 3-4 word title.
   shortCaption: z.optional(z.string().check(z.maxLength(80))),
+  // Species found by the agent's model; absent keeps what the photo already has.
+  species: z.optional(speciesListSchema),
+  speciesModel: z.optional(speciesModelSchema),
 }), exifFieldsSchema.shape);
 
 export type IngestPhotoInput = z.infer<typeof ingestPhotoSchema>;
@@ -92,6 +106,8 @@ export interface PhotoRow {
   has_watermark?: number | null;
   aesthetic_score?: number | null;
   short_caption?: string | null;
+  species?: string;
+  species_model?: string | null;
   user_rating?: number | null;
   user_caption?: string | null;
   user_subjects?: string | null;
@@ -141,6 +157,8 @@ export interface SerializedPhoto {
   aestheticScore: number | null;
   /** 3-4 word title; null when not generated yet. */
   shortCaption: string | null;
+  /** Animals found by the species model ({ common, scientific, score, box? }); [] when none or not scanned. */
+  species: unknown[];
   /** Owner's 1-5 star rating; null when not rated by hand. */
   userRating: number | null;
   /** 1-10 blend of the owner's rating and the model's score; null when neither exists. */
@@ -173,14 +191,30 @@ export function effectiveText(row: PhotoRow) {
   };
 }
 
-/** search_primary: the high-signal words that get extra weight in ranking. */
+/**
+ * The names of the animals the species model found, to be indexed. Empty when the owner has set
+ * their own subjects: their words are what is searched, so a corrected species can never be
+ * contradicted by the model's guess (the species stay stored and shown).
+ */
+export function speciesWords(species: unknown[], userSubjects: string | null | undefined): string[] {
+  if (userSubjects != null) return [];
+  const words: string[] = [];
+  for (const e of species as Partial<SpeciesEntry>[]) {
+    if (e?.common) words.push(e.common);
+    if (e?.scientific) words.push(e.scientific);
+  }
+  return words;
+}
+
+/** search_primary: the high-signal words that get extra weight in ranking (species names are the strongest). */
 export function buildPrimaryText(input: {
   subjects: string[];
   tags: string[];
   colors?: string[];
   shortCaption?: string;
+  species?: string[];
 }): string {
-  return [...input.subjects, ...input.tags, ...(input.colors ?? []), input.shortCaption ?? '']
+  return [...(input.species ?? []), ...input.subjects, ...input.tags, ...(input.colors ?? []), input.shortCaption ?? '']
     .filter(Boolean)
     .join(' ');
 }
@@ -193,6 +227,7 @@ export function primaryTextForRow(row: PhotoRow): string {
     tags: eff.tags,
     colors: parseJsonArray(row.colors) as string[],
     shortCaption: eff.shortCaption ?? undefined,
+    species: speciesWords(parseJsonArray(row.species), row.user_subjects),
   });
 }
 
@@ -212,6 +247,7 @@ export function searchTextForRow(row: PhotoRow): string {
     cameraMake: row.camera_make ?? undefined,
     cameraModel: row.camera_model ?? undefined,
     lensModel: row.lens_model ?? undefined,
+    species: speciesWords(parseJsonArray(row.species), row.user_subjects),
   });
 }
 
@@ -263,6 +299,7 @@ export function serializePhoto(row: PhotoRow, canEdit: boolean): SerializedPhoto
     hasWatermark: row.has_watermark == null ? null : row.has_watermark === 1,
     aestheticScore: row.aesthetic_score ?? null,
     shortCaption: eff.shortCaption,
+    species: parseJsonArray(row.species),
     userRating: row.user_rating ?? null,
     combinedScore: combinedScore(row),
     canEdit,
@@ -287,8 +324,10 @@ export function buildSearchText(input: {
   patterns?: string[];
   season?: string;
   shortCaption?: string;
+  species?: string[];
 }): string {
   return [
+    ...(input.species ?? []),
     ...input.subjects,
     ...input.tags,
     ...(input.colors ?? []),

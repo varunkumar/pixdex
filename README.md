@@ -105,6 +105,7 @@ web UI. For each photo the agent:
 |---|---|---|---|
 | Describe, tag, rate, caption | `qwen3.8:27b-mlx` | Ollama (`OLLAMA_BASE_URL`, default `http://localhost:11434`) | Set `OLLAMA_MODEL` in `agent/.env` (the built-in default is still `qwen3.5:27b-mlx`). The model name is stored on each photo. Changing the model does not re-index existing photos: they are skipped by content hash and keep their old data, so a library can mix models. |
 | Face detection and embeddings | InsightFace `buffalo_l` | Local Python sidecar (CoreML, CPU fallback) | Optional. The weights are non-commercial, so personal use only. |
+| Species identification | BioCLIP 2 plus an OWLv2 bird detector | Local Python sidecar (`species_server.py`) | Optional. Much better than the vision model at naming birds; see below. |
 
 Setup: install [Ollama](https://ollama.com), `ollama pull qwen3.8:27b-mlx`, then
 copy `agent/.env.example` to `agent/.env` and set `OLLAMA_MODEL=qwen3.8:27b-mlx`, `CLOUDFLARE_API_BASE_URL` and
@@ -117,6 +118,36 @@ README). Start it, set `FACE_SIDECAR_URL=http://127.0.0.1:8799` in `agent/.env`
 (it must be a loopback address), and indexing detects faces after each photo. A
 sidecar failure is logged and never fails the photo. Only the face crop leaves
 your disk.
+
+### Species identification (optional)
+
+The vision model is weak at naming birds (it gave different species for the same bird across frames),
+so an optional local species sidecar (`agent/sidecar/species_server.py`, setup in its README) runs
+BioCLIP 2 on the whole frame and on each detected bird, limited to the species recorded in the photo's
+region (GBIF lists built by `build-species-regions`; the region comes from the EXIF position or the
+album name, see `agent/species/regions.json`). Mammals come from the whole frame, birds from the bird
+boxes, so two animals in one photo (a myna on a deer) are both found. Answers below 0.5 confidence are
+dropped rather than stored. Results are stored on the photo as `species` (common name, scientific name,
+score, optional box) and are searchable, ranked above the vision model's words; your own edited
+subjects win over them in search. The photo page lists them. Photos never leave your machine: only a
+downsized JPEG goes to the sidecar over loopback, and only region names go to GBIF.
+
+New photos get species while indexing when `SPECIES_SIDECAR_URL` is set (a sidecar failure never fails
+the photo). The existing library is filled in from the index, local and Google Drive photos alike, with no
+folders to pass:
+
+```bash
+cd agent
+npm run dev -- build-species-regions                       # once, and after editing regions.json
+npm run dev -- backfill-species --list                     # albums and how many photos still need a scan
+npm run dev -- backfill-species --dry-run --limit 20       # try it, writes nothing
+npm run dev -- backfill-species --album "Bandipur (29,31-Mar-2025)" --limit 200
+npm run dev -- backfill-species                            # everything left; safe to stop and re-run
+```
+
+Photos that were scanned (even with nothing found) are recorded and skipped next time; a photo whose
+file is not available (drive unmounted) stays pending. Google Drive photos need the stored login from
+`index-drive` (a backfill never opens a sign-in; without it they are skipped and listed as such).
 
 ### Indexing commands
 

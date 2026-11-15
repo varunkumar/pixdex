@@ -1,0 +1,11 @@
+{
+  "default": "IN",
+  "regions": {
+    "IN": { "country": "IN" },
+    "IN-KA": { "country": "IN", "stateProvince": "Karnataka" }
+  },
+  "rules": [
+    { "region": "IN-KA", "bbox": [11.5, 74.0, 18.5, 78.6] },
+    { "region": "IN-KA", "albumPattern": "bandipur|nagarhole|kabini|bhadra|dandeli|ranganathittu|mysore|bengaluru|bangalore" }
+  ]
+}

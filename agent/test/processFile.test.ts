@@ -158,6 +158,56 @@ describe('processFile', () => {
     expect(calls).toEqual(['ingestPhoto', 'ingestFaces']);
   });
 
+  describe('species', () => {
+    const regions = { default: 'IN', regions: { IN: { country: 'IN' } }, rules: [] };
+    const tiger = { model: 'bioclip-2', whole: [['Tiger', 'Panthera tigris', 'Mammalia', 0.97]], boxes: [] };
+    const fresh = () => ({
+      cloudflareClient: { uploadThumbnail: vi.fn().mockResolvedValue(undefined), ingestPhoto: vi.fn().mockResolvedValue(undefined) },
+      ollamaClient: { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) },
+    });
+    const input = () => ({ localPath: filePath, contentHash: 'f'.repeat(64), source: 'local' as const, filename: 'fixture.jpg', album: 'Kanha' });
+
+    it('sends the species with the photo so it is indexed in one write', async () => {
+      const { cloudflareClient, ollamaClient } = fresh();
+      const identify = vi.fn().mockResolvedValue(tiger);
+      await processFile(input(), { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, species: { sidecar: { identify } as any, regions } });
+      const payload = cloudflareClient.ingestPhoto.mock.calls[0][0];
+      expect(payload.species).toEqual([{ common: 'Tiger', scientific: 'Panthera tigris', score: 0.97 }]);
+      expect(payload.speciesModel).toBe('bioclip-2');
+    });
+
+    it('sends an empty list (scanned, nothing confident) rather than nothing', async () => {
+      const { cloudflareClient, ollamaClient } = fresh();
+      const identify = vi.fn().mockResolvedValue({ model: 'bioclip-2', whole: [], boxes: [] });
+      await processFile(input(), { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, species: { sidecar: { identify } as any, regions } });
+      const payload = cloudflareClient.ingestPhoto.mock.calls[0][0];
+      expect(payload.species).toEqual([]);
+      expect(payload.speciesModel).toBe('bioclip-2');
+    });
+
+    it('does not fail the photo when the sidecar is down; it is left for backfill-species', async () => {
+      const { cloudflareClient, ollamaClient } = fresh();
+      const identify = vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED'));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await expect(
+        processFile(input(), { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, species: { sidecar: { identify } as any, regions } })
+      ).resolves.toBeUndefined();
+      const payload = cloudflareClient.ingestPhoto.mock.calls[0][0];
+      expect(payload.species).toBeUndefined();
+      expect(payload.speciesModel).toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('ECONNREFUSED'));
+      warn.mockRestore();
+    });
+
+    it('sends no species fields when species scanning is not configured', async () => {
+      const { cloudflareClient, ollamaClient } = fresh();
+      await processFile(input(), { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config });
+      const payload = cloudflareClient.ingestPhoto.mock.calls[0][0];
+      expect('species' in payload).toBe(false);
+      expect('speciesModel' in payload).toBe(false);
+    });
+  });
+
   it('skips scanning when no sidecar is configured', async () => {
     const cloudflareClient = {
       uploadThumbnail: vi.fn().mockResolvedValue(undefined),

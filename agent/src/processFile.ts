@@ -1,15 +1,17 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { extractExifData } from './exif';
 import { generateThumbnail } from './thumbnail';
 import { analyzeImage, type ImageAnalysisResult } from './ollama/analyzeImage';
 import { ratePhoto } from './ollama/ratePhoto';
 import { generateText } from './ollama/generateText';
 import type { OllamaClient } from './ollama/client';
-import { CloudflareClient, type IngestPhotoPayload } from './cloudflareClient';
+import { CloudflareClient, type IngestPhotoPayload, type SpeciesEntry } from './cloudflareClient';
 import type { AgentConfig } from './config';
 import { scanFaces } from './faces/scanFaces';
 import type { Gallery } from './known/gallery';
 import type { FaceSidecarClient } from './faces/sidecarClient';
+import { identifySpecies, type SpeciesDeps } from './species/identify';
 
 export interface ProcessFileInput {
   localPath: string;
@@ -28,6 +30,8 @@ export interface ProcessFileDeps {
   /** Face scanning runs after ingest when set; a failure never fails the photo. */
   faceSidecar?: FaceSidecarClient;
   knownGallery?: Gallery;
+  /** Species identification runs before ingest when set; a failure never fails the photo (backfill-species picks it up). */
+  species?: SpeciesDeps;
 }
 
 export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps): Promise<void> {
@@ -42,6 +46,19 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
   const caption = await generateText(buildCaptionPrompt(analysis), ollamaClient);
   const hashtags = await generateText(buildHashtagPrompt(analysis), ollamaClient);
   const thumbnail = await generateThumbnail(input.localPath);
+  let found: { model: string; species: SpeciesEntry[] } | undefined;
+  if (deps.species) {
+    try {
+      found = await identifySpecies(
+        await readFile(input.localPath),
+        { album: input.album ?? null, latitude: exif.camera.latitude ?? null, longitude: exif.camera.longitude ?? null },
+        deps.species
+      );
+    } catch (error) {
+      // The photo is still indexed (species_model stays empty); `backfill-species` will pick this one up.
+      console.warn(`Species scan failed: ${input.filename} (${error instanceof Error ? error.message : String(error)})`);
+    }
+  }
 
   const payload: IngestPhotoPayload = {
     id: randomUUID(),
@@ -72,6 +89,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     hasWatermark: analysis.hasWatermark,
     aestheticScore: rating.score ?? undefined,
     shortCaption: rating.caption ?? undefined,
+    ...(found && { species: found.species, speciesModel: found.model }),
   };
 
   // Upload the thumbnail before creating the D1 row: the thumbnail PUT is

@@ -42,6 +42,8 @@ export interface SerializedPhoto {
   aestheticScore?: number | null;
   /** 3-4 word title; null/undefined when not generated yet. */
   shortCaption?: string | null;
+  /** Animals the species model found (common and scientific name, confidence 0..1); empty or absent when none or not scanned. */
+  species?: { common: string; scientific: string; score: number; box?: [number, number, number, number] }[];
   /** Owner's 1-5 star rating; null/undefined when not rated by hand. */
   userRating?: number | null;
   /** 1-10 blend of the owner's rating and the model's score. */

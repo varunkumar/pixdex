@@ -79,4 +79,11 @@ describe('loadConfig', () => {
     }
     expect(() => loadConfig({ ...base, FACE_SIDECAR_URL: 'http://192.168.1.5:8799' })).toThrow(/loopback/);
   });
+
+  it('accepts and omits SPECIES_SIDECAR_URL, loopback only', () => {
+    const base = { CLOUDFLARE_API_BASE_URL: 'https://example.workers.dev', INGEST_TOKEN: 't' };
+    expect(loadConfig(base).SPECIES_SIDECAR_URL).toBeUndefined();
+    expect(loadConfig({ ...base, SPECIES_SIDECAR_URL: 'http://127.0.0.1:8800' }).SPECIES_SIDECAR_URL).toBe('http://127.0.0.1:8800');
+    expect(() => loadConfig({ ...base, SPECIES_SIDECAR_URL: 'http://192.168.1.5:8800' })).toThrow(/loopback/);
+  });
 });

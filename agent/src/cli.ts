@@ -24,6 +24,7 @@ import { checkList, entityProblems, fetchCandidates, loadList, PersonSchema, sav
 import { createCandidateStore, gatherCandidates, isQid } from './known/pick/candidates';
 import { createPickApp, newToken, startPickServer } from './known/pick/server';
 import { runIndexBatch, runIndexStatus } from './batch/cli';
+import { createSpeciesDeps, runBackfillSpecies, runBuildSpeciesRegions } from './speciesCli';
 
 const UPSERT_BATCH = 500;
 const PeopleSchema = z.array(PersonSchema);
@@ -470,6 +471,9 @@ export async function runCli(argv: string[]): Promise<number> {
     }
   }
 
+  if (command === 'backfill-species') return runBackfillSpecies(argv.slice(1));
+  if (command === 'build-species-regions') return runBuildSpeciesRegions(argv.slice(1));
+
   if (command === 'backfill-ratings' && folder) {
     try {
       const config = loadConfig();
@@ -490,7 +494,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   if (command !== 'index-local' || !folder) {
     console.error(
-      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore] [--page-size <n>]\n       pixdex-agent known-gallery-push\n       pixdex-agent known-gallery-pull [--force]\n       pixdex-agent known-pick [--id <Q...>] [--port <n>]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive [--dry-run] [--exclude <glob>]... [--folder <id-or-url>]...\n       pixdex-agent serve-originals'
+      'Usage: pixdex-agent index-local <folder>\n       pixdex-agent backfill-exif <folder>\n       pixdex-agent backfill-ratings <folder>\n       pixdex-agent backfill-faces [folder] [--recrop]\n       pixdex-agent backfill-species [--list] [--dry-run] [--album <name>]... [--limit <n>]\n       pixdex-agent build-species-regions [region]...\n       pixdex-agent index-batch <root-or-album>...\n       pixdex-agent index-status\n       pixdex-agent build-known-gallery [--rebuild <id>...] [--retry-excluded] [--full]\n       pixdex-agent backfill-known [--dry-run] [--rescore] [--page-size <n>]\n       pixdex-agent known-gallery-push\n       pixdex-agent known-gallery-pull [--force]\n       pixdex-agent known-pick [--id <Q...>] [--port <n>]\n       pixdex-agent known-search "<name>"\n       pixdex-agent known-add --id <Q...> [--name <n>] [--alias <a>]...\n       pixdex-agent known-check [--offline]\n       pixdex-agent index-drive [--dry-run] [--exclude <glob>]... [--folder <id-or-url>]...\n       pixdex-agent serve-originals'
     );
     return 1;
   }
@@ -505,6 +509,7 @@ export async function runCli(argv: string[]): Promise<number> {
       ollamaClient,
       config,
       faceSidecar: createFaceSidecar(config),
+      species: await createSpeciesDeps(config),
       knownGallery: await loadKnownGallery(),
       onProgress: (message) => console.log(message),
     });

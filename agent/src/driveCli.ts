@@ -1,3 +1,4 @@
+import { createSpeciesDeps } from './speciesCli';
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
 import {
@@ -143,6 +144,7 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
 
   const ollamaClient = new OllamaClient(config);
   const faceSidecar = createFaceSidecar(config);
+  const species = await createSpeciesDeps(config);
   const knownGallery = await loadKnownGallery();
 
   let failedAny = false;
@@ -153,6 +155,7 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
       ollamaClient,
       config,
       faceSidecar,
+      species,
       knownGallery,
       onProgress: (message) => console.log(`${new Date().toISOString()} ${message}`),
       exclude: parsed.exclude,

@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import type { Env } from '../types';
-import { buildPrimaryText, buildSearchText, effectiveText, ingestPhotoSchema, type PhotoRow } from '../db/photos';
+import { buildPrimaryText, buildSearchText, effectiveText, ingestPhotoSchema, speciesWords, type PhotoRow } from '../db/photos';
 
 export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
   let body: unknown;
@@ -27,13 +27,20 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
   }
   // A re-index must not undo the owner's edits, so index their versions when set.
   const edits = await c.env.DB.prepare(
-    'SELECT user_caption, user_subjects, user_tags, short_caption, subjects, tags FROM photos WHERE id = ?'
+    'SELECT user_caption, user_subjects, user_tags, short_caption, subjects, tags, species, species_model FROM photos WHERE id = ?'
   )
     .bind(p.id)
     .first<PhotoRow>();
   const eff = edits ? effectiveText({ ...edits, subjects: JSON.stringify(p.subjects), tags: JSON.stringify(p.tags), short_caption: p.shortCaption ?? null }) : null;
-  const searchText = buildSearchText(eff ? { ...p, subjects: eff.subjects, tags: eff.tags, shortCaption: eff.shortCaption ?? undefined } : p);
+  // Species the agent sent now replace the stored ones; none sent keeps them (a re-index without the species model must not erase them).
+  const species: unknown[] = p.species ?? (edits?.species ? JSON.parse(edits.species) : []);
+  const speciesModel = p.speciesModel ?? edits?.species_model ?? null;
+  const speciesIndexed = speciesWords(species, edits?.user_subjects);
+  const searchText = buildSearchText(
+    eff ? { ...p, subjects: eff.subjects, tags: eff.tags, shortCaption: eff.shortCaption ?? undefined, species: speciesIndexed } : { ...p, species: speciesIndexed }
+  );
   const searchPrimary = buildPrimaryText({
+    species: speciesIndexed,
     subjects: eff?.subjects ?? p.subjects,
     tags: eff?.tags ?? p.tags,
     colors: p.colors,
@@ -50,8 +57,8 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          suggested_hashtags, model_provider, model_name, search_text, search_primary, last_indexed,
          camera_make, camera_model, lens_model, focal_length, f_number,
          exposure_time, iso, latitude, longitude, has_watermark,
-         aesthetic_score, short_caption
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         aesthetic_score, short_caption, species, species_model
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          content_hash = excluded.content_hash,
          source = excluded.source,
@@ -89,7 +96,9 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          longitude = excluded.longitude,
          has_watermark = excluded.has_watermark,
          aesthetic_score = excluded.aesthetic_score,
-         short_caption = excluded.short_caption`
+         short_caption = excluded.short_caption,
+         species = excluded.species,
+         species_model = excluded.species_model`
     )
       .bind(
         p.id, p.contentHash, p.source, p.path ?? null, p.driveFileId ?? null, p.filename,
@@ -103,7 +112,8 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
         p.iso ?? null, p.latitude ?? null, p.longitude ?? null,
         p.hasWatermark === undefined ? null : p.hasWatermark ? 1 : 0,
         p.aestheticScore ?? null,
-        p.shortCaption ?? null
+        p.shortCaption ?? null,
+        JSON.stringify(species), speciesModel
       )
       .run();
   } catch (err) {

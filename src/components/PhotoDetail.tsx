@@ -251,6 +251,10 @@ const PhotoDetail = () => {
             </Box>
           )}
           <Divider />
+          <Section
+            title="Species"
+            items={(photo.species ?? []).map((s) => `${s.common} · ${s.scientific} · ${Math.round(s.score * 100)}%`)}
+          />
           <Section title="Subjects" items={photo.subjects} />
           <Section title="Tags" items={photo.tags} variant="outline" />
           <Section title="Colors" items={photo.colors} variant="outline" />
