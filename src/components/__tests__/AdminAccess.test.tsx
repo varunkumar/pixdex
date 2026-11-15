@@ -94,6 +94,17 @@ describe('AdminAccess', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Approve a@example.com' })).toBeEnabled());
   });
 
+  it('refetches the list after a failed decision so stale rows disappear', async () => {
+    vi.mocked(workerApiClient.decideAccessRequest).mockRejectedValue(new Error('Could not save: 409'));
+    show();
+    await screen.findByText('a@example.com');
+    expect(workerApiClient.listAccessRequests).toHaveBeenCalledTimes(1);
+    vi.mocked(workerApiClient.listAccessRequests).mockResolvedValue(list([row(2, 'b@example.com')]));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve a@example.com' }));
+    await waitFor(() => expect(workerApiClient.listAccessRequests).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('a@example.com')).toBeNull());
+  });
+
   it('renders a note as plain text, never markup', async () => {
     vi.mocked(workerApiClient.listAccessRequests).mockResolvedValue(
       list([row(1, 'a@example.com', 'pending', '<b>x</b>')])

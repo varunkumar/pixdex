@@ -42,7 +42,9 @@ const AdminAccess = () => {
 
   const decide = useMutation({
     mutationFn: ({ id, action }: { id: number; action: Action }) => workerApiClient.decideAccessRequest(id, action),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['access-requests'] }),
+    // Any outcome refetches (a 409, 404 or 502 means the shown row may be stale); the returned promise keeps
+    // the buttons disabled until the refetch finishes.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['access-requests'] }),
     onError: () =>
       notifications.show({
         color: 'red',
