@@ -163,6 +163,66 @@ describe('Pages Function identity', () => {
     );
   });
 
+  describe('admin access requests', () => {
+    async function adminPost(path: string, email: string | null) {
+      const headers: Record<string, string> = { 'content-type': 'application/json', 'X-Viewer-Email': 'owner@example.com' };
+      if (email !== null) headers['Cf-Access-Jwt-Assertion'] = await signJwt(key, validClaims({ email }));
+      return onRequestPost({
+        request: new Request(`https://pixdex.example.dev${path}`, { method: 'POST', headers, body: '{}' }),
+        env,
+      });
+    }
+
+    it('forwards GET admin/requests with the verified email and the status filter', async () => {
+      const res = await get('/api/admin/requests?status=pending', ' Admin@Example.com', { 'X-Viewer-Email': 'owner@example.com' });
+      expect(res.status).toBe(200);
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe('https://worker.example.dev/admin/requests?status=pending');
+      const h = new Headers(init.headers);
+      expect(h.get('x-viewer-email')).toBe('admin@example.com');
+      expect(h.get('authorization')).toBe('Bearer secret-token');
+    });
+
+    it.each(['approve', 'deny', 'revoke'])('forwards POST admin/requests/:id/%s with the verified email', async (action) => {
+      const res = await adminPost(`/api/admin/requests/7/${action}`, 'Admin@example.com');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe(`https://worker.example.dev/admin/requests/7/${action}`);
+      expect(init.method).toBe('POST');
+      const h = new Headers(init.headers);
+      expect(h.get('x-viewer-email')).toBe('admin@example.com');
+      expect(h.get('authorization')).toBe('Bearer secret-token');
+    });
+
+    it('returns 401 for the admin routes without a JWT', async () => {
+      expect((await get('/api/admin/requests', null)).status).toBe(401);
+      for (const action of ['approve', 'deny', 'revoke']) {
+        expect((await adminPost(`/api/admin/requests/7/${action}`, null)).status).toBe(401);
+      }
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+
+    it.each([
+      ['GET', '/api/admin/requests/7'],
+      ['GET', '/api/admin'],
+      ['POST', '/api/admin/requests'],
+      ['POST', '/api/admin/requests/7/approve/x'],
+      ['POST', '/api/admin/requests/7/delete'],
+      ['POST', '/api/admin/requests//approve'],
+    ])('does not proxy %s %s', async (method, path) => {
+      const res = method === 'GET' ? await get(path, 'admin@example.com') : await adminPost(path, 'admin@example.com');
+      expect(res.status).toBe(404);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+
+    it('does not proxy enroll through the authenticated catch-all', async () => {
+      expect((await get('/api/enroll', 'admin@example.com')).status).toBe(404);
+      expect((await adminPost('/api/enroll', 'admin@example.com')).status).toBe(404);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+  });
+
   describe('known gallery backup', () => {
     it.each(['/api/ingest/known-gallery', '/api/ingest/known-gallery/status'])('does not proxy GET or PUT %s', async (path) => {
       const got = await get(path, 'friend@example.com');
