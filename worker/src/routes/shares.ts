@@ -1,12 +1,13 @@
 import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import { albumRole, userOf } from '../access';
+import { isAdmin } from '../admin';
 import { photoAccess } from '../db/visibility';
 import type { Env } from '../types';
 
-/** GET /me: the resolved viewer. No D1 access, constant CPU. */
+/** GET /me: the resolved viewer and whether they are the admin. No D1 access, constant CPU. */
 export function meRoute(c: Context<{ Bindings: Env }>) {
-  return c.json({ email: userOf(c).email });
+  return c.json({ email: userOf(c).email, admin: isAdmin(c) });
 }
 
 const MAX_SHARES = 50;

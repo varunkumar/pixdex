@@ -6,15 +6,15 @@ import { OWNER_TEST_EMAIL, readHeaders } from './helpers';
 const me = (headers: Record<string, string>) => SELF.fetch('https://example.com/me', { headers });
 
 describe('viewer identity', () => {
-  it('reports the resolved email only', async () => {
+  it('reports the resolved email and the admin flag', async () => {
     const response = await me(readHeaders());
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ email: OWNER_TEST_EMAIL });
+    expect(await response.json()).toEqual({ email: OWNER_TEST_EMAIL, admin: true });
   });
 
   it('normalizes the email', async () => {
     const response = await me(readHeaders('Viewer@Example.COM '));
-    expect(await response.json()).toEqual({ email: 'viewer@example.com' });
+    expect(await response.json()).toEqual({ email: 'viewer@example.com', admin: false });
   });
 
   it('needs no owner address configured: any forwarded identity resolves', async () => {
