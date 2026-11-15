@@ -243,7 +243,7 @@ candidate). It returns 404 if no photo qualifies.
 ## Species identification
 
 Why: the vision model is unreliable at naming birds, so an optional local sidecar (`SPECIES_SIDECAR_URL`,
-`agent/sidecar/species_server.py`) runs BioCLIP 2 on the whole frame and on each OWLv2-detected bird.
+`agent/sidecar/species_server.py`) runs BioCLIP 2.5 Huge (fp16, about 3 GB resident) on the whole frame and on each OWLv2-detected bird.
 `POST /species?region=` returns raw candidates; `agent/src/species/decide.ts` chooses what to store
 (whole-frame answer for mammals and other animals, bird boxes for birds, a species once with its best
 score, both animals of a two-animal photo, score below 0.5 dropped; thresholds from a labelled evaluation).

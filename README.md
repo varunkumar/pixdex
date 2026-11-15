@@ -105,7 +105,7 @@ web UI. For each photo the agent:
 |---|---|---|---|
 | Describe, tag, rate, caption | `qwen3.8:27b-mlx` | Ollama (`OLLAMA_BASE_URL`, default `http://localhost:11434`) | Set `OLLAMA_MODEL` in `agent/.env` (the built-in default is still `qwen3.5:27b-mlx`). The model name is stored on each photo. Changing the model does not re-index existing photos: they are skipped by content hash and keep their old data, so a library can mix models. |
 | Face detection and embeddings | InsightFace `buffalo_l` | Local Python sidecar (CoreML, CPU fallback) | Optional. The weights are non-commercial, so personal use only. |
-| Species identification | BioCLIP 2 plus an OWLv2 bird detector | Local Python sidecar (`species_server.py`) | Optional. Much better than the vision model at naming birds; see below. |
+| Species identification | BioCLIP 2.5 Huge (fp16) plus an OWLv2 bird detector | Local Python sidecar (`species_server.py`) | Optional. Much better than the vision model at naming birds; see below. |
 
 Setup: install [Ollama](https://ollama.com), `ollama pull qwen3.8:27b-mlx`, then
 copy `agent/.env.example` to `agent/.env` and set `OLLAMA_MODEL=qwen3.8:27b-mlx`, `CLOUDFLARE_API_BASE_URL` and
@@ -123,7 +123,7 @@ your disk.
 
 The vision model is weak at naming birds (it gave different species for the same bird across frames),
 so an optional local species sidecar (`agent/sidecar/species_server.py`, setup in its README) runs
-BioCLIP 2 on the whole frame and on each detected bird, limited to the species recorded in the photo's
+BioCLIP 2.5 Huge on the whole frame and on each detected bird, limited to the species recorded in the photo's
 region (GBIF lists built by `build-species-regions`; the region comes from the EXIF position or the
 album name, see `agent/species/regions.json`). Mammals come from the whole frame, birds from the bird
 boxes, so two animals in one photo (a myna on a deer) are both found. Answers below 0.5 confidence are

@@ -24,7 +24,7 @@ const configSchema = z.object({
       message: 'FACE_SIDECAR_URL must point at a loopback host (127.0.0.1, localhost or [::1])',
     })
     .optional(),
-  // The species sidecar (BioCLIP 2 plus a detector, agent/sidecar/species_server.py). Photos are sent to it
+  // The species sidecar (BioCLIP 2.5 plus a detector, agent/sidecar/species_server.py). Photos are sent to it
   // over loopback only and never leave the machine.
   SPECIES_SIDECAR_URL: z
     .string()
