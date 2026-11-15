@@ -4,6 +4,8 @@ import type {
   DailyPickResponse,
   FaceGroup,
   KnownPersonSummary,
+  AccessRequest,
+  AccessRequestsResponse,
   MeResponse,
   MatchResponse,
   PersonSummary,
@@ -165,6 +167,17 @@ export class WorkerApiClient {
 
   async getMe(): Promise<MeResponse> {
     return this.getJson<MeResponse>('/me');
+  }
+
+  async listAccessRequests(status?: AccessRequest['status']): Promise<AccessRequestsResponse> {
+    const suffix = status ? `?status=${status}` : '';
+    return this.getJson<AccessRequestsResponse>(`/admin/requests${suffix}`);
+  }
+
+  /** Sends a JSON body {} so the Pages Function accepts the POST (it requires the JSON content type). */
+  async decideAccessRequest(id: number, action: 'approve' | 'deny' | 'revoke'): Promise<AccessRequest> {
+    const response = await this.sendJson('POST', `/admin/requests/${id}/${action}`, {});
+    return ((await response.json()) as { request: AccessRequest }).request;
   }
 
   /** Replaces the album's share list; returns the normalized emails the Worker stored. */

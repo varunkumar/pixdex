@@ -7,6 +7,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
  */
 export function useMe(): {
   email: string | null;
+  admin: boolean;
   loading: boolean;
 } {
   const { data, isPending } = useQuery({
@@ -16,6 +17,7 @@ export function useMe(): {
   });
   return {
     email: data?.email ?? null,
+    admin: data?.admin === true,
     loading: isPending,
   };
 }

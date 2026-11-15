@@ -47,7 +47,7 @@ const show = (canEdit = true) => renderWithProviders(<PhotoFaces photoId="p1" ca
 describe('PhotoFaces', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com' });
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com', admin: false });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
     vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });

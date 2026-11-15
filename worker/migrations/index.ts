@@ -222,6 +222,22 @@ BEGIN DELETE FROM person_labels WHERE person_id = old.id; END;`,
   'ALTER TABLE faces ADD COLUMN known_id TEXT;',
   'ALTER TABLE faces ADD COLUMN known_score REAL;',
   'CREATE INDEX IF NOT EXISTS idx_faces_known_photo ON faces (known_id, photo_id) WHERE known_id IS NOT NULL;',
+  // Mirrors 0019_access_requests.sql.
+  `CREATE TABLE IF NOT EXISTS access_requests (
+  id INTEGER PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','denied','revoked')),
+  created_at TEXT NOT NULL,
+  decided_at TEXT
+);`,
+  'CREATE INDEX IF NOT EXISTS idx_access_requests_status_created ON access_requests (status, created_at);',
+  `CREATE TRIGGER IF NOT EXISTS access_requests_email_lower_bi BEFORE INSERT ON access_requests
+WHEN new.email <> lower(new.email)
+BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
+  `CREATE TRIGGER IF NOT EXISTS access_requests_email_lower_bu BEFORE UPDATE OF email ON access_requests
+WHEN new.email <> lower(new.email)
+BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

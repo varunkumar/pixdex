@@ -13,7 +13,7 @@ import {
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import type { IconType } from 'react-icons';
-import { MdAlbum, MdDarkMode, MdHome, MdLightMode, MdLogout, MdPeople, MdPhoto, MdSearch, MdTimeline } from 'react-icons/md';
+import { MdAdminPanelSettings, MdAlbum, MdDarkMode, MdHome, MdLightMode, MdLogout, MdPeople, MdPhoto, MdSearch, MdTimeline } from 'react-icons/md';
 import { Link, Outlet, useMatch } from 'react-router-dom';
 import { useMe } from '../hooks/useMe';
 import { BRAND, HEADER_GRADIENT } from '../theme';
@@ -34,6 +34,9 @@ const LINKS: NavItem[] = [
   { to: '/people', label: 'People', icon: MdPeople, end: false },
   { to: '/daily', label: 'Daily Pick', icon: MdPhoto, end: false },
 ];
+
+/** Shown (never disabled) only to the admin. */
+const ADMIN_LINK: NavItem = { to: '/admin/access', label: 'Access', icon: MdAdminPanelSettings, end: false };
 
 const HeaderLink = ({ to, label, icon: Icon, end }: NavItem) => {
   const active = useMatch({ path: to, end }) !== null;
@@ -71,7 +74,8 @@ const Layout = () => {
   const [opened, { toggle, close }] = useDisclosure(false);
   const { setColorScheme } = useMantineColorScheme();
   const scheme = useComputedColorScheme('light');
-  const { email } = useMe();
+  const { email, admin } = useMe();
+  const links = admin ? [...LINKS, ADMIN_LINK] : LINKS;
 
   return (
     <AppShell
@@ -105,7 +109,7 @@ const Layout = () => {
               </Text>
             </Link>
             <Group gap={4} visibleFrom="sm" wrap="nowrap">
-              {LINKS.map((item) => (
+              {links.map((item) => (
                 <HeaderLink key={item.to} {...item} />
               ))}
             </Group>
@@ -156,7 +160,7 @@ const Layout = () => {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
-        {LINKS.map((item) => (
+        {links.map((item) => (
           <DrawerLink key={item.to} {...item} onNavigate={close} />
         ))}
         {email && (

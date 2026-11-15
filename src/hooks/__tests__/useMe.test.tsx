@@ -17,11 +17,11 @@ describe('useMe', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('has no email while loading, then the resolved one', async () => {
-    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'o@example.com' });
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'o@example.com', admin: false });
     const { result } = renderHook(() => useMe(), { wrapper });
-    expect(result.current).toEqual({ email: null, loading: true });
+    expect(result.current).toEqual({ email: null, admin: false, loading: true });
     await waitFor(() => expect(result.current.email).toBe('o@example.com'));
-    expect(result.current).toEqual({ email: 'o@example.com', loading: false });
+    expect(result.current).toEqual({ email: 'o@example.com', admin: false, loading: false });
   });
 
   it('has no email when the request fails', async () => {

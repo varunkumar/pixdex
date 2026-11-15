@@ -19,6 +19,20 @@ export async function requireIngestToken(
   await next();
 }
 
+/** Bearer READ_TOKEN only; no X-Viewer-Email needed (routes for callers without a verified identity). */
+export async function requireProxyToken(
+  c: Context<{ Bindings: Env }>,
+  next: Next
+) {
+  const token = bearerToken(c);
+
+  if (!token || token !== c.env.READ_TOKEN) {
+    return c.text('Unauthorized', 401);
+  }
+
+  await next();
+}
+
 /**
  * Bearer header only: tokens in URLs end up in logs and browser history.
  * Also requires the proxy-forwarded X-Viewer-Email identity.

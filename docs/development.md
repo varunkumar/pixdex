@@ -91,12 +91,64 @@ them, and an album with no owner (like a photo with no album) is visible to nobo
 4. Update the agent and restart it: indexing now sends `ownerEmail` (it refuses to index without `OWNER_EMAIL`). An agent
    that has not been updated sends no `ownerEmail`, so `/ingest/photo` answers 400 (it is required). A running
    `serve-originals` breaks (its lookups get 401) until it is updated. `index-status` needs `OWNER_EMAIL` too.
-5. Only then change the Cloudflare Access policy to allow any Google account. Doing it earlier lets strangers reach
-   a Function that cannot yet verify them.
+5. The Access policy step that used to be here ("allow any Google account") is superseded by invite-only access: do not open
+   Access to every Google account. Follow "Rollout order for invite-only access" below instead (it switches the policy to
+   the `pixdex-approved` group, never to everyone).
 
 Local dev: the Vite `/api` proxy sends `X-Viewer-Email` from `DEV_VIEWER_EMAIL`, falling back to `OWNER_EMAIL` in the root
 `.env`; set `DEV_VIEWER_EMAIL` to preview as a user an album is shared with. Run `cd worker && npm run backfill-owner -- --local`
 to own your local albums.
+
+### Rollout order for invite-only access
+
+Spec: `docs/superpowers/specs/2026-11-14-invite-only-access-design.md`. The Access group is the only gate, so the order below
+exists to keep the owner from being locked out. Use real addresses only in the dashboard and your shell, never in the repo.
+
+1. In Zero Trust, create an Access group named `pixdex-approved` and add exactly two emails by hand: the admin and the one person
+   albums are shared with today. Note the group's id (for `CF_ACCESS_GROUP_ID`).
+2. Create a Cloudflare Turnstile widget for the site hostname. Set `TURNSTILE_SITE_KEY` (public) and `TURNSTILE_SECRET` as Pages
+   variables. Without both, `/enroll` answers 503 and `POST /api/enroll` fails closed.
+3. Create an Access application with a Bypass policy for exactly `/enroll` and `/api/enroll` (nothing wider: a wider bypass
+   lets strangers reach the Function).
+4. Create the API token with the single permission "Access: Organizations, Identity Providers, and Groups Write" (account scope, see
+   below). Set the Worker secrets: `cd worker && npx wrangler secret put ADMIN_EMAIL` (same address as the agent's `OWNER_EMAIL`),
+   then the same for `CF_API_TOKEN`, `CF_ACCOUNT_ID` and `CF_ACCESS_GROUP_ID`. Check the
+   `namespace_id` of the `[[ratelimits]]` binding (`ENROLL_LIMITER`) in `worker/wrangler.toml`: 7410061 is a valid id; change it only if the account already has a rate limiter with that id. If it
+   collided with another rate limiter in the account, the two would share one counter and throttle each other.
+5. Merge. Migration `0019_access_requests.sql` (additive) applies before the new Worker goes live. The Access policy is still
+   unchanged, so nothing is blocked yet.
+6. Seed the existing users: `cd worker && npm run seed-access -- --dry-run`. It reads the REMOTE database read-only (a `SELECT` of
+   `albums.owner_email` and `shared_with`, no write) and prints the addresses and the SQL. The CLI has not been run end to end by
+   its implementers, so read the dry-run output carefully: it must list exactly the two addresses from step 1 (it refuses unless there
+   are exactly two distinct ones; the admin address comes from `ADMIN_EMAIL`, `OWNER_EMAIL` or `agent/.env`). Then run
+   `npm run seed-access` (an idempotent upsert: inserts two `approved` rows, upgrades a `pending` row for those two addresses to `approved`
+   for anyone who enrolled before the seed ran, and leaves an existing approved, denied or revoked row untouched; `-- --local` targets the
+   local D1). It writes
+   `access_requests` only; the Access group is the one from step 1.
+7. Only now switch the PixdeX Access application policy from "any Google account" to Allow: group `pixdex-approved`.
+8. Verify: a Google account that is not in the group is blocked at the edge (no Function call); enroll through `/enroll` while
+   signed out; approve it on `/admin/access` and sign in with it; revoke it and confirm its session ends at once.
+
+Behaviour to know:
+
+- A revoke calls two Cloudflare endpoints (remove from the group, then revoke sessions). If the second fails, the row stays
+  `approved` although the email may already be out of the group; retry the revoke (both calls are idempotent).
+- Concurrent approvals of different emails can lose a group update (read-modify-write on the group, one retry on a conflict). The
+  admin page runs one action at a time; do not approve from two tabs at once.
+- A concurrent revoke and approve from two browser tabs can re-add a revoked email (the group edit is GET-then-PUT). The UI runs one
+  action at a time, but two tabs can still race. Recovery: revoke again.
+- The admin page hides Revoke on the admin's own row; the Worker refuses it with 400 anyway.
+- The public `POST /api/enroll` relays only the Worker's 202, 400 and 429; any other Worker status (401, 404, 500, ...) becomes a generic
+  502 `Upstream unavailable`, so misconfiguration is never disclosed. `/enroll` answers 405 to every method but GET and HEAD.
+- Local dev: the Vite dev proxy does not serve `/enroll` or `/api/enroll` (they are Pages Functions). The admin page works against the dev
+  mock (`PIXDEX_MOCK=1 npm run dev`, which answers `/me` with `admin: true` and keeps requests in memory).
+- Cannot be measured locally: Turnstile, the Cloudflare Access API, the Access bypass behaviour and the rate-limit binding. After
+  deploy, measure with `wrangler tail` (Worker), the Access logs in Zero Trust, and an end-to-end check on the deployed site (the
+  step 8 list, plus six enroll posts in a minute from one IP to see the 429).
+- Cost: browse hot path unchanged. Enroll is one rate-limit binding call plus at most 1 indexed count over at most 200 pending rows
+  plus at most 1 write (none for a duplicate or a full queue); admin list 2 statements, at most 200 rows; admin actions 1 read, 1 write,
+  and Cloudflare calls: approve 2 (1 if already a member, 4 on a conflict retry), revoke 3 (2 if not a member, 5 with a retry), deny none;
+  `/me` reads no D1.
 
 ### Rollout order for known personalities (phase 1)
 
@@ -290,3 +342,11 @@ requests or an `album_shares(email, album)` lookup table are the next steps.
   immutable). Server-side access is revoked immediately.
 - The Vite dev proxy forwards a client `X-Viewer-Email` when neither `DEV_VIEWER_EMAIL` nor `OWNER_EMAIL` (root `.env`) is set
   (dev only).
+
+## Cloudflare Access API token (invite-only access)
+
+The Worker's `CF_API_TOKEN` (`worker/src/cf/accessApi.ts`) needs one account-scoped permission,
+"Access: Organizations, Identity Providers, and Groups Write". It covers both `PUT /accounts/{id}/access/groups/{group}`
+(add or remove an invited email) and `POST /accounts/{id}/access/organizations/revoke_user` (end a revoked user's sessions).
+Called only from owner-only admin routes: 2 Cloudflare subrequests per add or remove (1 when the group needs no change, 4 with one
+conflict retry), 1 per session revoke, no D1.

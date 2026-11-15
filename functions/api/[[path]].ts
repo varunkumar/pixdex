@@ -23,6 +23,10 @@ interface Env {
   // when both are set, so Access can be enabled on the hostname independently.
   ACCESS_CLIENT_ID?: string;
   ACCESS_CLIENT_SECRET?: string;
+  // Turnstile for the public enroll page and endpoint (functions/enroll.ts, functions/api/enroll.ts);
+  // not used by this proxy. The secret never reaches the browser; the site key is public.
+  TURNSTILE_SECRET?: string;
+  TURNSTILE_SITE_KEY?: string;
 }
 
 interface Context {
@@ -46,6 +50,8 @@ const ALLOWED_PATHS = [
   /^people\/known$/,
   /^photos\/[^/]+\/faces$/,
   /^faces\/[^/]+\/crop$/,
+  // Access requests list for the admin page; the Worker answers 404 to anyone but ADMIN_EMAIL.
+  /^admin\/requests$/,
 ];
 
 // Full-resolution local-disk originals, served by the agent through a tunnel.
@@ -166,6 +172,9 @@ const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
     /^people\/[^/]+\/match$/,
     /^people\/[^/]+\/cover$/,
     /^faces\/[^/]+\/(assign|reject|unassign)$/,
+    // Deciding an access request. Owner-only (ADMIN_EMAIL), enforced by the Worker, which answers 404 to
+    // everyone else. The body is `{}`, sent as application/json like every other write.
+    /^admin\/requests\/[^/]+\/(approve|deny|revoke)$/,
   ],
   // Human review of one photo (rating, title, subjects, tags); renaming a person.
   PATCH: [/^photos\/[^/]+$/, /^people\/[^/]+$/],

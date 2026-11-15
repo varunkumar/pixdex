@@ -106,6 +106,22 @@ export interface AlbumsPageResponse {
 
 export interface MeResponse {
   email: string;
+  admin: boolean;
+}
+
+export interface AccessRequest {
+  id: number;
+  email: string;
+  note: string | null;
+  status: 'pending' | 'approved' | 'denied' | 'revoked';
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+export interface AccessRequestsResponse {
+  requests: AccessRequest[];
+  pendingCount: number;
+  queueFull: boolean;
 }
 
 export interface AlbumsResponse {

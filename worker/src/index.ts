@@ -1,5 +1,7 @@
 import { Hono, type Context } from 'hono';
-import { requireIngestToken, requireReadToken } from './auth';
+import { requireIngestToken, requireProxyToken, requireReadToken } from './auth';
+import { approveRoute, denyRoute, enrollRoute, listRequestsRoute, revokeRoute } from './routes/access-requests';
+import { requireAdmin } from './admin';
 import { guardedWrites } from './access';
 import { checkHashesRoute } from './routes/ingest-check-hashes';
 import { ingestFacesRoute, pendingFacesRoute, putFaceCropRoute, unscannedFacesRoute } from './routes/ingest-faces';
@@ -116,6 +118,17 @@ app.get('/access/photo/:id', accessPhotoRoute);
 
 app.use('/me', requireReadToken);
 app.get('/me', meRoute);
+
+// Public enroll: bearer proxy token only (no viewer identity); not a guardedWrite.
+app.use('/enroll', requireProxyToken);
+app.post('/enroll', enrollRoute);
+
+// Admin: READ_TOKEN plus viewer first (401), then admin only (404 to everyone else). /enroll is not under /admin.
+app.use('/admin/*', requireReadToken, requireAdmin);
+app.get('/admin/requests', listRequestsRoute);
+guardedWrite('POST', '/admin/requests/:id/approve', approveRoute);
+guardedWrite('POST', '/admin/requests/:id/deny', denyRoute);
+guardedWrite('POST', '/admin/requests/:id/revoke', revokeRoute);
 
 app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);

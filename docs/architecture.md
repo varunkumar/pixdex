@@ -33,7 +33,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
   matching), Dashboard,
-  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout. Timeline keeps `PeopleFilter`.
+  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
 - AI Search (part of Search: `components/Search.tsx`, `components/AiResults.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
   entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI", Cmd+Enter and the plain-mode "Add keywords" button, which opens the keyword row without the model,
   are gated on it; in AI mode the page button is "Search again", which commits a typed keyword draft and re-runs the keywords without the model, while Enter in the bar stays a plain search; there is no nav entry, and `/ai-search` is a redirect, `LegacyAiRedirect.tsx`, to `/search?mode=ai`). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):
@@ -56,6 +56,14 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 
 ### Identity and album access
 
+Invite-only: Access is configured to allow only the group `pixdex-approved`, so a stranger never reaches the Function or Worker. A
+public request-access flow feeds the admin: `GET /enroll` (self-contained page with Turnstile) and `POST /api/enroll` (Turnstile, 4 KB cap,
+no Access JWT; an Access Bypass application covers exactly these two paths) forward to the Worker `POST /enroll` (READ_TOKEN bearer only,
+rate limit `ENROLL_LIMITER` 5 per minute per IP, pending cap 200, always 202) which inserts into `access_requests`
+(`pending`, `approved`, `denied`, `revoked`). The admin (`ADMIN_EMAIL`) lists and decides at `/admin/access` through `GET /admin/requests`
+and `POST /admin/requests/:id/approve|deny|revoke`; approve and revoke edit the Access group and revoke sessions through the Cloudflare API
+(`worker/src/cf/accessApi.ts`, `CF_API_TOKEN`). Album sharing alone does not grant login. Details and rollout in `docs/development.md`.
+
 Cloudflare Access sits in front of the Pages site and, after login, adds a signed JWT (`Cf-Access-Jwt-Assertion`).
 The Pages Function (`functions/_lib/access.ts`) verifies it (RS256 signature against the team JWKS at
 `https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`, cached per isolate for an hour; `aud` must be `ACCESS_AUD`;
@@ -69,7 +77,7 @@ they own it or are in `shared_with`. An album with a NULL owner, and any photo w
 one-time `worker/scripts/backfill-owner.mjs` stamps the albums (and people) with the owner address. Photo reads (search,
 timeline, buckets, albums, photo, faces, daily pick) are always filtered by that scope (`scopeFor` or the primary-key join in
 `photoAccess`; there is no unscoped fast path); an invisible resource is 404, and a viewer's write is 403. `PUT /albums/shares`
-(owner only) replaces `shared_with`; `GET /me` returns `{ email }`. The Worker never reads `OWNER_EMAIL`: the agent sends
+(owner only) replaces `shared_with`; `GET /me` returns `{ email, admin }` (`admin` is true only for `ADMIN_EMAIL`, no D1). The Worker never reads `OWNER_EMAIL`: the agent sends
 it as `ownerEmail` with each ingested photo (`POST /ingest/photo`), and the first photo of an album stamps the album's owner.
 
 People are per owner (`persons.owner_email`, unique name per owner). A person is editable only by its owner; face assign,
@@ -98,13 +106,14 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/known`, `me`) plus `originals/:id`, which goes
-to the agent through the tunnel. `/ingest/*` is deliberately not reachable.
+`people/groups`, `people/known`, `me`, `admin/requests`) plus `originals/:id`, which goes
+to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
+`functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails are cached immutably (content-hash addressed); other routes use
 `no-cache`. The only writes the browser can make are `PUT albums/cover`,
 `PUT albums/shares`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`,
-`people/:id/faces`, `people/:id/match`, `people/:id/cover` and `faces/:id/assign|reject|unassign`
-(bodies JSON only, DELETE has none), all forwarded with the read token through
+`people/:id/faces`, `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign` and
+`admin/requests/:id/approve|deny|revoke` (bodies JSON only, DELETE has none), all forwarded with the read token through
 one shared helper with per-method allowlists.
 
 ### Human review (HITL)
@@ -223,6 +232,8 @@ candidate). It returns 404 if no photo qualifies.
 1. `agent` indexes: files -> hash -> Ollama analysis -> `POST /ingest/*` on the Worker.
 2. Worker stores rows in D1 (with FTS5 text) and thumbnails in R2.
 3. Browser -> Pages `/api/*` -> Pages Function adds token -> Worker read route.
+3b. Request access (signed out): browser -> `/enroll` -> `POST /api/enroll` (Turnstile) -> Worker `POST /enroll` -> `access_requests`;
+   the admin approves on `/admin/access` -> Worker -> Cloudflare Access API (group edit, session revoke).
 4. "View Original": browser -> `/api/originals/:id` -> tunnel -> agent server
    (local files, or Drive files streamed with the agent's Google token via
    `files.get alt=media`, nothing staged on disk). The photo page adds an
@@ -336,8 +347,9 @@ Licence: InsightFace pretrained weights are non-commercial, personal use only.
 
 | Where | Variables |
 | --- | --- |
-| Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (both required); local dev only: `DEV_VIEWER_EMAIL` |
+| Root `.env` / Pages secrets | `WORKER_URL`, `READ_TOKEN`, optional `ORIGINALS_BASE_URL`, `ORIGINALS_TOKEN`, `ACCESS_CLIENT_ID/SECRET`; identity: `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` (both required); `TURNSTILE_SECRET`, `TURNSTILE_SITE_KEY` (enroll page; both required or enroll is off); local dev only: `DEV_VIEWER_EMAIL` |
 | `agent/.env` | `CLOUDFLARE_API_BASE_URL`, `INGEST_TOKEN`, `OLLAMA_*`, `GOOGLE_OAUTH_*`, `ORIGINALS_PORT/TOKEN`, `READ_TOKEN`, `OWNER_EMAIL` (the album owner: required to index, sent as `ownerEmail`; also the viewer for `serve-originals` and `index-status`), optional `FACE_SIDECAR_URL` (face scanning is off when unset) |
-| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN` (the Worker never reads `OWNER_EMAIL`; an old Worker secret of that name can be deleted) |
+| Worker secrets | `READ_TOKEN`, `INGEST_TOKEN`, `ADMIN_EMAIL`, `CF_API_TOKEN`, `CF_ACCOUNT_ID`, `CF_ACCESS_GROUP_ID` (the Worker never reads `OWNER_EMAIL`; an old Worker secret of that name can be deleted; `CF_API_TOKEN` is as sensitive as the admin login) |
+| `worker/wrangler.toml` | `[[ratelimits]]` binding `ENROLL_LIMITER` (5 per 60 s); `namespace_id`: 7410061 is a valid id; change it only if the account already has a rate limiter with that id |
 
 Never prefix server-side secrets with `VITE_`.

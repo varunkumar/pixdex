@@ -23,7 +23,7 @@ describe('ShareAlbumModal', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(workerApiClient.setAlbumShares).mockResolvedValue([]);
-    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'me@example.com' });
+    vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'me@example.com', admin: false });
   });
 
   it('lists the owner and current emails with avatars, and the Google sign-in note', async () => {

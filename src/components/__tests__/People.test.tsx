@@ -69,6 +69,7 @@ describe("People", () => {
     vi.resetAllMocks();
     vi.mocked(workerApiClient.getMe).mockResolvedValue({
       email: "owner@example.com",
+      admin: false,
     });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation(
       (f) => `/api${f.thumbnailUrl}`,
@@ -360,6 +361,7 @@ describe("People", () => {
   it("hides naming controls for a viewer, whose unnamed groups the Worker returns empty", async () => {
     vi.mocked(workerApiClient.getMe).mockResolvedValue({
       email: "viewer@example.com",
+      admin: false,
     });
     vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
       groups: [],

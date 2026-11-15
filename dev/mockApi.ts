@@ -11,6 +11,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import type {
+  AccessRequest,
   KnownPersonSummary,
   PersonSummary,
   SerializedPhoto,
@@ -36,6 +37,18 @@ const KNOWN: KnownPersonSummary[] = [
   // Shares a name with the own person "Demo Dhoni".
   { id: 'Q900007', name: 'Demo Dhoni', aliases: [], photoCount: 3 },
 ];
+
+/** In-memory access requests for the admin page demo; decisions move rows between tabs until the dev server restarts. */
+const REQUESTS: AccessRequest[] = [
+  { id: 1, email: 'priya.demo@example.com', note: 'Friend of the family, would love to see the Kabini photos.', status: 'pending', createdAt: '2026-11-14T09:30:00Z', decidedAt: null },
+  { id: 2, email: 'a-very-long-demo-address-for-layout-checks@subdomain.example.com', note: 'x'.repeat(200), status: 'pending', createdAt: '2026-11-13T18:05:00Z', decidedAt: null },
+  { id: 3, email: 'rohan.demo@example.com', note: null, status: 'pending', createdAt: '2026-11-12T07:10:00Z', decidedAt: null },
+  { id: 4, email: 'meera.demo@example.com', note: '<b>not bold</b> & friends', status: 'approved', createdAt: '2026-11-08T11:00:00Z', decidedAt: '2026-11-09T10:00:00Z' },
+  { id: 5, email: 'spam.demo@example.com', note: 'buy now', status: 'denied', createdAt: '2026-11-07T11:00:00Z', decidedAt: '2026-11-07T12:00:00Z' },
+  { id: 6, email: 'old.demo@example.com', note: null, status: 'revoked', createdAt: '2026-10-01T11:00:00Z', decidedAt: '2026-11-01T12:00:00Z' },
+];
+
+const NEXT_STATUS = { approve: 'approved', deny: 'denied', revoke: 'revoked' } as const;
 
 const ALBUMS = ['Kabini Demo', 'Goa Demo Trip', 'Cricket Demo Day', 'Family Demo'];
 const TAGS = ['beach', 'cricket', 'sunset', 'temple', 'forest', 'birthday', 'leopard', 'street'];
@@ -173,8 +186,22 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   const path = url.pathname.slice('/api'.length);
   const method = req.method ?? 'GET';
 
-  if (method !== 'GET') return sendJson(res, 405, { error: 'The dev mock is read-only' });
-  if (path === '/me') return sendJson(res, 200, { email: EMAIL });
+  const decision = /^\/admin\/requests\/(\d+)\/(approve|deny|revoke)$/.exec(path);
+  if (method === 'POST' && decision) {
+    const found = REQUESTS.find((r) => r.id === Number(decision[1]));
+    if (!found) return sendJson(res, 404, { error: 'Not found' });
+    found.status = NEXT_STATUS[decision[2] as keyof typeof NEXT_STATUS];
+    found.decidedAt = new Date().toISOString();
+    return sendJson(res, 200, { request: found });
+  }
+  if (method !== 'GET') return sendJson(res, 405, { error: 'The dev mock is read-only apart from admin decisions' });
+  if (path === '/me') return sendJson(res, 200, { email: EMAIL, admin: true });
+  if (path === '/admin/requests') {
+    const wanted = url.searchParams.get('status');
+    const pendingCount = REQUESTS.filter((r) => r.status === 'pending').length;
+    const requests = REQUESTS.filter((r) => !wanted || r.status === wanted).sort((a, b) => b.id - a.id);
+    return sendJson(res, 200, { requests, pendingCount, queueFull: pendingCount >= 3 });
+  }
   if (path === '/people') return sendJson(res, 200, { people: OWN });
   if (path === '/people/known') return sendJson(res, 200, { known: KNOWN });
   if (path === '/people/groups') return sendJson(res, 200, { groups: [], scanned: 0, nextCursor: null });

@@ -238,7 +238,11 @@ describe('GET /access/photo/:id', () => {
 
 describe('write route enumeration', () => {
   it('every non-GET route outside /ingest/* is in the guarded registry', () => {
-    const writes = app.routes.filter((r) => r.method !== 'GET' && r.method !== 'ALL' && !r.path.startsWith('/ingest/'));
+    // POST /enroll is the one exemption: it authorizes by proxy token (requireProxyToken), not by album or person.
+    const exempt = new Set(['POST /enroll']);
+    const writes = app.routes.filter(
+      (r) => r.method !== 'GET' && r.method !== 'ALL' && !r.path.startsWith('/ingest/') && !exempt.has(`${r.method} ${r.path}`)
+    );
     expect(writes.length).toBeGreaterThan(0);
     const unguarded = writes.map((r) => `${r.method} ${r.path}`).filter((k) => !guardedWrites.has(k));
     expect(unguarded).toEqual([]);
