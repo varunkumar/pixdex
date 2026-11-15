@@ -127,7 +127,8 @@ BioCLIP 2.5 Huge on the whole frame and on each detected bird, limited to the sp
 region (GBIF lists built by `build-species-regions`; the region comes from the EXIF position or the
 album name, see `agent/species/regions.json`). Mammals come from the whole frame, birds from the bird
 boxes, so two animals in one photo (a myna on a deer) are both found. Answers below 0.5 confidence are
-dropped rather than stored. Results are stored on the photo as `species` (common name, scientific name,
+dropped rather than stored, and a whole-frame answer below 0.9 is also dropped unless the vision model's subjects
+mention an animal (otherwise people and scenery photos get a mid-confidence wrong animal). Results are stored on the photo as `species` (common name, scientific name,
 score, optional box) and are searchable, ranked above the vision model's words; your own edited
 subjects win over them in search. The photo page lists them. Photos never leave your machine: only a
 downsized JPEG goes to the sidecar over loopback, and only region names go to GBIF.

@@ -51,7 +51,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     try {
       found = await identifySpecies(
         await readFile(input.localPath),
-        { album: input.album ?? null, latitude: exif.camera.latitude ?? null, longitude: exif.camera.longitude ?? null },
+        { album: input.album ?? null, latitude: exif.camera.latitude ?? null, longitude: exif.camera.longitude ?? null, subjects: [...analysis.subjects, ...analysis.tags] },
         deps.species
       );
     } catch (error) {

@@ -1,4 +1,5 @@
 import type { SpeciesEntry } from '../cloudflareClient';
+import { hasAnimalCue } from './cue';
 
 /** [common name, scientific name, class, score 0..1] */
 export type SpeciesCandidate = [string, string, string, number];
@@ -25,6 +26,12 @@ export interface SpeciesDetection {
 export const WHOLE_MIN = 0.5;
 export const BIRD_MIN = 0.5;
 export const MAX_SPECIES = 6;
+/**
+ * A whole-frame answer is relative (it always names the closest animal), so a photo of people or scenery gets a
+ * mid-confidence wrong species. Without any sign of an animal in the vision model's subjects it must clear this
+ * higher bar. Bird boxes are exempt: the detector has already seen a bird there.
+ */
+export const WHOLE_NO_CUE_MIN = 0.9;
 
 /**
  * Chooses the species to store for one photo.
@@ -33,13 +40,15 @@ export const MAX_SPECIES = 6;
  * - Birds come from the bird boxes (far more accurate on small birds, and the way a second bird, or a
  *   myna sitting on a deer, is found). When any bird box is confident it replaces a whole-frame bird answer;
  *   otherwise a confident whole-frame bird stays.
+ * - With `subjects` (the vision model's, as a guard), a whole-frame answer below WHOLE_NO_CUE_MIN is dropped unless
+ *   those subjects show an animal (hasAnimalCue). Without `subjects` there is no guard.
  * A species is listed once with its best score; best first.
  */
 export function decideSpecies(
   detection: SpeciesDetection,
-  options: { wholeMin?: number; birdMin?: number; max?: number } = {}
+  options: { wholeMin?: number; birdMin?: number; max?: number; subjects?: string[] } = {}
 ): SpeciesEntry[] {
-  const { wholeMin = WHOLE_MIN, birdMin = BIRD_MIN, max = MAX_SPECIES } = options;
+  const { wholeMin = WHOLE_MIN, birdMin = BIRD_MIN, max = MAX_SPECIES, subjects } = options;
 
   const birds: SpeciesEntry[] = [];
   for (const b of detection.boxes) {
@@ -50,7 +59,8 @@ export function decideSpecies(
 
   const found: SpeciesEntry[] = [...birds];
   const whole = detection.whole[0];
-  if (whole && whole[3] >= wholeMin && !(whole[2] === 'Aves' && birds.length > 0)) {
+  const guarded = subjects !== undefined && whole !== undefined && whole[3] < WHOLE_NO_CUE_MIN && !hasAnimalCue(subjects, whole[0]);
+  if (whole && whole[3] >= wholeMin && !guarded && !(whole[2] === 'Aves' && birds.length > 0)) {
     found.push({ common: whole[0], scientific: whole[1], score: whole[3] });
   }
 

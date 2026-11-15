@@ -246,7 +246,7 @@ Why: the vision model is unreliable at naming birds, so an optional local sideca
 `agent/sidecar/species_server.py`) runs BioCLIP 2.5 Huge (fp16, about 3 GB resident) on the whole frame and on each OWLv2-detected bird.
 `POST /species?region=` returns raw candidates; `agent/src/species/decide.ts` chooses what to store
 (whole-frame answer for mammals and other animals, bird boxes for birds, a species once with its best
-score, both animals of a two-animal photo, score below 0.5 dropped; thresholds from a labelled evaluation).
+score, both animals of a two-animal photo, score below 0.5 dropped; a whole-frame answer below 0.9 also needs an animal word in the vision model's stored subjects (`species/cue.ts`), since the whole-frame answer always names the closest animal and non-animal photos got mid-confidence wrong species; thresholds from a labelled evaluation).
 The region (`species/regions.ts`, `agent/species/regions.json`) comes from the EXIF position (boxes), else the
 album name, else the default, and selects a GBIF species list (`build-species-regions`, local files under
 `agent/.index-state/species-regions/`). `identifySpecies` (`species/identify.ts`) is shared by indexing and the backfill.
