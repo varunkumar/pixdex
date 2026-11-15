@@ -86,4 +86,39 @@ describe('decideSpecies', () => {
     expect(decideSpecies(input)[0].score).toBe(0.973);
     expect(input).toEqual(copy);
   });
+
+  describe('guarding whole-frame answers with the vision model\'s subjects', () => {
+    const toad = det({ whole: [['Common sunda toad', 'Duttaphrynus melanostictus', 'Amphibia', 0.72]] });
+
+    it('drops a mid-confidence whole-frame answer when the subjects show no animal', () => {
+      expect(decideSpecies(toad, { subjects: ['woman', 'portrait', 'hotel lobby'] })).toEqual([]);
+    });
+
+    it('keeps a mid-confidence whole-frame answer when the subjects name an animal', () => {
+      const out = decideSpecies(det({ whole: [['Bonnet macaque', 'Macaca radiata', 'Mammalia', 0.62]] }), { subjects: ['monkey', 'primate'] });
+      expect(out.map((s) => s.common)).toEqual(['Bonnet macaque']);
+    });
+
+    it('keeps a very confident whole-frame answer even with no sign of an animal', () => {
+      const out = decideSpecies(det({ whole: [['Tiger', 'Panthera tigris', 'Mammalia', 0.95]] }), { subjects: ['Unknown'] });
+      expect(out.map((s) => s.common)).toEqual(['Tiger']);
+    });
+
+    it('keeps a confident bird box whatever the subjects say (the detector saw a bird)', () => {
+      const out = decideSpecies(det({ boxes: [bird('Grey-capped Pygmy Woodpecker', 'Yungipicus canicapillus', 0.85)] }), { subjects: ['hotel', 'garden'] });
+      expect(out.map((s) => s.common)).toEqual(['Grey-capped Pygmy Woodpecker']);
+    });
+
+    it('drops a whole-frame bird with no bird box and no cue, but keeps the species of a confident bird box', () => {
+      const out = decideSpecies(
+        det({ whole: [['Grey-winged Blackbird', 'Turdus boulboul', 'Aves', 0.7]], boxes: [bird('Rufous Treepie', 'Dendrocitta vagabunda', 0.9)] }),
+        { subjects: ['garden'] }
+      );
+      expect(out.map((s) => s.common)).toEqual(['Rufous Treepie']);
+    });
+
+    it('does not guard when no subjects are given (the caller cannot judge)', () => {
+      expect(decideSpecies(toad).map((s) => s.common)).toEqual(['Common sunda toad']);
+    });
+  });
 });

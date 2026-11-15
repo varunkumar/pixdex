@@ -20,7 +20,7 @@ export interface SpeciesDeps {
  */
 export async function identifySpecies(
   original: Buffer,
-  photo: RegionPhoto,
+  photo: RegionPhoto & { subjects?: string[] },
   deps: SpeciesDeps
 ): Promise<{ model: string; region: string; species: SpeciesEntry[] }> {
   const jpeg = await sharp(original)
@@ -30,5 +30,5 @@ export async function identifySpecies(
     .toBuffer();
   const region = resolveRegion(photo, deps.regions);
   const detection = await deps.sidecar.identify(jpeg, region);
-  return { model: detection.model, region, species: decideSpecies(detection) };
+  return { model: detection.model, region, species: decideSpecies(detection, { subjects: photo.subjects }) };
 }
