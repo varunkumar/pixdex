@@ -50,6 +50,15 @@ const REQUESTS: AccessRequest[] = [
 
 const NEXT_STATUS = { approve: 'approved', deny: 'denied', revoke: 'revoked' } as const;
 
+/** Dummy species, keyed by scientific name (what `species=` filters on). */
+const SPECIES = [
+  { scientific: 'Panthera pardus', common: 'Leopard' },
+  { scientific: 'Pavo cristatus', common: 'Indian Peafowl' },
+  { scientific: 'Haliastur indus', common: 'Brahminy Kite' },
+  { scientific: 'Axis axis', common: 'Chital' },
+  { scientific: 'Alcedo atthis', common: 'Common Kingfisher' },
+];
+
 const ALBUMS = ['Kabini Demo', 'Goa Demo Trip', 'Cricket Demo Day', 'Family Demo'];
 const TAGS = ['beach', 'cricket', 'sunset', 'temple', 'forest', 'birthday', 'leopard', 'street'];
 
@@ -63,6 +72,7 @@ function rng(seed: number): () => number {
 }
 
 interface MockPhoto {
+  species: string[];
   photo: SerializedPhoto;
   people: string[];
   known: string[];
@@ -85,6 +95,7 @@ function buildLibrary(): MockPhoto[] {
     out.push({
       people,
       known,
+      species: SPECIES.filter((_, k) => (i + k) % 9 === 0).map((s) => s.scientific),
       photo: {
         id,
         canEdit: true,
@@ -131,6 +142,7 @@ function search(params: URLSearchParams): { results: SerializedPhoto[]; total: n
   const album = params.get('album');
   const people = list(params.get('people'));
   const known = list(params.get('known'));
+  const species = params.get('species');
   const from = params.get('from');
   const to = params.get('to');
   const onThisDay = params.get('onThisDay');
@@ -144,6 +156,7 @@ function search(params: URLSearchParams): { results: SerializedPhoto[]; total: n
     if (album && p.album !== album) return false;
     if (!people.every((id) => m.people.includes(id))) return false;
     if (!known.every((id) => m.known.includes(id))) return false;
+    if (species && !m.species.includes(species)) return false;
     if (from && (!date || date < from)) return false;
     if (to && (!date || date > to)) return false;
     if (onThisDay && (!date || date.slice(5) !== onThisDay)) return false;
@@ -220,6 +233,17 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
       };
     });
     return sendJson(res, 200, { albums, total: albums.length });
+  }
+  if (path === '/albums/contents') {
+    const inAlbum = LIBRARY.filter((m) => m.photo.album === url.searchParams.get('name'));
+    const count = (has: (m: MockPhoto) => boolean) => inAlbum.filter(has).length;
+    const people = OWN.slice(0, 3).map((p) => ({ id: p.id, name: p.name, canEdit: true, photoCount: count((m) => m.people.includes(p.id)), cover: null }));
+    const known = KNOWN.slice(0, 1).map((k) => ({ id: k.id, name: k.name, photoCount: count((m) => m.known.includes(k.id)), cover: null }));
+    const species = SPECIES.map((s) => {
+      const first = inAlbum.find((m) => m.species.includes(s.scientific)) ?? LIBRARY[0];
+      return { ...s, photoCount: count((m) => m.species.includes(s.scientific)), coverPhotoId: first.photo.id, thumbnailUrl: `/thumbnails/${first.photo.id}` };
+    });
+    return sendJson(res, 200, { people, known, species });
   }
   if (path === '/search') return sendJson(res, 200, search(url.searchParams));
   if (path === '/timeline') return sendJson(res, 200, { groups: [], nextCursor: null });

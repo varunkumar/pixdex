@@ -1,4 +1,5 @@
 import type {
+  AlbumContents,
   AlbumsPageResponse,
   AlbumsResponse,
   DailyPickResponse,
@@ -27,6 +28,8 @@ export interface SearchParams {
   people?: string[];
   /** Known personality ids (AND with people, combined cap 5). */
   known?: string[];
+  /** Scientific name of one species (photos of it, any album you can see). */
+  species?: string;
   sort?: PhotoSort;
   limit?: number;
   offset?: number;
@@ -105,6 +108,7 @@ export class WorkerApiClient {
     if (params.album) query.set('album', params.album);
     if (params.people?.length) query.set('people', params.people.join(','));
     if (params.known?.length) query.set('known', params.known.join(','));
+    if (params.species) query.set('species', params.species);
     if (params.sort) query.set('sort', params.sort);
     if (params.limit != null) query.set('limit', String(params.limit));
     if (params.offset != null) query.set('offset', String(params.offset));
@@ -149,6 +153,10 @@ export class WorkerApiClient {
   }
 
   /** Album names only, for dropdowns. */
+  async getAlbumContents(album: string): Promise<AlbumContents> {
+    return this.getJson<AlbumContents>(`/albums/contents?name=${encodeURIComponent(album)}`);
+  }
+
   async getAlbums(): Promise<string[]> {
     const { albums } = await this.getJson<AlbumsResponse>('/albums?names=1');
     return albums;

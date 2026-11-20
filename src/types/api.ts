@@ -162,6 +162,38 @@ export interface PersonSummary {
   cover: SerializedFace | null;
 }
 
+/** One person in an album (`GET /albums/contents`). */
+export interface AlbumPersonTile {
+  id: string;
+  name: string | null;
+  canEdit: boolean;
+  photoCount: number;
+  cover: SerializedFace | null;
+}
+
+/** One known personality in an album. */
+export interface AlbumKnownTile {
+  id: string;
+  name: string;
+  photoCount: number;
+  cover: SerializedFace | null;
+}
+
+/** One species in an album; `scientific` is the `species=` filter key. */
+export interface AlbumSpeciesTile {
+  scientific: string;
+  common: string;
+  photoCount: number;
+  coverPhotoId: string;
+  thumbnailUrl: string;
+}
+
+export interface AlbumContents {
+  people: AlbumPersonTile[];
+  known: AlbumKnownTile[];
+  species: AlbumSpeciesTile[];
+}
+
 /** A known personality (global reference data) matched in at least one photo the caller can see. */
 export interface KnownPersonSummary {
   id: string;
