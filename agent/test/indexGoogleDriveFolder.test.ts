@@ -152,6 +152,94 @@ describe('indexGoogleDriveFolder', () => {
     expect(await readdir(tempRoot)).toHaveLength(0);
   });
 
+  it('downloads the next photo while the current one is still being indexed, with at most two staged', async () => {
+    const bytes = {
+      a: await makeJpeg({ r: 10, g: 20, b: 30 }),
+      b: await makeJpeg({ r: 60, g: 70, b: 80 }),
+      c: await makeJpeg({ r: 110, g: 120, b: 130 }),
+    };
+    const downloads: string[] = [];
+    const driveClient: DriveFilesClient = {
+      list: vi.fn().mockResolvedValue({
+        data: {
+          files: ['a', 'b', 'c'].map((id) => ({ id, name: `${id}.jpg`, mimeType: 'image/jpeg' })),
+        },
+      }),
+      get: vi.fn().mockImplementation(async (params: { fileId: string }) => {
+        downloads.push(params.fileId);
+        return { data: Readable.from([bytes[params.fileId as 'a' | 'b' | 'c']]) };
+      }),
+    };
+    const cloudflareClient = {
+      checkHashes: vi.fn().mockResolvedValue(new Set()),
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+    };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let firstCall = true;
+    const staged: number[] = [];
+    const ollamaClient = {
+      chat: vi.fn().mockImplementation(async () => {
+        if (firstCall) {
+          firstCall = false;
+          // Photo a is being analysed: b must already be downloading, c must not be yet.
+          await vi.waitFor(() => expect(downloads).toEqual(['a', 'b']));
+          staged.push((await readdir(tempRoot)).length);
+          release();
+        }
+        await gate;
+        return SAMPLE_RESPONSE;
+      }),
+    };
+
+    const result = await indexGoogleDriveFolder(driveClient, 'folder-1', 'Kanha 2026', {
+      cloudflareClient: cloudflareClient as any,
+      ollamaClient: ollamaClient as any,
+      config,
+      tempDir: tempRoot,
+    });
+
+    expect(result).toEqual({ total: 3, indexed: 3, skipped: 0, failed: 0 });
+    expect(downloads).toEqual(['a', 'b', 'c']);
+    expect(staged[0]).toBeLessThanOrEqual(2);
+    expect(await readdir(tempRoot)).toHaveLength(0);
+  });
+
+  it('reports a failed prefetch against its own photo, cleans up, and carries on', async () => {
+    const good = await makeJpeg({ r: 5, g: 6, b: 7 });
+    const driveClient: DriveFilesClient = {
+      list: vi.fn().mockResolvedValue({
+        data: { files: ['a', 'bad', 'c'].map((id) => ({ id, name: `${id}.jpg`, mimeType: 'image/jpeg' })) },
+      }),
+      get: vi.fn().mockImplementation(async (params: { fileId: string }) => {
+        if (params.fileId === 'bad') throw new Error('boom');
+        const bytes = params.fileId === 'a' ? good : await makeJpeg({ r: 200, g: 100, b: 50 });
+        return { data: Readable.from([bytes]) };
+      }),
+    };
+    const cloudflareClient = {
+      checkHashes: vi.fn().mockResolvedValue(new Set()),
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+    };
+    const ollamaClient = { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) };
+    const lines: string[] = [];
+
+    const result = await indexGoogleDriveFolder(driveClient, 'folder-1', 'Kanha 2026', {
+      cloudflareClient: cloudflareClient as any,
+      ollamaClient: ollamaClient as any,
+      config,
+      tempDir: tempRoot,
+      onProgress: (line: string) => lines.push(line),
+      retry: { retries: 0, baseDelayMs: 0 },
+    } as any);
+
+    expect(result).toEqual({ total: 3, indexed: 2, skipped: 0, failed: 1 });
+    expect(lines.some((l) => l.startsWith('Failed: bad.jpg') && l.includes('boom'))).toBe(true);
+    expect(await readdir(tempRoot)).toHaveLength(0);
+  });
+
   it('continues indexing subsequent files after one file fails', async () => {
     const [firstBytes, secondBytes, thirdBytes] = await Promise.all([
       makeJpeg({ r: 10, g: 20, b: 30 }),

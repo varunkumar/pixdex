@@ -171,6 +171,36 @@ export async function indexGoogleDriveFolder(
   const checked = new Set<string>();
   const seenThisRun = new Set<string>();
 
+  interface StagedPhoto {
+    tempPath: string;
+    contentHash: string;
+    /** Download plus hash time; it overlaps the previous photo's indexing, so it is not part of that photo's wall time. */
+    downloadMs: number;
+  }
+  /** Downloads one photo into staging and hashes it; removes the file again if anything fails. */
+  const stagePhoto = async (image: DriveImageRef): Promise<StagedPhoto> => {
+    // Use only a random UUID (plus the original extension, for format
+    // detection) in the temp filename. `image.name` is untrusted input from
+    // Drive and may contain path-meaningful characters (e.g. "../"), so it
+    // must never be interpolated directly into a filesystem path.
+    // Drive names often lack an extension; fall back to the mime type so format detection works.
+    const ext = path.extname(image.name) || (mime.extension(image.mimeType) ? `.${mime.extension(image.mimeType)}` : '');
+    const tempPath = path.join(tempDir, `pixdex-drive-${randomUUID()}${ext}`);
+    const started = now();
+    try {
+      await downloadDriveFile(driveClient, image.id, tempPath, retry);
+      const downloaded = (await stat(tempPath)).size;
+      if (downloaded > maxBytes) {
+        throw new Error(`downloaded file is ${Math.round(downloaded / 1048576)} MB, over the ${Math.round(maxBytes / 1048576)} MB staging limit (DRIVE_STAGING_MAX_MB)`);
+      }
+      const contentHash = await sha256ContentHash(tempPath);
+      return { tempPath, contentHash, downloadMs: now() - started };
+    } catch (error) {
+      await rm(tempPath, { force: true }).catch(() => {});
+      throw error;
+    }
+  };
+
   for (;;) {
     absorbAll(scanner.drain());
     if (pending.length === 0) {
@@ -187,17 +217,24 @@ export async function indexGoogleDriveFolder(
       fresh.forEach((hash) => checked.add(hash));
     }
 
-    for (const image of batch) {
+    // The next photo is downloaded and hashed while the current one is indexed (the model work is slow,
+    // the download is not), so at most two files are staged at once: the current and the next.
+    const startFetch = (image: DriveImageRef | undefined): Promise<StagedPhoto> | undefined => {
+      if (!image) return undefined;
+      if (image.sha256 && alreadyIndexed.has(image.sha256)) return undefined; // skipped without a download
+      if (image.size !== undefined && image.size > maxBytes) return undefined; // refused below, before any download
+      const fetching = stagePhoto(image);
+      fetching.catch(() => {}); // the failure is reported where the photo is consumed
+      return fetching;
+    };
+    let fetching = startFetch(batch[0]);
+
+    for (const [position, image] of batch.entries()) {
       // Keep absorbing folders as they finish while photos are being indexed (cheap, no waiting).
       absorbAll(scanner.drain());
-
-      // Use only a random UUID (plus the original extension, for format
-      // detection) in the temp filename. `image.name` is untrusted input from
-      // Drive and may contain path-meaningful characters (e.g. "../"), so it
-      // must never be interpolated directly into a filesystem path.
-      // Drive names often lack an extension; fall back to the mime type so format detection works.
-      const ext = path.extname(image.name) || (mime.extension(image.mimeType) ? `.${mime.extension(image.mimeType)}` : '');
-      const tempPath = path.join(tempDir, `pixdex-drive-${randomUUID()}${ext}`);
+      const current = fetching;
+      fetching = startFetch(batch[position + 1]);
+      let tempPath: string | undefined;
 
       const photoStart = now();
       const where = `${image.folderPath.join(' / ')} | ${formatMB(image.size)}`;
@@ -212,13 +249,10 @@ export async function indexGoogleDriveFolder(
         if (image.size !== undefined && image.size > maxBytes) {
           throw new Error(`file is ${Math.round(image.size / 1048576)} MB, over the ${Math.round(maxBytes / 1048576)} MB staging limit (DRIVE_STAGING_MAX_MB)`);
         }
-        await downloadDriveFile(driveClient, image.id, tempPath, retry);
-        const downloaded = (await stat(tempPath)).size;
-        const downloadMs = now() - photoStart;
-        if (downloaded > maxBytes) {
-          throw new Error(`downloaded file is ${Math.round(downloaded / 1048576)} MB, over the ${Math.round(maxBytes / 1048576)} MB staging limit (DRIVE_STAGING_MAX_MB)`);
-        }
-        const contentHash = await sha256ContentHash(tempPath);
+        const staged = await current!;
+        tempPath = staged.tempPath;
+        const { contentHash, downloadMs } = staged;
+        const processStart = now();
 
         if (seenThisRun.has(contentHash)) {
           skipped++;
@@ -238,7 +272,7 @@ export async function indexGoogleDriveFolder(
 
         const stages = await processFile(
           {
-            localPath: tempPath,
+            localPath: staged.tempPath,
             contentHash,
             source: 'google_drive',
             driveFileId: image.id,
@@ -252,7 +286,7 @@ export async function indexGoogleDriveFolder(
         indexedAt.push(finishedAt);
         reportProgress(
           onProgress,
-          `Indexed: ${image.name} | album ${albumFromDrivePath(image.folderPath)} | ${where} | download ${formatDuration(downloadMs)}, index ${formatDuration(finishedAt - photoStart - downloadMs)}, total ${formatDuration(finishedAt - photoStart)} | ${formatStages(stages)} | #${indexed}`
+          `Indexed: ${image.name} | album ${albumFromDrivePath(image.folderPath)} | ${where} | download ${formatDuration(downloadMs)}, index ${formatDuration(finishedAt - processStart)}, total ${formatDuration(finishedAt - photoStart)} | ${formatStages(stages)} | #${indexed}`
         );
         onFile({ file: image.name, outcome: 'indexed' });
       } catch (error) {
@@ -267,7 +301,7 @@ export async function indexGoogleDriveFolder(
         // the folder, so it is swallowed here rather than propagated.
         if (now() - lastSummary >= SUMMARY_LOG_INTERVAL_MS) summary('Progress');
         try {
-          await rm(tempPath, { force: true });
+          if (tempPath) await rm(tempPath, { force: true });
         } catch (cleanupError) {
           reportProgress(
             onProgress,

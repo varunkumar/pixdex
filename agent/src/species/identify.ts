@@ -1,7 +1,7 @@
 import sharp from 'sharp';
 import type { RegionPhoto, RegionsConfig } from './regions';
 import { resolveRegion } from './regions';
-import { decideSpecies } from './decide';
+import { decideSpecies, type SpeciesDetection } from './decide';
 import type { SpeciesEntry } from '../cloudflareClient';
 import type { SpeciesSidecarClient } from './sidecarClient';
 
@@ -11,6 +11,21 @@ export const SPECIES_MAX_SIDE = 1600;
 export interface SpeciesDeps {
   sidecar: Pick<SpeciesSidecarClient, 'identify'>;
   regions: RegionsConfig;
+}
+
+/** The slow half: the sidecar call. It needs only the picture and the region, not the vision model's words. */
+export async function detectSpecies(
+  original: Buffer,
+  photo: RegionPhoto,
+  deps: SpeciesDeps
+): Promise<{ detection: SpeciesDetection; region: string }> {
+  const jpeg = await sharp(original)
+    .rotate()
+    .resize({ width: SPECIES_MAX_SIDE, height: SPECIES_MAX_SIDE, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 90 })
+    .toBuffer();
+  const region = resolveRegion(photo, deps.regions);
+  return { detection: await deps.sidecar.identify(jpeg, region), region };
 }
 
 /**
@@ -23,12 +38,6 @@ export async function identifySpecies(
   photo: RegionPhoto & { subjects?: string[] },
   deps: SpeciesDeps
 ): Promise<{ model: string; region: string; species: SpeciesEntry[] }> {
-  const jpeg = await sharp(original)
-    .rotate()
-    .resize({ width: SPECIES_MAX_SIDE, height: SPECIES_MAX_SIDE, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 90 })
-    .toBuffer();
-  const region = resolveRegion(photo, deps.regions);
-  const detection = await deps.sidecar.identify(jpeg, region);
+  const { detection, region } = await detectSpecies(original, photo, deps);
   return { model: detection.model, region, species: decideSpecies(detection, { subjects: photo.subjects }) };
 }

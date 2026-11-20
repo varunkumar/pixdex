@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import type { CloudflareClient, FacePayload } from '../cloudflareClient';
 import { decodeEmbedding, type Gallery } from '../known/gallery';
 import { matchKnown } from '../known/matcher';
-import type { FaceSidecarClient } from './sidecarClient';
+import type { FaceSidecarClient, SidecarDetection } from './sidecarClient';
 
 const MAX_SIDE = 1280;
 /** Longest side of the upright copy that face crops are cut from (sharper than the 1280 px detection copy). */
@@ -109,12 +109,14 @@ export async function scanFaces(
      * never rotated. `processFile` passes `upright`; `backfill-faces` keeps `raw`.
      */
     boxFrame?: 'raw' | 'upright';
+    /** A detection already started for this file (so it can overlap other work); `sidecar.detect` is not called. */
+    detection?: Promise<SidecarDetection>;
     onWarning?: (message: string) => void;
   }
 ): Promise<number> {
   const { sidecar, cloudflareClient, onWarning, boxFrame = 'raw' } = deps;
   let { gallery } = deps;
-  const detection = await sidecar.detect(await prepareFaceImage(filePath));
+  const detection = await (deps.detection ?? sidecar.detect(await prepareFaceImage(filePath)));
   const { width, height } = detection;
   const { orientation } = await sharp(filePath).metadata();
 
