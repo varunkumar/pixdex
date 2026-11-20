@@ -155,6 +155,49 @@ describe('AlbumPhotos tabs', () => {
     );
   });
 
+  it('an unknown species deep link shows the chip and the filtered empty message, no error', async () => {
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [], total: 0 });
+    renderAlbum('/albums/Kanha?species=Nope');
+    expect(await screen.findByText('Nope')).toBeInTheDocument();
+    expect(await screen.findByText('No photos in this album match this filter.')).toBeInTheDocument();
+    expect(screen.queryByText('This album has no photos.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/error/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the plain empty message when no filter is active', async () => {
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [], total: 0 });
+    renderAlbum();
+    expect(await screen.findByText('This album has no photos.')).toBeInTheDocument();
+  });
+
+  it('links an own person chip to the person page, once contents load', async () => {
+    renderAlbum('/albums/Kanha?people=p1');
+    expect(await screen.findByRole('link', { name: 'View all photos of Asha' })).toHaveAttribute('href', '/people/p1');
+  });
+
+  it('shows no person link before contents load', async () => {
+    vi.mocked(workerApiClient.getAlbumContents).mockReturnValue(new Promise(() => {}));
+    renderAlbum('/albums/Kanha?people=p1');
+    expect(await screen.findByText('Person')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /view all photos/i })).not.toBeInTheDocument();
+  });
+
+  it('shows no person link for a person the user does not own, nor for known or species', async () => {
+    vi.mocked(workerApiClient.getAlbumContents).mockResolvedValue({
+      ...CONTENTS,
+      people: [{ id: 'p9', name: 'Theirs', canEdit: false, photoCount: 1, cover: null }],
+    });
+    const { router } = renderAlbum('/albums/Kanha?people=p9');
+    expect(await screen.findByText('Theirs')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /view all photos/i })).not.toBeInTheDocument();
+    await router.navigate('/albums/Kanha?known=Q1');
+    expect(await screen.findByText('Some Star')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /view all photos/i })).not.toBeInTheDocument();
+    await router.navigate('/albums/Kanha?species=Elephas%20maximus');
+    expect(await screen.findByText('Asian Elephant')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /view all photos/i })).not.toBeInTheDocument();
+  });
+
   it('labels a nameless person Unnamed', async () => {
     renderAlbum('/albums/Kanha?tab=people');
     expect(await screen.findByRole('button', { name: /^Unnamed/ })).toBeInTheDocument();

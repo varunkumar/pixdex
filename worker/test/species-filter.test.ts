@@ -60,6 +60,14 @@ describe('GET /search?species=', () => {
     expect(await ids('/search?species=Panthera%20tigris')).toEqual(['e2', 't1']);
   });
 
+  it('ignores species JSON that is not an array of objects without a 500', async () => {
+    await insert('str', 'A', '["Elephas maximus"]');
+    await insert('num', 'A', '[1, null, "x"]');
+    await insert('obj', 'A', '{"scientific":"Elephas maximus"}');
+    expect((await get('/search?species=Elephas%20maximus')).status).toBe(200);
+    expect(await ids('/search?album=A&species=Elephas%20maximus')).toEqual(['e1', 'e2']);
+  });
+
   it('an unknown name gives zero results', async () => {
     const body = await json('/search?album=A&species=Nope%20nope');
     expect(body.total).toBe(0);

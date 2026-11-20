@@ -160,6 +160,37 @@ describe('GET /albums/contents', () => {
     expect(body.species).toHaveLength(200);
   });
 
+  it('caps people and known tiles at 200', async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => String(i).padStart(3, '0'));
+    await env.DB.batch([
+      ...ids.map((i) => env.DB.prepare(`INSERT INTO persons (id, name, owner_email, created_at) VALUES (?, ?, 'owner@example.com', 'x')`).bind(`bp${i}`, `Bulk ${i}`)),
+      ...ids.map((i) => env.DB.prepare(`INSERT INTO known_people (id, name, aliases, created_at) VALUES (?, ?, '[]', 'x')`).bind(`BQ${i}`, `Known ${i}`)),
+      ...ids.map((i) =>
+        env.DB.prepare(
+          `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, crop_key, person_id, assign_status, known_id, known_score, created_at)
+           VALUES (?, 'a1', 0, 0, 1, 1, 0.9, x'00', 'm', NULL, ?, 'confirmed', ?, 0.9, '2026-01-01T00:00:00.000Z')`
+        ).bind(`bf${i}`, `bp${i}`, `BQ${i}`)
+      ),
+    ]);
+    const body = await (await get('Kanha')).json<any>();
+    expect(body.people).toHaveLength(200);
+    expect(body.known).toHaveLength(200);
+    // equal counts tie-break by name, then by id: stable order
+    expect(body.people[0].id).toBe('bp000');
+    expect(body.known[0].id).toBe('BQ000');
+  });
+
+  it('serves albums whose names have spaces and special characters, untrimmed', async () => {
+    for (const album of [' Padded ', 'A/B #1 & C', 'Café Zürich 東京']) {
+      await insertPhoto(`s-${album.length}`, album, JSON.stringify([sp('Tiger', 'Panthera tigris', 0.9)]));
+      const res = await get(album);
+      expect(res.status, album).toBe(200);
+      expect((await res.json<any>()).species[0].scientific, album).toBe('Panthera tigris');
+    }
+    expect((await get('Padded')).status).toBe(404); // the trimmed name is a different album
+    expect((await SELF.fetch('https://example.com/albums/contents?name=', { headers: readHeaders() })).status).toBe(400);
+  });
+
   it('requires the read token and the viewer email', async () => {
     const url = 'https://example.com/albums/contents?name=Kanha';
     expect((await SELF.fetch(url)).status).toBe(401);

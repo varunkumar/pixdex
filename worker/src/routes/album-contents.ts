@@ -35,31 +35,39 @@ export const PEOPLE_COUNTS_SQL = (scopeSql: string) => `SELECT f.person_id AS id
   p.owner_email = ? AS can_edit, ${PERSON_NAME_SQL} AS name
   FROM photos ph CROSS JOIN faces f ON f.photo_id = ph.id JOIN persons p ON p.id = f.person_id
   WHERE ph.album = ?${scopeSql} AND f.assign_status IN ('auto', 'confirmed')
-  GROUP BY f.person_id ORDER BY photo_count DESC, name COLLATE NOCASE LIMIT ${MAX_TILES}`;
+  GROUP BY f.person_id ORDER BY photo_count DESC, name COLLATE NOCASE, f.person_id LIMIT ${MAX_TILES}`;
 
 export const KNOWN_COUNTS_ALBUM_SQL = (scopeSql: string) => `SELECT f.known_id AS id, k.name AS name, COUNT(DISTINCT f.photo_id) AS photo_count
   FROM photos ph CROSS JOIN faces f ON f.photo_id = ph.id JOIN known_people k ON k.id = f.known_id
   WHERE ph.album = ?${scopeSql} AND f.known_id IS NOT NULL
-  GROUP BY f.known_id ORDER BY photo_count DESC, k.name COLLATE NOCASE LIMIT ${MAX_TILES}`;
+  GROUP BY f.known_id ORDER BY photo_count DESC, k.name COLLATE NOCASE, f.person_id LIMIT ${MAX_TILES}`;
 
-/** One cover face per key (person_id or known_id): a window function over the album's faces, no per-tile query. */
-const coversSql = (keyCol: string, extraWhere: string, order: string, scopeSql: string) => `SELECT * FROM (
+/**
+ * One cover face per key (person_id or known_id): a window function over the album's faces, no per-tile query.
+ * The inner query selects only keys and ranking columns; the person name (a person_labels probe for people the caller
+ * does not own) is computed once per kept cover in the outer SELECT, not per face row. Binds: email x2, album, scope.
+ */
+const coversSql = (keyCol: string, extraWhere: string, order: string, scopeSql: string, joinPersons: boolean) => `SELECT w.key, w.id, w.photo_id,
+  w.bbox_x, w.bbox_y, w.bbox_w, w.bbox_h, w.det_score, w.person_id, w.assign_status, w.match_score, w.crop_key,
+  ${PERSON_NAME_SQL} AS person_name, w.content_hash
+  FROM (
   SELECT f.${keyCol} AS key, f.id, f.photo_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h, f.det_score, f.person_id,
-    f.assign_status, f.match_score, f.crop_key, ${PERSON_NAME_SQL} AS person_name, ph.content_hash AS content_hash,
+    f.assign_status, f.match_score, f.crop_key, ph.content_hash AS content_hash,
     ROW_NUMBER() OVER (PARTITION BY f.${keyCol} ORDER BY ${order}) AS rn
-  FROM photos ph CROSS JOIN faces f ON f.photo_id = ph.id LEFT JOIN persons p ON p.id = f.person_id
+  FROM photos ph CROSS JOIN faces f ON f.photo_id = ph.id${joinPersons ? ' LEFT JOIN persons p ON p.id = f.person_id' : ''}
   WHERE ph.album = ?${scopeSql} AND ${extraWhere}
-) WHERE rn = 1`;
+) w LEFT JOIN persons p ON p.id = w.person_id WHERE w.rn = 1`;
 
 export const PEOPLE_COVERS_SQL = (scopeSql: string) =>
   coversSql(
     'person_id',
     `f.assign_status IN ('auto', 'confirmed')`,
     `(f.id = p.cover_face_id) DESC, (f.assign_status = 'confirmed') DESC, f.det_score DESC, f.id`,
-    scopeSql
+    scopeSql,
+    true
   );
 export const KNOWN_COVERS_SQL = (scopeSql: string) =>
-  coversSql('known_id', 'f.known_id IS NOT NULL', 'f.known_score DESC, f.det_score DESC, f.id', scopeSql);
+  coversSql('known_id', 'f.known_id IS NOT NULL', 'f.known_score DESC, f.det_score DESC, f.id', scopeSql, false);
 
 /** Species grouped by scientific name; the bare columns (common, pid, h) come from the row holding MAX(score). */
 export const SPECIES_SQL = (scopeSql: string) => `SELECT sci AS scientific, com AS common, pid, h, COUNT(DISTINCT pid) AS photo_count, MAX(score) AS best FROM (
@@ -78,10 +86,11 @@ type CoverRow = FaceRow & { key: string; person_name: string | null; content_has
  * D1 (one batch, 6 statements, no N+1, 0 writes): a visibility check (albums primary key plus json_each over one
  * row), then five photo-driven statements that start from idx_photos_album and probe faces via idx_faces_photo_id
  * (or json_each over photos.species). Rows read are bounded by the album's photos and faces; the person-name
- * label lookup runs only for people the caller does not own. Worker CPU: mapping at most 200 tiles per list.
+ * label lookup runs once per people-count row and once per kept cover (never per face row), only for people the
+ * caller does not own. Worker CPU: mapping at most 200 tiles per list.
  */
 export async function albumContentsRoute(c: Context<{ Bindings: Env }>) {
-  const name = (c.req.query('name') ?? '').trim();
+  const name = c.req.query('name') ?? '';
   if (!name) return c.json({ error: 'name is required' }, 400);
   const user = userOf(c);
   const scope = scopeFor(user, 'ph.album');

@@ -51,7 +51,7 @@ machine. Originals stay on local disk or Google Drive.
   name, size or rating. An album page has Photos, People and Species tabs: pick a
   person, known personality or species to see only those photos in the album (one
   filter at a time, shown as a removable chip; people you do not own show your own
-  label or "Unnamed").
+  label or "Unnamed"; a person you created also links to all their photos).
 - **Get a daily pick.** One nature or wildlife photo a day (no people), chosen from
   your best-rated shots, never from the same album two days running.
 - **Rate and correct the AI.** Add 1-5 stars and fix the title, species and tags.
