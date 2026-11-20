@@ -10,32 +10,158 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
     searchPage: vi.fn(),
     getAlbumsPage: vi.fn(),
+    getAlbumContents: vi.fn(),
     setAlbumCover: vi.fn(),
     thumbnailUrl: vi.fn((p: { thumbnailUrl?: string }) => `/api${p.thumbnailUrl}`),
   },
 }));
 vi.mock('../../services/originals', () => ({ getOriginalUrl: vi.fn(() => null) }));
 
-describe('AlbumPhotos', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto()], total: 1 });
-    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
-      albums: [
-        {
-          name: 'Kanha',
-          photoCount: 1,
-          coverPhotoId: 'other',
-          coverThumbnailUrl: null,
-          latestDate: null,
-          role: 'owner',
-        },
-      ],
-      total: 1,
-    });
-    vi.mocked(workerApiClient.setAlbumCover).mockResolvedValue();
+const FACE = {
+  id: 'f1',
+  photoId: 'ph1',
+  thumbnailUrl: '/thumbnails/ph1',
+  bbox: { x: 0.1, y: 0.1, w: 0.3, h: 0.3 },
+  detScore: 0.9,
+  personId: null,
+  personName: null,
+  status: 'unassigned' as const,
+  matchScore: null,
+};
+const CONTENTS = {
+  people: [
+    { id: 'p1', name: 'Asha', canEdit: true, photoCount: 3, cover: FACE },
+    { id: 'p2', name: null, canEdit: true, photoCount: 1, cover: null },
+  ],
+  known: [{ id: 'Q1', name: 'Some Star', photoCount: 2, cover: FACE }],
+  species: [
+    { scientific: 'Elephas maximus', common: 'Asian Elephant', photoCount: 4, coverPhotoId: 'ph1', thumbnailUrl: '/thumbnails/ph1' },
+  ],
+};
+
+function renderAlbum(route = '/albums/Kanha') {
+  return renderWithRouter(
+    [
+      {
+        path: '/albums/:name',
+        element: <AlbumPhotos />,
+      },
+    ],
+    [route]
+  );
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto()], total: 1 });
+  vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+    albums: [
+      {
+        name: 'Kanha',
+        photoCount: 1,
+        coverPhotoId: 'other',
+        coverThumbnailUrl: null,
+        latestDate: null,
+        role: 'owner',
+      },
+    ],
+    total: 1,
+  });
+  vi.mocked(workerApiClient.setAlbumCover).mockResolvedValue();
+  vi.mocked(workerApiClient.getAlbumContents).mockResolvedValue(CONTENTS);
+});
+
+describe('AlbumPhotos tabs', () => {
+  it('shows People and Species tabs with counts once contents load', async () => {
+    renderAlbum();
+    expect(await screen.findByRole('tab', { name: /People/ })).toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: /Species/ })).toHaveTextContent('1');
+    expect(screen.getByRole('tab', { name: /Photos/ })).toBeInTheDocument();
+    expect(workerApiClient.getAlbumContents).toHaveBeenCalledWith('Kanha');
   });
 
+  it('hides both tabs for empty contents', async () => {
+    vi.mocked(workerApiClient.getAlbumContents).mockResolvedValue({ people: [], known: [], species: [] });
+    renderAlbum();
+    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    await waitFor(() => expect(workerApiClient.getAlbumContents).toHaveBeenCalled());
+    expect(screen.queryByRole('tab', { name: /People/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Species/ })).not.toBeInTheDocument();
+  });
+
+  it('shows one line on a contents error and keeps the photos', async () => {
+    vi.mocked(workerApiClient.getAlbumContents).mockRejectedValue(new Error('boom'));
+    renderAlbum();
+    expect(await screen.findByText(/could not load people and species/i)).toBeInTheDocument();
+    expect(screen.getByText('A leopard in a tree.')).toBeInTheDocument();
+  });
+
+  it('filters by a person tile, shows the chip and the total, and clearing drops the param', async () => {
+    const { router } = renderAlbum('/albums/Kanha?page=2&tab=people');
+    fireEvent.click(await screen.findByRole('button', { name: /^Asha/ }));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenLastCalledWith({
+        album: 'Kanha',
+        people: ['p1'],
+        sort: 'date',
+        limit: 12,
+        offset: 0,
+      })
+    );
+    expect(router.state.location.search).toBe('?people=p1');
+    expect(await screen.findByText('Asha')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+    await waitFor(() => expect(router.state.location.search).toBe(''));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenLastCalledWith({ album: 'Kanha', sort: 'date', limit: 12, offset: 0 })
+    );
+  });
+
+  it('uses known for a known tile and species for a species tile', async () => {
+    renderAlbum('/albums/Kanha?tab=people');
+    fireEvent.click(await screen.findByRole('button', { name: /^Some Star/ }));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenLastCalledWith(expect.objectContaining({ known: ['Q1'] }))
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /Species/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Asian Elephant/ }));
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ species: 'Elephas maximus' })
+      )
+    );
+  });
+
+  it('applies only the first filter kind from the URL', async () => {
+    renderAlbum('/albums/Kanha?people=p1&species=x');
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith({
+        album: 'Kanha',
+        people: ['p1'],
+        sort: 'date',
+        limit: 12,
+        offset: 0,
+      })
+    );
+  });
+
+  it('deep link by species shows the scientific name chip before contents load', async () => {
+    vi.mocked(workerApiClient.getAlbumContents).mockReturnValue(new Promise(() => {}));
+    renderAlbum('/albums/Kanha?species=Elephas%20maximus');
+    expect(await screen.findByText('Elephas maximus')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ species: 'Elephas maximus' }))
+    );
+  });
+
+  it('labels a nameless person Unnamed', async () => {
+    renderAlbum('/albums/Kanha?tab=people');
+    expect(await screen.findByRole('button', { name: /^Unnamed/ })).toBeInTheDocument();
+  });
+});
+
+describe('AlbumPhotos', () => {
   it('lists the album photos by date using the decoded name from the URL', async () => {
     renderWithProviders(<AlbumPhotos />, {
       route: `/albums/${encodeURIComponent('A/B #1')}`,
@@ -76,6 +202,9 @@ describe('AlbumPhotos', () => {
   });
 
   it('returns to the albums listing it came from, keeping its sort', async () => {
+    // A total that really has a page 2, so the pagination never clamps the page away (the clamp raced this test).
+    const base = await workerApiClient.getAlbumsPage();
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({ ...base, total: 30 });
     renderWithRouter(
       [
         { path: '/albums', element: <Albums /> },

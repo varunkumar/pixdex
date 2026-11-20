@@ -3,7 +3,18 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import type { SerializedFace } from '../types/api';
 
 /** A face: the sharp crop when the agent uploaded one, else cut out of the 400 px photo thumbnail by its bbox. */
-const FaceTile = ({ face, size = 72, index }: { face: SerializedFace; size?: number; index?: number }) => {
+const FaceTile = ({
+  face,
+  size = 72,
+  index,
+  round = false,
+}: {
+  face: SerializedFace;
+  size?: number;
+  index?: number;
+  /** Circular crop instead of a rounded square. */
+  round?: boolean;
+}) => {
   const { x, y, w, h } = face.bbox;
   // Scale so the bbox fills the tile, then shift so the bbox origin sits at the tile origin.
   const bgW = w > 0 ? size / w : size;
@@ -19,7 +30,7 @@ const FaceTile = ({ face, size = 72, index }: { face: SerializedFace; size?: num
         style={{
           width: size,
           height: size,
-          borderRadius: 'var(--mantine-radius-md)',
+          borderRadius: round ? '50%' : 'var(--mantine-radius-md)',
           backgroundColor: 'var(--mantine-color-default-hover)',
           backgroundImage: src ? `url("${src}")` : undefined,
           backgroundRepeat: 'no-repeat',

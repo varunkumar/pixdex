@@ -152,11 +152,12 @@ export class WorkerApiClient {
     return this.getJson<TimelineBucketsResponse>(`/timeline/buckets${suffix}`);
   }
 
-  /** Album names only, for dropdowns. */
+  /** The people, known personalities and species in one album (tiles for the album tabs). */
   async getAlbumContents(album: string): Promise<AlbumContents> {
     return this.getJson<AlbumContents>(`/albums/contents?name=${encodeURIComponent(album)}`);
   }
 
+  /** Album names only, for dropdowns. */
   async getAlbums(): Promise<string[]> {
     const { albums } = await this.getJson<AlbumsResponse>('/albums?names=1');
     return albums;

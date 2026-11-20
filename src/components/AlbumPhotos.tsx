@@ -1,9 +1,12 @@
-import { Anchor, Badge, Button, Group, Select, Stack, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Group, Select, Stack, Tabs, Text, Title } from '@mantine/core';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
+import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
+import AlbumFilterChip from './AlbumFilterChip';
+import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
 import ShareAlbumModal from './ShareAlbumModal';
@@ -26,12 +29,50 @@ const AlbumPhotos = () => {
   const sort = SORT_OPTIONS.find((o) => o.value === requestedSort)?.value ?? 'date';
   const queryClient = useQueryClient();
 
+  // One filter at a time from the URL (people, then known, then species).
+  const filter = useMemo(() => parseAlbumFilter(params), [params]);
+
   const { data, error, isPlaceholderData } = useQuery({
-    queryKey: ['album-photos', name, page, size, sort],
-    queryFn: () => workerApiClient.searchPage({ album: name, sort, limit: size, offset }),
+    queryKey: ['album-photos', name, page, size, sort, filter?.kind ?? null, filter?.value ?? null],
+    queryFn: () =>
+      workerApiClient.searchPage({
+        album: name,
+        ...(filter?.kind === 'people' && { people: [filter.value] }),
+        ...(filter?.kind === 'known' && { known: [filter.value] }),
+        ...(filter?.kind === 'species' && { species: filter.value }),
+        sort,
+        limit: size,
+        offset,
+      }),
     enabled: name !== '',
     placeholderData: keepPreviousData,
   });
+
+  const { data: contents, isError: contentsError } = useQuery({
+    queryKey: ['album-contents', name],
+    queryFn: () => workerApiClient.getAlbumContents(name),
+    staleTime: 5 * 60 * 1000,
+    enabled: name !== '' && data !== undefined,
+  });
+  const people = contents?.people ?? [];
+  const known = contents?.known ?? [];
+  const species = contents?.species ?? [];
+  const peopleCount = people.length + known.length;
+  const requestedTab = params.get('tab');
+  const tab =
+    (requestedTab === 'people' && peopleCount > 0) || (requestedTab === 'species' && species.length > 0)
+      ? requestedTab
+      : 'photos';
+  const pick = (picked: AlbumFilter) => update({ ...filterPatch(picked), tab: null }, { resetPage: true });
+  const chipLabel = !filter
+    ? ''
+    : filter.kind === 'people'
+      ? people.find((p) => p.id === filter.value)
+        ? (people.find((p) => p.id === filter.value)?.name ?? 'Unnamed')
+        : 'Person'
+      : filter.kind === 'known'
+        ? (known.find((k) => k.id === filter.value)?.name ?? 'Person')
+        : (species.find((s) => s.scientific === filter.value)?.common ?? filter.value);
 
   const { data: summary } = useQuery({
     queryKey: ['album-summary', name],
@@ -101,9 +142,29 @@ const AlbumPhotos = () => {
         <Text c="red">{setCover.error instanceof Error ? setCover.error.message : 'Could not set cover'}</Text>
       )}
 
-      {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
-      {data && data.results.length === 0 && <Text c="dimmed">This album has no photos.</Text>}
-      {data && data.results.length > 0 && (
+      {contentsError && <Text c="dimmed">Could not load people and species.</Text>}
+      {(peopleCount > 0 || species.length > 0) && (
+        <Tabs value={tab} onChange={(v) => update({ tab: v === 'photos' ? null : v })}>
+          <Tabs.List>
+            <Tabs.Tab value="photos">Photos</Tabs.Tab>
+            {peopleCount > 0 && <Tabs.Tab value="people">People ({peopleCount})</Tabs.Tab>}
+            {species.length > 0 && <Tabs.Tab value="species">Species ({species.length})</Tabs.Tab>}
+          </Tabs.List>
+        </Tabs>
+      )}
+      {tab === 'people' && <PeopleTiles people={people} known={known} onPick={pick} />}
+      {tab === 'species' && <SpeciesTiles species={species} onPick={pick} />}
+
+      {tab === 'photos' && filter && (
+        <AlbumFilterChip
+          label={chipLabel}
+          kind={filter.kind}
+          onClear={() => update(filterPatch(null), { resetPage: true })}
+        />
+      )}
+      {tab === 'photos' && error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
+      {tab === 'photos' && data && data.results.length === 0 && <Text c="dimmed">This album has no photos.</Text>}
+      {tab === 'photos' && data && data.results.length > 0 && (
         <PhotoGrid
           photos={data.results}
           footer={(photo) =>
@@ -127,7 +188,7 @@ const AlbumPhotos = () => {
         <ShareAlbumModal album={name} sharedWith={summary.sharedWith ?? []} opened onClose={() => setSharing(false)} />
       )}
 
-      {data && (
+      {tab === 'photos' && data && (
         <ListPagination
           page={page}
           size={size}

@@ -237,11 +237,32 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   if (path === '/albums/contents') {
     const inAlbum = LIBRARY.filter((m) => m.photo.album === url.searchParams.get('name'));
     const count = (has: (m: MockPhoto) => boolean) => inAlbum.filter(has).length;
-    const people = OWN.slice(0, 3).map((p) => ({ id: p.id, name: p.name, canEdit: true, photoCount: count((m) => m.people.includes(p.id)), cover: null }));
-    const known = KNOWN.slice(0, 1).map((k) => ({ id: k.id, name: k.name, photoCount: count((m) => m.known.includes(k.id)), cover: null }));
-    const species = SPECIES.map((s) => {
-      const first = inAlbum.find((m) => m.species.includes(s.scientific)) ?? LIBRARY[0];
-      return { ...s, photoCount: count((m) => m.species.includes(s.scientific)), coverPhotoId: first.photo.id, thumbnailUrl: `/thumbnails/${first.photo.id}` };
+    const face = (id: string, name: string | null, status: 'confirmed' | 'unassigned', has: (m: MockPhoto) => boolean) => {
+      const m = inAlbum.find(has);
+      if (!m) return null;
+      return {
+        id: `cover-${id}`,
+        photoId: m.photo.id,
+        thumbnailUrl: `/thumbnails/${m.photo.id}`,
+        cropUrl: null,
+        bbox: { x: 0.3, y: 0.2, w: 0.3, h: 0.3 },
+        detScore: 0.99,
+        personId: status === 'confirmed' ? id : null,
+        personName: name,
+        status,
+        matchScore: null,
+      };
+    };
+    const people = OWN.slice(0, 3)
+      .map((p) => ({ id: p.id, name: p.name, canEdit: true, photoCount: count((m) => m.people.includes(p.id)), cover: face(p.id, p.name, 'confirmed', (m) => m.people.includes(p.id)) }))
+      .filter((p) => p.photoCount > 0);
+    const known = KNOWN.slice(0, 1)
+      .map((k) => ({ id: k.id, name: k.name, photoCount: count((m) => m.known.includes(k.id)), cover: face(k.id, null, 'unassigned', (m) => m.known.includes(k.id)) }))
+      .filter((k) => k.photoCount > 0);
+    const species = SPECIES.flatMap((s) => {
+      const first = inAlbum.find((m) => m.species.includes(s.scientific));
+      if (!first) return [];
+      return [{ ...s, photoCount: count((m) => m.species.includes(s.scientific)), coverPhotoId: first.photo.id, thumbnailUrl: `/thumbnails/${first.photo.id}` }];
     });
     return sendJson(res, 200, { people, known, species });
   }
