@@ -154,7 +154,7 @@ never leave local disk or Google Drive.
   folder, later ones are large because indexing is slower than listing): the same rows read in total, at most about `photos / 500`
   plus a handful of extra Worker requests compared with one global call.
 - `index-drive` log lines (for measuring throughput): every line starts with an ISO-8601 UTC timestamp (added in `driveCli.ts`). An `Indexed:` line
-  carries the album, folder path, file size, download / index / total time and the running `#N`; `Skipping` and `Failed` lines carry the folder path
+  carries the album, folder path, file size, download / index / total time, per-stage seconds (`StageTimings` from `processFile`: exif, analyze, rate, caption, hashtags, thumbnail, species, ingest, faces; stages that did not run are left out) and the running `#N`; `Skipping` and `Failed` lines carry the folder path
   and size. A `Progress:` line every 5 minutes and a final `Summary:` line give indexed / skipped / failed counts, photos per minute overall and over
   the last 20 indexed, queued vs found photos, folders listed, elapsed time and an upper-bound ETA for the queued photos (some will be skipped, and
   the listing may still be running). Agent-only: no Worker CPU or D1 change.

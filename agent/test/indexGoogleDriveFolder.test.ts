@@ -313,7 +313,7 @@ describe('indexGoogleDriveFolder', () => {
 
     const indexedLines = messages.filter((m) => m.startsWith('Indexed:'));
     expect(indexedLines).toHaveLength(2);
-    expect(indexedLines[0]).toMatch(/^Indexed: a\.jpg \| album Trips \| Trips \| 2\.0 MB \| download \d+s, index \d+s, total \d+s \| #1$/);
+    expect(indexedLines[0]).toMatch(/^Indexed: a\.jpg \| album Trips \| Trips \| 2\.0 MB \| download \d+s, index \d+s, total \d+s \| (?:[a-z]+ [\d.]+s ?)+ \| #1$/);
     expect(indexedLines[1]).toContain('#2');
     const summary = messages.at(-1)!;
     expect(summary).toMatch(/^Summary: 2 indexed, 0 skipped, 0 failed \| [\d.]+ photos\/min overall, [\d.]+ last 2 \| 0 queued of 2 found, 1 folders listed \| elapsed /);

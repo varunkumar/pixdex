@@ -78,6 +78,34 @@ describe('processFile', () => {
     expect(payload.subjects).toEqual(['leopard', 'big cat']);
   });
 
+  it('returns per-stage timings, with the model stages measured and absent stages at 0', async () => {
+    const ollamaClient = {
+      chat: vi.fn().mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        return SAMPLE_RESPONSE;
+      }),
+    };
+    const cloudflareClient = {
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const timings = await processFile(
+      { localPath: filePath, contentHash: 'b'.repeat(64), source: 'local', filename: 'fixture.jpg' },
+      { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config }
+    );
+
+    expect(Object.keys(timings).sort()).toEqual(
+      ['analyze', 'caption', 'exif', 'faces', 'hashtags', 'ingest', 'rate', 'species', 'thumbnail'].sort()
+    );
+    expect(timings.analyze).toBeGreaterThanOrEqual(10);
+    expect(timings.rate).toBeGreaterThanOrEqual(10);
+    expect(timings.caption).toBeGreaterThanOrEqual(10);
+    expect(timings.hashtags).toBeGreaterThanOrEqual(10);
+    expect(timings.species).toBe(0); // species off
+    expect(timings.faces).toBe(0); // no sidecar
+  });
+
   it('refuses to index, before any model call, when OWNER_EMAIL is not set', async () => {
     const cloudflareClient = { uploadThumbnail: vi.fn(), ingestPhoto: vi.fn() };
     const ollamaClient = { chat: vi.fn() };
@@ -132,7 +160,7 @@ describe('processFile', () => {
         { localPath: filePath, contentHash: 'c'.repeat(64), source: 'local', filename: 'fixture.jpg' },
         { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, faceSidecar: faceSidecar as any }
       )
-    ).resolves.toBeUndefined();
+    ).resolves.toHaveProperty('analyze');
 
     expect(cloudflareClient.ingestPhoto).toHaveBeenCalled();
     expect(faceSidecar.detect).toHaveBeenCalled();
@@ -191,7 +219,7 @@ describe('processFile', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await expect(
         processFile(input(), { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, species: { sidecar: { identify } as any, regions } })
-      ).resolves.toBeUndefined();
+      ).resolves.toHaveProperty('analyze');
       const payload = cloudflareClient.ingestPhoto.mock.calls[0][0];
       expect(payload.species).toBeUndefined();
       expect(payload.speciesModel).toBeUndefined();

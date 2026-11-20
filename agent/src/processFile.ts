@@ -34,25 +34,49 @@ export interface ProcessFileDeps {
   species?: SpeciesDeps;
 }
 
-export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps): Promise<void> {
+/** Milliseconds spent in each stage of one photo, for measuring where indexing time goes. */
+export interface StageTimings {
+  exif: number;
+  analyze: number;
+  rate: number;
+  caption: number;
+  hashtags: number;
+  thumbnail: number;
+  species: number;
+  ingest: number;
+  faces: number;
+}
+
+export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps): Promise<StageTimings> {
   const { cloudflareClient, ollamaClient, config } = deps;
+  const timings: StageTimings = { exif: 0, analyze: 0, rate: 0, caption: 0, hashtags: 0, thumbnail: 0, species: 0, ingest: 0, faces: 0 };
+  const timed = async <T>(stage: keyof StageTimings, run: () => Promise<T>): Promise<T> => {
+    const started = Date.now();
+    try {
+      return await run();
+    } finally {
+      timings[stage] += Date.now() - started;
+    }
+  };
   // Fail before any Ollama work: every photo is indexed on behalf of one album owner.
   const ownerEmail = config.OWNER_EMAIL?.trim().toLowerCase();
   if (!ownerEmail) throw new Error('OWNER_EMAIL must be set in agent/.env to index photos (the album owner)');
 
-  const exif = await extractExifData(input.localPath);
-  const analysis = await analyzeImage(input.localPath, ollamaClient, { album: input.album });
-  const rating = await ratePhoto(input.localPath, ollamaClient);
-  const caption = await generateText(buildCaptionPrompt(analysis), ollamaClient);
-  const hashtags = await generateText(buildHashtagPrompt(analysis), ollamaClient);
-  const thumbnail = await generateThumbnail(input.localPath);
+  const exif = await timed('exif', () => extractExifData(input.localPath));
+  const analysis = await timed('analyze', () => analyzeImage(input.localPath, ollamaClient, { album: input.album }));
+  const rating = await timed('rate', () => ratePhoto(input.localPath, ollamaClient));
+  const caption = await timed('caption', () => generateText(buildCaptionPrompt(analysis), ollamaClient));
+  const hashtags = await timed('hashtags', () => generateText(buildHashtagPrompt(analysis), ollamaClient));
+  const thumbnail = await timed('thumbnail', () => generateThumbnail(input.localPath));
   let found: { model: string; species: SpeciesEntry[] } | undefined;
   if (deps.species) {
     try {
-      found = await identifySpecies(
-        await readFile(input.localPath),
-        { album: input.album ?? null, latitude: exif.camera.latitude ?? null, longitude: exif.camera.longitude ?? null, subjects: [...analysis.subjects, ...analysis.tags] },
-        deps.species
+      found = await timed('species', async () =>
+        identifySpecies(
+          await readFile(input.localPath),
+          { album: input.album ?? null, latitude: exif.camera.latitude ?? null, longitude: exif.camera.longitude ?? null, subjects: [...analysis.subjects, ...analysis.tags] },
+          deps.species!
+        )
       );
     } catch (error) {
       // The photo is still indexed (species_model stays empty); `backfill-species` will pick this one up.
@@ -96,18 +120,22 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
   // safe to retry/duplicate (keyed by content hash), but once ingestPhoto
   // succeeds, future dedup checks skip this hash forever, so we must not
   // create the metadata row until we know the thumbnail landed.
-  await cloudflareClient.uploadThumbnail(input.contentHash, thumbnail);
-  await cloudflareClient.ingestPhoto(payload);
+  await timed('ingest', async () => {
+    await cloudflareClient.uploadThumbnail(input.contentHash, thumbnail);
+    await cloudflareClient.ingestPhoto(payload);
+  });
 
   if (deps.faceSidecar) {
     try {
-      await scanFaces(input.localPath, input.contentHash, {
-        sidecar: deps.faceSidecar,
-        cloudflareClient,
-        gallery: deps.knownGallery,
-        boxFrame: 'upright',
-        onWarning: (message) => console.warn(message),
-      });
+      await timed('faces', () =>
+        scanFaces(input.localPath, input.contentHash, {
+          sidecar: deps.faceSidecar!,
+          cloudflareClient,
+          gallery: deps.knownGallery,
+          boxFrame: 'upright',
+          onWarning: (message) => console.warn(message),
+        })
+      );
     } catch (error) {
       // The photo is already indexed; `backfill-faces` will pick this one up.
       console.warn(
@@ -115,6 +143,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
       );
     }
   }
+  return timings;
 }
 
 function buildCaptionPrompt(analysis: ImageAnalysisResult): string {

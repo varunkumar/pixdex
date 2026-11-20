@@ -7,7 +7,7 @@ import { albumFromDrivePath, DriveScanner, type DriveFolderResult } from './driv
 import { defaultStagingDir, stagingLimitBytes, sweepStaleStaging } from './staging';
 import type { IndexFileEvent } from '../indexLocalFolder';
 import { sha256ContentHash } from '../hashing';
-import { processFile } from '../processFile';
+import { processFile, type StageTimings } from '../processFile';
 import type { OllamaClient } from '../ollama/client';
 import type { CloudflareClient } from '../cloudflareClient';
 import type { AgentConfig } from '../config';
@@ -55,6 +55,14 @@ function formatDuration(ms: number): string {
   const m = Math.floor(total / 60);
   if (m < 60) return `${m}m${String(total % 60).padStart(2, '0')}s`;
   return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`;
+}
+
+/** e.g. `analyze 62.1s rate 8.0s caption 3.2s ...`; zero-time stages (species off, faces off) are left out. */
+function formatStages(stages: StageTimings): string {
+  return (Object.entries(stages) as Array<[string, number]>)
+    .filter(([, ms]) => ms > 0)
+    .map(([name, ms]) => `${name} ${(ms / 1000).toFixed(1)}s`)
+    .join(' ');
 }
 
 function formatMB(bytes: number | undefined): string {
@@ -228,7 +236,7 @@ export async function indexGoogleDriveFolder(
         }
         seenThisRun.add(contentHash);
 
-        await processFile(
+        const stages = await processFile(
           {
             localPath: tempPath,
             contentHash,
@@ -244,7 +252,7 @@ export async function indexGoogleDriveFolder(
         indexedAt.push(finishedAt);
         reportProgress(
           onProgress,
-          `Indexed: ${image.name} | album ${albumFromDrivePath(image.folderPath)} | ${where} | download ${formatDuration(downloadMs)}, index ${formatDuration(finishedAt - photoStart - downloadMs)}, total ${formatDuration(finishedAt - photoStart)} | #${indexed}`
+          `Indexed: ${image.name} | album ${albumFromDrivePath(image.folderPath)} | ${where} | download ${formatDuration(downloadMs)}, index ${formatDuration(finishedAt - photoStart - downloadMs)}, total ${formatDuration(finishedAt - photoStart)} | ${formatStages(stages)} | #${indexed}`
         );
         onFile({ file: image.name, outcome: 'indexed' });
       } catch (error) {
