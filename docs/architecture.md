@@ -106,7 +106,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/known`, `me`, `admin/requests`) plus `originals/:id`, which goes
+`people/groups`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails are cached immutably (content-hash addressed); other routes use
@@ -138,6 +138,15 @@ candidate). It returns 404 if no photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
+- `routes/album-contents.ts` - `GET /albums/contents?name=` returns `{ people, known, species }` for one album the viewer can
+  see (404 otherwise, 400 without `name`): per-list tiles with `photoCount` (distinct photos), at most 200 each, sorted by
+  count then name; people use only `auto` and `confirmed` faces and carry the viewer's own label or `null` for people they
+  do not own (`PERSON_NAME_SQL`); covers are one face per person or known id (window function), the species cover is the
+  best-scored photo. One `DB.batch` of 6 statements, 0 written; rows read are the album's photos plus about 4 passes over
+  its faces, `json_each` over `photos.species` runs in D1 (UNMEASURED on real D1; fallback: a `photo_species` table, see the
+  spec). `GET /search` also takes `species=<scientific name>` (`db/species.ts`), AND-combined with the other filters.
+  The album page (`AlbumPhotos`) reads it once per view (React Query, 5 minutes) for its People and Species tabs; a tile
+  sets one of `people`, `known`, `species` in the URL (one at a time) and the photo grid uses `/search`.
 - `routes/timeline.ts` - `GET /timeline` returns date groups, newest first, as
   `{ groups: [{ key, total, shown, photos }], nextCursor }`. Params: `zoom`
   (`year`, `month` default, `day`; groups are months, months, days, with an

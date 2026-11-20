@@ -48,7 +48,10 @@ machine. Originals stay on local disk or Google Drive.
   "Add keywords" lets you type keywords yourself without the model. See
   [AI Search](#ai-search).
 - **Browse albums.** Cover photos, counts and average ratings, sorted by date,
-  name, size or rating.
+  name, size or rating. An album page has Photos, People and Species tabs: pick a
+  person, known personality or species to see only those photos in the album (one
+  filter at a time, shown as a removable chip; people you do not own show your own
+  label or "Unnamed").
 - **Get a daily pick.** One nature or wildlife photo a day (no people), chosen from
   your best-rated shots, never from the same album two days running.
 - **Rate and correct the AI.** Add 1-5 stars and fix the title, species and tags.
