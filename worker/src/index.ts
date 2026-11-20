@@ -14,6 +14,7 @@ import { ingestSpeciesRoute, pendingSpeciesRoute, speciesSummaryRoute } from './
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { ingestRelocateRoute } from './routes/ingest-relocate';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
+import { albumContentsRoute } from './routes/album-contents';
 import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
 import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute } from './routes/faces';
 import {
@@ -110,6 +111,9 @@ guardedWrite('POST', '/faces/:id/unassign', unassignFaceRoute);
 
 app.use('/albums', requireReadToken);
 app.get('/albums', getAlbumsRoute);
+
+app.use('/albums/contents', requireReadToken);
+app.get('/albums/contents', albumContentsRoute);
 
 app.use('/albums/cover', requireReadToken);
 guardedWrite('PUT', '/albums/cover', putAlbumCoverRoute);

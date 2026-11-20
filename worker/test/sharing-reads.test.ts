@@ -117,6 +117,16 @@ describe('album sharing: scoped photo reads', () => {
     });
   });
 
+  describe('/albums/contents', () => {
+    it('needs X-Viewer-Email and hides an album that is not visible', async () => {
+      const noViewer = await SELF.fetch('https://example.com/albums/contents?name=Kanha', { headers: { Authorization: readHeaders().Authorization } });
+      expect(noViewer.status).toBe(401);
+      expect((await get('/albums/contents?name=Kanha', VIEWER)).status).toBe(200);
+      expect((await get('/albums/contents?name=Ranthambore', VIEWER)).status).toBe(404);
+      expect((await get('/albums/contents?name=Kanha', STRANGER)).status).toBe(404);
+    });
+  });
+
   describe('/albums', () => {
     it('lists only visible names', async () => {
       expect((await json('/albums', OWNER)).albums).toEqual(['Kanha', 'Ranthambore']);

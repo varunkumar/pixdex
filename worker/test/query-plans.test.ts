@@ -5,6 +5,7 @@ import { KNOWN_COUNTS_SQL } from '../src/routes/known';
 import { knownFilterSql } from '../src/db/known';
 import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
+import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
 const U = { email: 'owner@example.com' };
@@ -153,5 +154,24 @@ describe('person label resolution', () => {
     const pending = await plan(pendingSpeciesSql(), 'bioclip-2', 0, 100);
     expect(pending).toMatch(/SEARCH photos USING INTEGER PRIMARY KEY \(rowid>\?\)/);
     expect(pending).not.toMatch(/USE TEMP B-TREE FOR ORDER BY/);
+  });
+
+  it('album contents start from idx_photos_album and probe faces by idx_faces_photo_id', async () => {
+    const sc = scopeFor(U, 'ph.album');
+    const queries: [string, string, unknown[]][] = [
+      ['people counts', PEOPLE_COUNTS_SQL(sc.sql), [U.email, U.email, U.email, 'Kanha', ...sc.params]],
+      ['known counts', KNOWN_COUNTS_ALBUM_SQL(sc.sql), ['Kanha', ...sc.params]],
+      ['people covers', PEOPLE_COVERS_SQL(sc.sql), [U.email, U.email, 'Kanha', ...sc.params]],
+      ['known covers', KNOWN_COVERS_SQL(sc.sql), [U.email, U.email, 'Kanha', ...sc.params]],
+    ];
+    for (const [label, sql, params] of queries) {
+      const p = await plan(sql, ...params);
+      expect(p, label).toMatch(/SEARCH ph USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
+      expect(p, label).toMatch(/SEARCH f USING INDEX idx_faces_photo_id \(photo_id=\?\)/);
+      expect(p, label).not.toMatch(/SCAN (ph|photos|f|faces)\b/);
+    }
+    const sp = await plan(SPECIES_SQL(sc.sql), 'Kanha', ...sc.params);
+    expect(sp).toMatch(/SEARCH ph USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
+    expect(sp).not.toMatch(/SCAN (ph|photos)\b/);
   });
 });
