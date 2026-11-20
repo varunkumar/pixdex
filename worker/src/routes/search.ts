@@ -6,6 +6,7 @@ import { dateFilterSql, parseDateFilter } from '../db/dateFilter';
 import { userOf } from '../access';
 import { canEditFor, scopeFor } from '../db/visibility';
 import { knownFilterSql, MAX_FILTER_PEOPLE, parseKnown } from '../db/known';
+import { speciesFilterSql } from '../db/species';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 
 export async function searchRoute(c: Context<{ Bindings: Env }>) {
@@ -24,6 +25,7 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
   ].slice(0, MAX_FILTER_PEOPLE);
   // Known personalities share the cap with people: people take their slots first.
   const known = knownFilterSql(parseKnown(c.req.query('known'), people.length));
+  const species = speciesFilterSql(c.req.query('species'));
   const limit = Math.min(Math.max(Number(c.req.query('limit')) || 20, 1), 100);
   const offset = Math.max(Number(c.req.query('offset')) || 0, 0);
 
@@ -59,6 +61,8 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
     }
     from += known.sql;
     params.push(...known.params);
+    from += species.sql;
+    params.push(...species.params);
 
     // Album pages sort by date (newest first), name (file name) or rating (best first).
     // Otherwise best text match first; newest indexed first among equals and when
@@ -73,7 +77,7 @@ export async function searchRoute(c: Context<{ Bindings: Env }>) {
             : match
               ? `ORDER BY bm25(photos_fts, 1.0, 4.0), last_indexed DESC`
               : `ORDER BY last_indexed DESC`;
-    const unfiltered = !match && !album && !dates.sql && people.length === 0 && !known.sql && access.sql === '';
+    const unfiltered = !match && !album && !dates.sql && people.length === 0 && !known.sql && !species.sql && access.sql === '';
     const [rows, count] = await Promise.all([
       c.env.DB.prepare(`SELECT photos.* ${from} ${order} LIMIT ? OFFSET ?`)
         .bind(...params, limit, offset)

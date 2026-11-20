@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { MATCHABLE_SQL } from '../src/people/matching';
 import { KNOWN_COUNTS_SQL } from '../src/routes/known';
 import { knownFilterSql } from '../src/db/known';
+import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
+import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
 const U = { email: 'owner@example.com' };
@@ -93,6 +95,20 @@ describe('person label resolution', () => {
     const p = await plan('SELECT 1 AS x FROM person_labels WHERE viewer_email = ? AND lower(name) = lower(?) AND person_id != ?', U.email, 'x', '');
     expect(p).toMatch(/idx_person_labels_viewer_name_lower/);
   });
+  it('the species filter with an album runs its json_each check only on that album rows', async () => {
+    const f = speciesFilterSql('Elephas maximus');
+    const s = scopeFor(U, 'photos.album');
+    const p = await plan(
+      `SELECT photos.* FROM photos WHERE 1=1 AND album = ?${s.sql}${f.sql} ORDER BY last_indexed DESC LIMIT ? OFFSET ?`,
+      'A',
+      ...s.params,
+      ...f.params,
+      20,
+      0
+    );
+    expect(p).toMatch(/SEARCH photos USING INDEX idx_photos_album \(album=\?\)/);
+    expect(p).not.toMatch(/SCAN photos/);
+  });
   it('the known-person photo filter uses the partial index', async () => {
     const p = await plan('SELECT photo_id FROM faces WHERE known_id IN (?,?) GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?', 'Q1', 'Q2', 2);
     expect(p).toMatch(/idx_faces_known_photo/);
@@ -138,5 +154,24 @@ describe('person label resolution', () => {
     const pending = await plan(pendingSpeciesSql(), 'bioclip-2', 0, 100);
     expect(pending).toMatch(/SEARCH photos USING INTEGER PRIMARY KEY \(rowid>\?\)/);
     expect(pending).not.toMatch(/USE TEMP B-TREE FOR ORDER BY/);
+  });
+
+  it('album contents start from idx_photos_album and probe faces by idx_faces_photo_id', async () => {
+    const sc = scopeFor(U, 'ph.album');
+    const queries: [string, string, unknown[]][] = [
+      ['people counts', PEOPLE_COUNTS_SQL(sc.sql), [U.email, U.email, U.email, 'Kanha', ...sc.params]],
+      ['known counts', KNOWN_COUNTS_ALBUM_SQL(sc.sql), ['Kanha', ...sc.params]],
+      ['people covers', PEOPLE_COVERS_SQL(sc.sql), [U.email, U.email, 'Kanha', ...sc.params]],
+      ['known covers', KNOWN_COVERS_SQL(sc.sql), [U.email, U.email, 'Kanha', ...sc.params]],
+    ];
+    for (const [label, sql, params] of queries) {
+      const p = await plan(sql, ...params);
+      expect(p, label).toMatch(/SEARCH ph USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
+      expect(p, label).toMatch(/SEARCH f USING INDEX idx_faces_photo_id \(photo_id=\?\)/);
+      expect(p, label).not.toMatch(/SCAN (ph|photos|f|faces)\b/);
+    }
+    const sp = await plan(SPECIES_SQL(sc.sql), 'Kanha', ...sc.params);
+    expect(sp).toMatch(/SEARCH ph USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
+    expect(sp).not.toMatch(/SCAN (ph|photos)\b/);
   });
 });

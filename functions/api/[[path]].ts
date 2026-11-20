@@ -42,6 +42,7 @@ const ALLOWED_PATHS = [
   /^timeline$/,
   /^timeline\/buckets$/,
   /^albums$/,
+  /^albums\/contents$/,
   /^daily-pick$/,
   /^photos\/[^/]+$/,
   /^thumbnails\/[^/]+$/,

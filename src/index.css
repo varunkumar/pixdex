@@ -10,6 +10,7 @@ body {
   --pixdex-ink-blue: var(--mantine-color-blue-light-color);
   --pixdex-ink-violet: var(--mantine-color-violet-light-color);
   --pixdex-ink-teal: var(--mantine-color-teal-light-color);
+  --pixdex-ink-green: var(--mantine-color-green-light-color);
   --pixdex-ink-gray: var(--mantine-color-gray-light-color);
 }
 
@@ -17,5 +18,6 @@ body {
   --pixdex-ink-blue: var(--mantine-color-blue-3);
   --pixdex-ink-violet: var(--mantine-color-violet-3);
   --pixdex-ink-teal: var(--mantine-color-teal-3);
+  --pixdex-ink-green: var(--mantine-color-green-3);
   --pixdex-ink-gray: var(--mantine-color-gray-3);
 }

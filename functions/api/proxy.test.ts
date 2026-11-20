@@ -115,6 +115,17 @@ describe('Pages Function identity', () => {
     expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
   });
 
+  it('forwards GET albums/contents with the read token and verified email, but not ingest', async () => {
+    const res = await get('/api/albums/contents?name=A', ' Friend@Example.com');
+    expect(res.status).toBe(200);
+    const [[url, init]] = upstreamCalls();
+    expect(String(url)).toBe('https://worker.example.dev/albums/contents?name=A');
+    const h = new Headers(init.headers);
+    expect(h.get('x-viewer-email')).toBe('friend@example.com');
+    expect(h.get('authorization')).toBe('Bearer secret-token');
+    expect((await get('/api/ingest/photo', 'friend@example.com')).status).toBe(404);
+  });
+
   describe('known personalities', () => {
     it('forwards GET people/known with the verified email, READ_TOKEN and the query string', async () => {
       const res = await get('/api/people/known?limit=5', ' Friend@Example.com');
