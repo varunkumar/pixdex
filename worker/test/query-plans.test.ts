@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MATCHABLE_SQL } from '../src/people/matching';
 import { KNOWN_COUNTS_SQL } from '../src/routes/known';
 import { knownFilterSql } from '../src/db/known';
+import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
@@ -92,6 +93,20 @@ describe('person label resolution', () => {
   it('the clash check uses the per-viewer name index', async () => {
     const p = await plan('SELECT 1 AS x FROM person_labels WHERE viewer_email = ? AND lower(name) = lower(?) AND person_id != ?', U.email, 'x', '');
     expect(p).toMatch(/idx_person_labels_viewer_name_lower/);
+  });
+  it('the species filter with an album runs its json_each check only on that album rows', async () => {
+    const f = speciesFilterSql('Elephas maximus');
+    const s = scopeFor(U, 'photos.album');
+    const p = await plan(
+      `SELECT photos.* FROM photos WHERE 1=1 AND album = ?${s.sql}${f.sql} ORDER BY last_indexed DESC LIMIT ? OFFSET ?`,
+      'A',
+      ...s.params,
+      ...f.params,
+      20,
+      0
+    );
+    expect(p).toMatch(/SEARCH photos USING INDEX idx_photos_album \(album=\?\)/);
+    expect(p).not.toMatch(/SCAN photos/);
   });
   it('the known-person photo filter uses the partial index', async () => {
     const p = await plan('SELECT photo_id FROM faces WHERE known_id IN (?,?) GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?', 'Q1', 'Q2', 2);
