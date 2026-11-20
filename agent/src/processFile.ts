@@ -8,10 +8,11 @@ import { generateText } from './ollama/generateText';
 import type { OllamaClient } from './ollama/client';
 import { CloudflareClient, type IngestPhotoPayload, type SpeciesEntry } from './cloudflareClient';
 import type { AgentConfig } from './config';
-import { scanFaces } from './faces/scanFaces';
+import { prepareFaceImage, scanFaces } from './faces/scanFaces';
 import type { Gallery } from './known/gallery';
 import type { FaceSidecarClient } from './faces/sidecarClient';
-import { identifySpecies, type SpeciesDeps } from './species/identify';
+import { detectSpecies, type SpeciesDeps } from './species/identify';
+import { decideSpecies } from './species/decide';
 
 export interface ProcessFileInput {
   localPath: string;
@@ -63,21 +64,37 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
   if (!ownerEmail) throw new Error('OWNER_EMAIL must be set in agent/.env to index photos (the album owner)');
 
   const exif = await timed('exif', () => extractExifData(input.localPath));
+
+  // The face and species sidecars need only the picture (species also the region, from EXIF and album),
+  // not the vision model's words, so they start now and run while the model works. Their time is
+  // counted in `faces` and `species` even though it overlaps `analyze`, so stage times can add up to
+  // more than the wall time. A failure is held and handled at the same place as before.
+  const faceDetection = deps.faceSidecar
+    ? timed('faces', async () => deps.faceSidecar!.detect(await prepareFaceImage(input.localPath)))
+    : undefined;
+  const speciesDetection = deps.species
+    ? timed('species', async () =>
+        detectSpecies(
+          await readFile(input.localPath),
+          { album: input.album ?? null, latitude: exif.camera.latitude ?? null, longitude: exif.camera.longitude ?? null },
+          deps.species!
+        )
+      )
+    : undefined;
+  // If a model call throws first, these must not become unhandled rejections.
+  faceDetection?.catch(() => {});
+  speciesDetection?.catch(() => {});
+
   const analysis = await timed('analyze', () => analyzeImage(input.localPath, ollamaClient, { album: input.album }));
   const rating = await timed('rate', () => ratePhoto(input.localPath, ollamaClient));
   const caption = await timed('caption', () => generateText(buildCaptionPrompt(analysis), ollamaClient));
   const hashtags = await timed('hashtags', () => generateText(buildHashtagPrompt(analysis), ollamaClient));
   const thumbnail = await timed('thumbnail', () => generateThumbnail(input.localPath));
   let found: { model: string; species: SpeciesEntry[] } | undefined;
-  if (deps.species) {
+  if (speciesDetection) {
     try {
-      found = await timed('species', async () =>
-        identifySpecies(
-          await readFile(input.localPath),
-          { album: input.album ?? null, latitude: exif.camera.latitude ?? null, longitude: exif.camera.longitude ?? null, subjects: [...analysis.subjects, ...analysis.tags] },
-          deps.species!
-        )
-      );
+      const { detection } = await speciesDetection;
+      found = { model: detection.model, species: decideSpecies(detection, { subjects: [...analysis.subjects, ...analysis.tags] }) };
     } catch (error) {
       // The photo is still indexed (species_model stays empty); `backfill-species` will pick this one up.
       console.warn(`Species scan failed: ${input.filename} (${error instanceof Error ? error.message : String(error)})`);
@@ -125,7 +142,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     await cloudflareClient.ingestPhoto(payload);
   });
 
-  if (deps.faceSidecar) {
+  if (deps.faceSidecar && faceDetection) {
     try {
       await timed('faces', () =>
         scanFaces(input.localPath, input.contentHash, {
@@ -133,6 +150,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
           cloudflareClient,
           gallery: deps.knownGallery,
           boxFrame: 'upright',
+          detection: faceDetection,
           onWarning: (message) => console.warn(message),
         })
       );

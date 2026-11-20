@@ -171,10 +171,17 @@ never leave local disk or Google Drive.
   `*_AME`, `allresources`, `*.collagefactoryfree`) plus any `--exclude <glob>` (never a Processed folder), skips already-indexed photos by Drive's `sha256Checksum` (equals `sha256ContentHash`) with one batched
   `check-hashes` before any download (files without a checksum are downloaded and checked as before), skips in-run duplicate content,
   retries 429, rate-limit 403, 5xx and network resets (`withDriveRetry`), and on `invalid_grant` deletes `agent/.google-token.json`
-  and exits 1. Local storage (`google/staging.ts`): one photo staged at a time in `<tmpdir>/pixdex-drive-staging`, deleted after every
-  photo; a file over `DRIVE_STAGING_MAX_MB` (optional env, default 1024) is refused before download (listing `size`) and again after
+  and exits 1. Local storage (`google/staging.ts`): the current photo plus the prefetched next one (at most two) staged in `<tmpdir>/pixdex-drive-staging`, each deleted after its photo
+  A file over `DRIVE_STAGING_MAX_MB` (optional env, default 1024) is refused before download (listing `size`) and again after
   (actual size); `pixdex-drive-*` files older than 1 hour are swept at the start of each run (orphans of a killed run). Agent-only: no Worker route, CPU or D1 change (the Worker sees the same `POST /ingest/photo`; fewer `check-hashes`
   calls per file, now one per 500 photos plus one per checksum-less file).
+- Indexing overlap (`processFile.ts`, `google/indexGoogleDriveFolder.ts`): the face and species sidecar calls start right after EXIF and run while the
+  vision model works (they need only the picture and the region; `detectSpecies` is the sidecar half of `identifySpecies`, `decideSpecies` runs after
+  `analyze` because its animal cue needs the model's subjects; `scanFaces` takes the started `detection` promise). Their stage seconds overlap
+  `analyze`, so the stage times on an `Indexed:` line can add up to more than the total. `index-drive` also downloads and hashes the next photo of the
+  batch while the current one is indexed (the `download` seconds are then hidden behind the previous photo; `total` is the wall time from taking the photo
+  to finishing it). A failed prefetch is reported against its own photo. Agent-only: no Worker route, CPU or D1 change; the sidecars now share the
+  machine with Ollama while it works, so `analyze` can run a little slower.
 - Thumbnail orientation (`agent/src/thumbnail.ts`): new thumbnails are stored upright (`.rotate()` applies the EXIF orientation, sharp drops the tag),
   so phone photos are no longer sideways. Thumbnails indexed before this change are still in the raw sensor frame and are left as they are. Face boxes
   must be in the same frame as the photo's thumbnail (the UI draws them over it): `scanFaces(..., { boxFrame })` is `upright` from `processFile` and `raw`

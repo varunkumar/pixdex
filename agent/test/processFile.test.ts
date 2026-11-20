@@ -106,6 +106,67 @@ describe('processFile', () => {
     expect(timings.faces).toBe(0); // no sidecar
   });
 
+  it('starts the face and species sidecars before the vision model answers, and still uses its subjects for species', async () => {
+    const events: string[] = [];
+    const cloudflareClient = {
+      uploadThumbnail: vi.fn().mockResolvedValue(undefined),
+      ingestPhoto: vi.fn().mockResolvedValue(undefined),
+      ingestFaces: vi.fn().mockResolvedValue({ faceIds: [] }),
+    };
+    let first = true;
+    const ollamaClient = {
+      chat: vi.fn().mockImplementation(async () => {
+        if (first) {
+          first = false;
+          await vi.waitFor(() => expect(events).toEqual(expect.arrayContaining(['detect', 'identify'])));
+          events.push('analyze-done');
+        }
+        return SAMPLE_RESPONSE;
+      }),
+    };
+    const faceSidecar = {
+      detect: vi.fn().mockImplementation(async () => {
+        events.push('detect');
+        return { model: 'buffalo_l', width: 100, height: 100, faces: [] };
+      }),
+    };
+    // A 0.6 whole-frame answer is kept only with an animal cue from the vision model ("leopard").
+    const identify = vi.fn().mockImplementation(async () => {
+      events.push('identify');
+      return { model: 'bioclip-2', whole: [['Leopard', 'Panthera pardus', 'Mammalia', 0.6]], boxes: [] };
+    });
+    const regions = { default: 'IN', regions: { IN: { country: 'IN' } }, rules: [] };
+
+    await processFile(
+      { localPath: filePath, contentHash: '9'.repeat(64), source: 'local', filename: 'fixture.jpg' },
+      { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, faceSidecar: faceSidecar as any, species: { sidecar: { identify } as any, regions } }
+    );
+
+    expect(events.indexOf('analyze-done')).toBeGreaterThan(events.indexOf('detect'));
+    expect(events.indexOf('analyze-done')).toBeGreaterThan(events.indexOf('identify'));
+    expect(cloudflareClient.ingestPhoto.mock.calls[0][0].species).toEqual([
+      { common: 'Leopard', scientific: 'Panthera pardus', score: 0.6 },
+    ]);
+    expect(cloudflareClient.ingestFaces).toHaveBeenCalled();
+  });
+
+  it('does not leave an unhandled rejection when a sidecar fails and the model call throws first', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const cloudflareClient = { uploadThumbnail: vi.fn(), ingestPhoto: vi.fn() };
+    const ollamaClient = { chat: vi.fn().mockRejectedValue(new Error('ollama down')) };
+    const faceSidecar = { detect: vi.fn().mockRejectedValue(new Error('face down')) };
+    await expect(
+      processFile(
+        { localPath: filePath, contentHash: '8'.repeat(64), source: 'local', filename: 'fixture.jpg' },
+        { cloudflareClient: cloudflareClient as any, ollamaClient: ollamaClient as any, config, faceSidecar: faceSidecar as any }
+      )
+    ).rejects.toThrow(/ollama down/);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    process.off('unhandledRejection', unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
   it('refuses to index, before any model call, when OWNER_EMAIL is not set', async () => {
     const cloudflareClient = { uploadThumbnail: vi.fn(), ingestPhoto: vi.fn() };
     const ollamaClient = { chat: vi.fn() };
