@@ -85,29 +85,63 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 1px;
   padding: 8px;
   color: #fff;
   font-size: 12px;
   line-height: 1.35;
-  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.75));
+  background: linear-gradient(transparent 55%, rgba(0, 0, 0, 0.72));
   opacity: 0;
   transition: opacity 0.15s;
   pointer-events: none;
 }
-.pdx-tile-overlay b {
-  font-size: 13px;
+.pdx-tile-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
-.pdx-tile-tags {
+.pdx-tile-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.pdx-tile-line b {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pdx-tile-date {
+  flex: none;
+  font-size: 11px;
   opacity: 0.85;
 }
+.pdx-tile-detail {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+/* The album chip uses the same teal as the album chip in the search box (the Mantine "light" tint), laid over an opaque
+   base so it stays readable on a photo. */
 .pdx-tile-album {
-  align-self: flex-start;
-  margin-bottom: 2px;
-  padding: 0 8px;
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  max-width: calc(100% - 52px); /* leaves room for the corner controls on the right */
+  padding: 1px 10px;
   border-radius: 999px;
-  font-size: 10px;
-  background: rgba(8, 127, 91, 0.92);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--mantine-color-teal-light-color);
+  background:
+    linear-gradient(var(--mantine-color-teal-light), var(--mantine-color-teal-light)),
+    var(--mantine-color-body);
 }
 .pdx-tile:hover .pdx-tile-overlay,
 .pdx-tile:focus-within .pdx-tile-overlay {

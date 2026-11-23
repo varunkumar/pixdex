@@ -25,7 +25,8 @@ interface PhotoTileProps {
 }
 
 /**
- * Image-first tile. Hover-capable devices get an overlay (caption, date, tags); touch devices get one caption line
+ * Image-first tile. Hover-capable devices get a compact overlay: the album chip at the top (Search), then the title with
+ * its date on one line and a single row of tags (or the AI note) at the bottom; touch devices get one caption line
  * under the image. Both are always in the DOM, CSS (`@media (hover: ...)`) picks which one is visible.
  */
 const PhotoTile = ({ photo, badges, actions, ratio, onThumbnailSize, note, showAlbum = false }: PhotoTileProps) => {
@@ -49,10 +50,18 @@ const PhotoTile = ({ photo, badges, actions, ratio, onThumbnailSize, note, showA
         </Link>
         <div className="pdx-tile-overlay">
           {album && <span className="pdx-tile-album">{album}</span>}
-          <b>{caption}</b>
-          {date && <span>{date}</span>}
-          {tags.length > 0 && <span className="pdx-tile-tags">{tags.map((t) => `#${t}`).join(' ')}</span>}
-          {note && <span>{note}</span>}
+          <div className="pdx-tile-info">
+            <div className="pdx-tile-line">
+              <b>{caption}</b>
+              {date && <span className="pdx-tile-date">{date}</span>}
+            </div>
+            {/* One detail row: an AI note explains the match, otherwise the first few tags. */}
+            {note ? (
+              <span className="pdx-tile-detail">{note}</span>
+            ) : (
+              tags.length > 0 && <span className="pdx-tile-detail">{tags.map((t) => `#${t}`).join(' ')}</span>
+            )}
+          </div>
         </div>
         {badges && <div className="pdx-tile-badges">{badges}</div>}
         {actions && <div className="pdx-tile-actions">{actions}</div>}

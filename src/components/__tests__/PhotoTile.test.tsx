@@ -75,6 +75,42 @@ describe('PhotoTile', () => {
     expect(screen.getAllByText(/matched: cat/)).toHaveLength(2);
   });
 
+  describe('compact hover overlay', () => {
+    const photo = makePhoto({ shortCaption: 'Family posing together', album: 'Hyderabad Trip', dateTime: DATE, tags: ['family', 'portrait', 'group photo'] });
+    const overlay = () => document.querySelector('.pdx-tile-overlay') as HTMLElement;
+
+    it('puts the album chip at the top, apart from the text block at the bottom', () => {
+      renderWithProviders(<PhotoTile photo={photo} showAlbum />);
+      const chip = overlay().querySelector('.pdx-tile-album') as HTMLElement;
+      expect(chip).toHaveTextContent('Hyderabad Trip');
+      expect(chip.closest('.pdx-tile-info')).toBeNull();
+    });
+
+    it('shows the title with the date on the same line, then the tags: two rows at the bottom, not four', () => {
+      renderWithProviders(<PhotoTile photo={photo} showAlbum />);
+      const info = overlay().querySelector('.pdx-tile-info') as HTMLElement;
+      expect(info.children).toHaveLength(2);
+      const line = info.children[0] as HTMLElement;
+      expect(line).toHaveClass('pdx-tile-line');
+      expect(line).toHaveTextContent('Family posing together');
+      expect(line).toHaveTextContent(dateText);
+      expect(info.children[1]).toHaveTextContent('#family #portrait #group photo');
+    });
+
+    it('shows a note on the second row instead of the tags, so the block stays two rows', () => {
+      renderWithProviders(<PhotoTile photo={photo} note="matched: cat · Rating: 4.2" />);
+      const info = overlay().querySelector('.pdx-tile-info') as HTMLElement;
+      expect(info.children).toHaveLength(2);
+      expect(info.children[1]).toHaveTextContent('matched: cat · Rating: 4.2');
+      expect(info).not.toHaveTextContent('#family');
+    });
+
+    it('has no album chip when the page does not ask for it', () => {
+      renderWithProviders(<PhotoTile photo={photo} />);
+      expect(overlay().querySelector('.pdx-tile-album')).toBeNull();
+    });
+  });
+
   it('renders badges in an always-visible slot, apart from the hover-only actions', () => {
     renderWithProviders(
       <PhotoTile photo={makePhoto()} badges={<span>Cover</span>} actions={<button type="button">Do it</button>} />
