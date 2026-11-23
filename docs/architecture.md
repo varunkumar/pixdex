@@ -33,7 +33,15 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
   matching), Dashboard,
-  DailySuggestion, Lightbox, PhotoGrid/PhotoCard, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
+  DailySuggestion, Lightbox, PhotoGrid/PhotoTile/MasonryGrid (masonry, see Photo grids below), AlbumCard (uniform 4:3 cover tiles), SortIcons, ColumnsToggle, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
+- Photo grids (frontend only, no Worker or D1 cost): `components/MasonryGrid.tsx` deals tiles into the shortest of N columns from each photo's
+  `width / height` (`components/masonry.ts`: `photoRatio` falls back to 4/3 and clamps to 0.4 to 3, `assignColumns`); N is 2 below 576px
+  (1 or 2 by the phone toggle, `hooks/usePhoneColumns.ts`, localStorage `pixdex.phoneColumns`), then 3, 4 (992px) and 5 (1408px).
+  `PhotoTile.tsx` always renders both a hover overlay and a one-line caption; CSS (`@media (hover: none)`, classes `pdx-*` in `index.css`)
+  shows the overlay on hover-capable devices and the caption line on touch devices. `PhotoGrid` takes `badges` (always-visible status, top left), `actions` (corner controls, outside the
+  link), `note` (AI results) and `showAlbum` (Search). Owner actions stay gated as before (album owner: "Set as cover" icon or "Cover" badge;
+  person owner: "Photo actions" menu). Album tiles (`AlbumCard`) are uniform 4:3, with the sharee `AvatarStack` or the owner's avatar at the bottom right.
+  Sort controls are `SortIcons` (icon group from 576px, one menu button below; no direction control, the API has none).
 - AI Search (part of Search: `components/Search.tsx`, `components/AiResults.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
   entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI", Cmd+Enter and the plain-mode "Add keywords" button, which opens the keyword row without the model,
   are gated on it; in AI mode the page button is "Search again", which commits a typed keyword draft and re-runs the keywords without the model, while Enter in the bar stays a plain search; there is no nav entry, and `/ai-search` is a redirect, `LegacyAiRedirect.tsx`, to `/search?mode=ai`). It uses only existing read routes through the existing proxy (`GET search` and thumbnail reads):

@@ -1,18 +1,21 @@
-import { Group, Select, SimpleGrid, Stack, Text, Title } from '@mantine/core';
+import { Group, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import type { IconType } from 'react-icons';
+import { TbCalendar, TbHash, TbStar } from 'react-icons/tb';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type AlbumSort } from '../services/api/WorkerApiClient';
 import AlbumCard from './AlbumCard';
 import ListPagination from './ListPagination';
+import SortIcons from './SortIcons';
 
 const ALBUM_PAGE_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: AlbumSort; label: string }[] = [
-  { value: 'date', label: 'Newest first' },
-  { value: 'rating', label: 'Best rated' },
-  { value: 'name', label: 'Alphabetical' },
-  { value: 'count', label: 'Most photos' },
+const SORT_OPTIONS: { value: AlbumSort; label: string; icon?: IconType; text?: string }[] = [
+  { value: 'date', label: 'Newest first', icon: TbCalendar },
+  { value: 'rating', label: 'Best rated', icon: TbStar },
+  { value: 'name', label: 'Alphabetical', text: 'A-Z' },
+  { value: 'count', label: 'Most photos', icon: TbHash },
 ];
 
 const Albums = () => {
@@ -37,12 +40,10 @@ const Albums = () => {
     <Stack gap="lg">
       <Group justify="space-between" align="center">
         <Title order={2}>Albums</Title>
-        <Select
-          aria-label="Sort albums"
-          data={SORT_OPTIONS}
+        <SortIcons
+          label="Sort albums"
+          options={SORT_OPTIONS}
           value={sort}
-          allowDeselect={false}
-          w={170}
           onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
         />
       </Group>
@@ -51,7 +52,7 @@ const Albums = () => {
       {data && data.albums.length === 0 && <Text c="dimmed">No albums yet.</Text>}
 
       {data && data.albums.length > 0 && (
-        <SimpleGrid cols={{ base: 1, xs: 2, md: 3, lg: 4 }} spacing="md">
+        <SimpleGrid cols={{ base: 2, xs: 3, md: 4, xl: 5 }} spacing="sm">
           {data.albums.map((album) => (
             <AlbumCard key={album.name} album={album} />
           ))}

@@ -21,3 +21,167 @@ body {
   --pixdex-ink-green: var(--mantine-color-green-3);
   --pixdex-ink-gray: var(--mantine-color-gray-3);
 }
+
+/* Masonry photo grid (MasonryGrid, PhotoTile). */
+.pdx-masonry {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pdx-masonry-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+@media (min-width: 62em) {
+  .pdx-masonry,
+  .pdx-masonry-col {
+    gap: 8px;
+  }
+}
+
+/* Photo tile: overlay on hover-capable devices, caption line on touch devices. */
+.pdx-tile {
+  position: relative;
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  background: var(--mantine-color-default-hover);
+}
+.pdx-tile-link {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pdx-tile-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pdx-tile-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1px;
+  padding: 8px;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.75));
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.pdx-tile-overlay b {
+  font-size: 13px;
+}
+.pdx-tile-tags {
+  opacity: 0.85;
+}
+.pdx-tile-album {
+  align-self: flex-start;
+  margin-bottom: 2px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(8, 127, 91, 0.92);
+}
+.pdx-tile:hover .pdx-tile-overlay,
+.pdx-tile:focus-within .pdx-tile-overlay {
+  opacity: 1;
+}
+.pdx-tile-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.pdx-tile:hover .pdx-tile-actions,
+.pdx-tile:focus-within .pdx-tile-actions,
+.pdx-album:hover .pdx-tile-actions,
+.pdx-album:focus-within .pdx-tile-actions {
+  opacity: 1;
+}
+.pdx-tile-cap {
+  display: none;
+  padding: 3px 2px 0;
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Touch as the primary input: no overlay, a caption line and always-visible controls. A touch screen next to a
+   mouse (hybrid laptop) also gets the caption line and the controls, and keeps the hover overlay. */
+@media (hover: none) {
+  .pdx-tile-overlay {
+    display: none;
+  }
+}
+@media (hover: none), (any-pointer: coarse) {
+  .pdx-tile-cap {
+    display: block;
+  }
+  .pdx-tile-actions {
+    opacity: 1;
+  }
+}
+.pdx-tile-badges {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+
+/* Album tile: uniform 4:3 cover with name and count over a bottom gradient. */
+.pdx-album {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+  background: var(--mantine-color-default-hover);
+}
+.pdx-album-link {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+.pdx-album-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px;
+  color: #fff;
+  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.72));
+}
+.pdx-album-chip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+.pdx-album-people {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+}
+
+/* Keyboard focus ring drawn inside the clipped tile (overflow: hidden would hide an outside outline). */
+.pdx-tile-link:focus-visible,
+.pdx-album-link:focus-visible {
+  outline: 3px solid var(--mantine-primary-color-filled);
+  outline-offset: -3px;
+}

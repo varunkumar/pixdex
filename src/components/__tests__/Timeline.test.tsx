@@ -92,11 +92,16 @@ describe('Timeline', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it('offers the phone column toggle next to the zoom control', async () => {
+    renderAt('/timeline');
+    expect(await screen.findByRole('button', { name: /switch to 1 column/i })).toBeInTheDocument();
+  });
+
   it('shows month headings with total and shown counts', async () => {
     renderAt('/timeline');
     expect(await screen.findByText('November 2026')).toBeInTheDocument();
     expect(screen.getByText('142 photos, 18 shown')).toBeInTheDocument();
-    expect(screen.getByText('Photo n0.')).toBeInTheDocument();
+    expect(screen.getAllByText('Photo n0.').length).toBeGreaterThan(0);
     expect(workerApiClient.getTimeline).toHaveBeenCalledWith(expect.objectContaining({ zoom: 'month' }));
   });
 

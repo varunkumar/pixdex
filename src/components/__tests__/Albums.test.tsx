@@ -35,10 +35,10 @@ describe('Albums', () => {
     expect(await screen.findByText('Kanha 2026')).toBeInTheDocument();
     expect(workerApiClient.getAlbumsPage).toHaveBeenCalledWith({ limit: 12, offset: 0, sort: 'date' });
     expect(screen.getAllByText(/3 photos/).length).toBeGreaterThan(0);
-    const cover = screen.getByRole('img', { name: /kanha 2026/i });
+    const cover = document.querySelector('img') as HTMLImageElement;
     expect(cover).toHaveAttribute('src', '/api/thumbnails/h1');
-    // The whole cover photo is shown, never cropped.
-    expect(cover.getAttribute('style')).toContain('--image-object-fit: contain');
+    // Uniform 4:3 tiles: the cover fills the tile.
+    expect(cover.getAttribute('style')).toContain('--image-object-fit: cover');
     expect(screen.getByText('Showing 1-12 of 30')).toBeInTheDocument();
   });
 
@@ -66,8 +66,7 @@ describe('Albums', () => {
 
   it('sorts through the URL and resets to the first page', async () => {
     const { router } = renderWithRouter([{ path: '/albums', element: <Albums /> }], ['/albums?page=2']);
-    fireEvent.click(await screen.findByRole('combobox', { name: /sort albums/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Best rated', hidden: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Best rated' }));
     await waitFor(() => expect(router.state.location.search).toBe('?sort=rating'));
     await waitFor(() =>
       expect(workerApiClient.getAlbumsPage).toHaveBeenLastCalledWith({ limit: 12, offset: 0, sort: 'rating' })
@@ -92,10 +91,9 @@ describe('Albums', () => {
     renderWithProviders(<Albums />, { route: '/albums' });
     await screen.findByText('Mine');
     // Two owned albums get a Share button, the viewer album does not.
-    expect(screen.getAllByRole('button', { name: 'Share' })).toHaveLength(2);
-    expect(screen.getByText('Shared with 1')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^share /i })).toHaveLength(2);
     expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Shared by owner@example.com')).toBeInTheDocument();
+    expect(screen.getByLabelText('owner@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('Shared with you')).toHaveLength(1);
     const theirs = screen.getByText('Theirs').closest('a') as HTMLElement;
     expect(theirs.parentElement?.querySelector('button')).toBeNull();

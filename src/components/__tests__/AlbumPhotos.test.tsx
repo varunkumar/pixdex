@@ -83,7 +83,7 @@ describe('AlbumPhotos tabs', () => {
   it('hides both tabs for empty contents', async () => {
     vi.mocked(workerApiClient.getAlbumContents).mockResolvedValue({ people: [], known: [], species: [] });
     renderAlbum();
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
     await waitFor(() => expect(workerApiClient.getAlbumContents).toHaveBeenCalled());
     expect(screen.queryByRole('tab', { name: /People/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Species/ })).not.toBeInTheDocument();
@@ -93,7 +93,7 @@ describe('AlbumPhotos tabs', () => {
     vi.mocked(workerApiClient.getAlbumContents).mockRejectedValue(new Error('boom'));
     renderAlbum();
     expect(await screen.findByText(/could not load people and species/i)).toBeInTheDocument();
-    expect(screen.getByText('A leopard in a tree.')).toBeInTheDocument();
+    expect(screen.getAllByText('A leopard in a tree.').length).toBeGreaterThan(0);
   });
 
   it('filters by a person tile, shows the chip and the total, and clearing drops the param', async () => {
@@ -220,14 +220,13 @@ describe('AlbumPhotos', () => {
         offset: 0,
       })
     );
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /all albums/i })).toHaveAttribute('href', '/albums');
   });
 
   it('sorts photos through the URL', async () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    fireEvent.click(await screen.findByRole('combobox', { name: /sort photos/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Alphabetical', hidden: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Alphabetical' }));
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenLastCalledWith({
         album: 'Kanha',
@@ -240,8 +239,31 @@ describe('AlbumPhotos', () => {
 
   it('sets a photo as the album cover', async () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    fireEvent.click(await screen.findByRole('button', { name: /set as cover/i }));
+    // Each tile's button names its photo, so a screen reader can tell them apart.
+    const buttons = await screen.findAllByRole('button', { name: /^set as cover: /i });
+    expect(buttons[0]).toHaveAccessibleName(/leopard in a tree/i);
+    fireEvent.click(buttons[0]);
     await waitFor(() => expect(workerApiClient.setAlbumCover).toHaveBeenCalledWith('Kanha', makePhoto().id));
+  });
+
+  it('marks the current cover photo with a Cover badge instead of a button', async () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: [
+        {
+          name: 'Kanha',
+          photoCount: 1,
+          coverPhotoId: makePhoto().id,
+          coverThumbnailUrl: null,
+          latestDate: null,
+          role: 'owner',
+        },
+      ],
+      total: 1,
+    });
+    renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
+    const badge = await screen.findByText('Cover');
+    expect(badge.closest('.pdx-tile-actions')).toBeNull(); // visible without hover
+    expect(screen.queryByRole('button', { name: /set as cover/i })).not.toBeInTheDocument();
   });
 
   it('returns to the albums listing it came from, keeping its sort', async () => {
@@ -277,10 +299,10 @@ describe('AlbumPhotos', () => {
       total: 1,
     });
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Shared with you')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Set as cover' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /set as cover/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^share/i })).not.toBeInTheDocument();
   });
 
   it('shows Share and the sharee avatars to the owner of a shared album', async () => {
@@ -299,7 +321,7 @@ describe('AlbumPhotos', () => {
       total: 1,
     });
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    expect(await screen.findByRole('button', { name: 'Share' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^share/i })).toBeInTheDocument();
     expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
   });
 });

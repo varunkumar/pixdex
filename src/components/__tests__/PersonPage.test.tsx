@@ -68,7 +68,7 @@ describe('PersonPage', () => {
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ people: ['pe1'] }))
     );
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
   });
 
   it('sorts newest first by default and re-sorts through the URL', async () => {
@@ -78,8 +78,7 @@ describe('PersonPage', () => {
         expect.objectContaining({ people: ['pe1'], sort: 'date' })
       )
     );
-    fireEvent.click(await screen.findByRole('combobox', { name: /sort photos/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Best rated', hidden: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Best rated' }));
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenLastCalledWith(
         expect.objectContaining({ people: ['pe1'], sort: 'rating' })
@@ -102,9 +101,22 @@ describe('PersonPage', () => {
     ]);
     vi.mocked(workerApiClient.rejectFace).mockResolvedValue(face('a1'));
     show();
-    expect(await screen.findByText('Auto')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Not Asha' }));
+    expect((await screen.findByText('Auto')).closest('.pdx-tile-actions')).toBeNull(); // visible without hover
+    expect(await screen.findByRole('button', { name: /^photo actions for .*leopard/i })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
     await waitFor(() => expect(workerApiClient.rejectFace).toHaveBeenCalledWith('a1', 'pe1'));
+  });
+
+  it('shows a failed Not action as a notification even though the menu closes', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face('a1', { personId: 'pe1', personName: 'Asha', status: 'auto' }),
+    ]);
+    vi.mocked(workerApiClient.rejectFace).mockRejectedValue(new Error('boom'));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
+    expect(await screen.findByText('Something went wrong, try again')).toBeInTheDocument();
   });
 
   it('Set as cover offers the largest face of the person in the photo and marks the current cover', async () => {
@@ -115,11 +127,12 @@ describe('PersonPage', () => {
     ]);
     vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Set as cover' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as cover' }));
     await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'big'));
   });
 
-  it('shows a Cover badge instead of the button when this photo holds the cover face', async () => {
+  it('shows a disabled Current cover item instead of Set as cover when this photo holds the cover face', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, canEdit: true, cover: face('c9', { personId: 'pe1' }) },
     ]);
@@ -127,8 +140,9 @@ describe('PersonPage', () => {
       face('c9', { personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
     ]);
     show();
-    expect(await screen.findByText('Cover')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Set as cover' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    expect(await screen.findByRole('menuitem', { name: 'Current cover' })).toBeDisabled();
+    expect(screen.queryByRole('menuitem', { name: 'Set as cover' })).toBeNull();
   });
 
   it('Review suggestions shows only the suggestion band', async () => {
@@ -220,9 +234,9 @@ describe('PersonPage', () => {
     ]);
     show();
     expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument();
-    await screen.findByText('A leopard in a tree.');
-    for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover']) {
-      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    await screen.findAllByText('A leopard in a tree.');
+    for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover', 'Photo actions']) {
+      expect(screen.queryByRole('button', { name: new RegExp(`^${name}`, 'i') })).not.toBeInTheDocument();
     }
   });
 

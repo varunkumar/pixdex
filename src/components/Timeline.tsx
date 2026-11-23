@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTimelineParams, ZOOMS } from '../hooks/useTimelineParams';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import type { TimelineGroup, TimelineZoom } from '../types/api';
+import ColumnsToggle from './ColumnsToggle';
 import PhotoGrid from './PhotoGrid';
 import TimelineScrubber from './TimelineScrubber';
 import PeopleFilter from './PeopleFilter';
@@ -221,12 +222,15 @@ const Timeline = () => {
     <Stack gap="lg" data-testid="timeline-content" pr={{ base: 0, md: SCRUBBER_GUTTER }}>
       <Group justify="space-between" align="flex-end">
         <Title order={2}>Timeline</Title>
-        <SegmentedControl
-          aria-label="Timeline zoom"
-          data={ZOOM_OPTIONS}
-          value={zoom}
-          onChange={(v) => changeZoom(v as TimelineZoom)}
-        />
+        <Group gap="xs">
+          <SegmentedControl
+            aria-label="Timeline zoom"
+            data={ZOOM_OPTIONS}
+            value={zoom}
+            onChange={(v) => changeZoom(v as TimelineZoom)}
+          />
+          <ColumnsToggle />
+        </Group>
       </Group>
 
       {to && (

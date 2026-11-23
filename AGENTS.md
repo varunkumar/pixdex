@@ -17,6 +17,11 @@ never leave local disk or Google Drive.
   keyword draft through the `KeywordRowHandle` ref, then re-runs the keywords without the model; Enter in the bar stays a plain search). `/ai-search` is only a redirect
   (`src/components/LegacyAiRedirect.tsx`) to `/search?mode=ai` (old `people=0` becomes `hidePeople=0`; without support the AI params are
   stripped); there is no AI Search nav entry. AI params: `mode=ai`, `q`, `kw`, `hidePeople=0`, `room=0`. `dev/mockApi.ts` is the dev-only dummy API
+- Photo grids (`src/components/MasonryGrid.tsx`, `masonry.ts`, `PhotoGrid.tsx`, `PhotoTile.tsx`, `AlbumCard.tsx`, `SortIcons.tsx`, `ColumnsToggle.tsx`,
+  `src/hooks/usePhoneColumns.ts`; styles `pdx-*` in `src/index.css`): masonry from each photo's `width / height` (null or zero is 4/3, clamped 0.4 to 3), columns
+  2 / 3 / 4 / 5 at 0 / 576px / 992px / 1408px, phones switch between 1 and 2 columns (localStorage `pixdex.phoneColumns`). Hover-capable devices get an overlay
+  (caption, date, 3 tags; album chip on Search), touch devices one caption line (`@media (hover: none)`); both are always in the DOM. `PhotoGrid` props are `badges` (always visible, top left: Cover, Auto), `actions` (hover-only on a mouse, top right), `note`,
+  `showAlbum` (the old `footer` is gone); a touch screen next to a mouse (`any-pointer: coarse`) also gets the caption line and always-visible actions. Icon-only controls carry their photo or album in the accessible name ("Set as cover: <caption>", "Share <album>", "Photo actions for <caption>"); the album tile lists who it is shared with or by in visually hidden text. Album tiles are uniform 4:3 (no cover size in the API). Sort is `SortIcons` (no direction). Frontend only: no Worker CPU, D1 or API change.
 - Frontend gating (hidden, never disabled): photo review controls and the photo's face-naming controls use
   `photo.canEdit` (the user owns the album); album cover and Share use the album's `role === 'owner'` (the album page reads it from
   its `album-summary` query); rename, delete, matching and covers on a person use that person's `canEdit` (the user created it).

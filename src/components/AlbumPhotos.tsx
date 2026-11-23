@@ -1,23 +1,28 @@
-import { Anchor, Badge, Button, Group, Select, Stack, Tabs, Text, Title } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Group, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
+import type { IconType } from 'react-icons';
+import { TbCalendar, TbPhotoStar, TbStar } from 'react-icons/tb';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
+import { photoCaption } from '../services/text';
 import AlbumFilterChip from './AlbumFilterChip';
 import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
+import ColumnsToggle from './ColumnsToggle';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
 import ShareAlbumModal from './ShareAlbumModal';
+import SortIcons from './SortIcons';
 import { AvatarStack, UserAvatar } from './UserAvatar';
 
 const ALBUM_PHOTO_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
-  { value: 'date', label: 'Newest first' },
-  { value: 'rating', label: 'Best rated' },
-  { value: 'name', label: 'Alphabetical' },
+const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: string }[] = [
+  { value: 'date', label: 'Newest first', icon: TbCalendar },
+  { value: 'rating', label: 'Best rated', icon: TbStar },
+  { value: 'name', label: 'Alphabetical', text: 'A-Z' },
 ];
 
 const AlbumPhotos = () => {
@@ -134,14 +139,13 @@ const AlbumPhotos = () => {
               {data.total} {data.total === 1 ? 'photo' : 'photos'}
             </Text>
           )}
-          <Select
-            aria-label="Sort photos"
-            data={SORT_OPTIONS}
+          <SortIcons
+            label="Sort photos"
+            options={SORT_OPTIONS}
             value={sort}
-            allowDeselect={false}
-            w={170}
             onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
           />
+          <ColumnsToggle />
         </Group>
       </Group>
       {setCover.error && (
@@ -180,18 +184,27 @@ const AlbumPhotos = () => {
             {data && data.results.length > 0 && (
               <PhotoGrid
                 photos={data.results}
-                footer={(photo) =>
-                  isOwner ? (
-                    <Button
-                      variant="light"
-                      size="xs"
-                      w="fit-content"
-                      disabled={photo.id === coverId}
-                      loading={setCover.isPending && setCover.variables === photo.id}
-                      onClick={() => setCover.mutate(photo.id)}
-                    >
-                      {photo.id === coverId ? 'Album cover' : 'Set as cover'}
-                    </Button>
+                badges={(photo) =>
+                  isOwner && photo.id === coverId ? (
+                    <Badge color="yellow" variant="filled" size="sm">
+                      Cover
+                    </Badge>
+                  ) : null
+                }
+                actions={(photo) =>
+                  isOwner && photo.id !== coverId ? (
+                    <Tooltip label="Set as cover">
+                      <ActionIcon
+                        variant="filled"
+                        color="dark"
+                        size="md"
+                        aria-label={`Set as cover: ${photoCaption(photo)}`}
+                        loading={setCover.isPending && setCover.variables === photo.id}
+                        onClick={() => setCover.mutate(photo.id)}
+                      >
+                        <TbPhotoStar aria-hidden />
+                      </ActionIcon>
+                    </Tooltip>
                   ) : null
                 }
               />

@@ -1,37 +1,32 @@
-import { Anchor, Badge, Button, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Group, Menu, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
+import type { IconType } from 'react-icons';
+import { TbCalendar, TbDotsVertical, TbStar } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
+import { photoCaption } from '../services/text';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
+import ColumnsToggle from './ColumnsToggle';
 import FaceTile from './FaceTile';
 import ListPagination from './ListPagination';
 import PersonLabelEditor from './PersonLabelEditor';
 import PhotoGrid from './PhotoGrid';
+import SortIcons from './SortIcons';
 
 const PHOTO_PAGE_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
-  { value: 'date', label: 'Newest first' },
-  { value: 'rating', label: 'Best rated' },
-  { value: 'name', label: 'Alphabetical' },
+const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: string }[] = [
+  { value: 'date', label: 'Newest first', icon: TbCalendar },
+  { value: 'rating', label: 'Best rated', icon: TbStar },
+  { value: 'name', label: 'Alphabetical', text: 'A-Z' },
 ];
 
-/** Shown under each photo: the person's cover control, plus a flag on an automatic match with a way to reject it. */
-const PersonFaceFooter = ({
-  photoId,
-  personId,
-  coverFaceId,
-  onChanged,
-}: {
-  photoId: string;
-  personId: string;
-  coverFaceId: string | undefined;
-  onChanged: () => void;
-}) => {
+/** This person's faces in one photo: the automatic match, and the largest face to offer as the cover. */
+const usePersonFaces = (photoId: string, personId: string, coverFaceId: string | undefined) => {
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
@@ -41,48 +36,74 @@ const PersonFaceFooter = ({
   // Offer the largest of this person's faces in the photo as the cover candidate.
   const candidate = [...mine].sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)[0];
   const isCover = coverFaceId != null && mine.some((f) => f.id === coverFaceId);
+  return { auto, candidate, isCover };
+};
+
+/** Always-visible "Auto" flag on a photo whose face match for this person was automatic. */
+const PersonFaceBadge = ({ photoId, personId }: { photoId: string; personId: string }) => {
+  const { auto } = usePersonFaces(photoId, personId, undefined);
+  return auto ? (
+    <Badge size="sm" variant="filled" color="grape">
+      Auto
+    </Badge>
+  ) : null;
+};
+
+/** Per photo: a menu to set the person's cover or reject an automatic match. */
+const PersonFaceActions = ({
+  photoId,
+  personId,
+  coverFaceId,
+  label,
+  onChanged,
+}: {
+  photoId: string;
+  personId: string;
+  coverFaceId: string | undefined;
+  /** The photo's caption, so each menu button has its own accessible name. */
+  label: string;
+  onChanged: () => void;
+}) => {
+  const { auto, candidate, isCover } = usePersonFaces(photoId, personId, coverFaceId);
+  // The menu closes on click, so a failure is reported as a notification, not inside the dropdown.
+  const onError = (error: unknown) => notifications.show({ color: 'red', message: errorMessage(error, false) });
   const reject = useMutation({
     mutationFn: (faceId: string) => workerApiClient.rejectFace(faceId, personId),
     onSuccess: onChanged,
+    onError,
   });
   const setCover = useMutation({
     mutationFn: (faceId: string) => workerApiClient.setPersonCover(personId, faceId),
     onSuccess: onChanged,
+    onError,
   });
   if (!candidate) return null;
   return (
-    <Group gap="xs">
-      {auto && (
-        <>
-          <Badge size="sm" variant="light" color="grape">
-            Auto
-          </Badge>
-          <Button
-            size="xs"
-            variant="light"
-            color="red"
-            loading={reject.isPending}
-            onClick={() => reject.mutate(auto.id)}
-          >
+    <Menu position="bottom-end" withinPortal>
+      <Menu.Target>
+        <ActionIcon
+          variant="filled"
+          color="dark"
+          size="md"
+          aria-label={`Photo actions for ${label}`}
+          loading={reject.isPending || setCover.isPending}
+        >
+          <TbDotsVertical aria-hidden />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {isCover ? (
+          <Menu.Item disabled>Current cover</Menu.Item>
+        ) : (
+          <Menu.Item onClick={() => setCover.mutate(candidate.id)}>Set as cover</Menu.Item>
+        )}
+        {auto && (
+          <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
             Not {auto.personName}
-          </Button>
-        </>
-      )}
-      {isCover ? (
-        <Badge size="sm" variant="light" color="teal">
-          Cover
-        </Badge>
-      ) : (
-        <Button size="xs" variant="light" loading={setCover.isPending} onClick={() => setCover.mutate(candidate.id)}>
-          Set as cover
-        </Button>
-      )}
-      {(reject.error ?? setCover.error) && (
-        <Text size="xs" c="red">
-          {errorMessage(reject.error ?? setCover.error, false)}
-        </Text>
-      )}
-    </Group>
+          </Menu.Item>
+        )}
+      </Menu.Dropdown>
+    </Menu>
   );
 };
 
@@ -317,21 +338,29 @@ const PersonPage = () => {
       {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
       {photos && photos.length === 0 && <Text c="dimmed">No photos for this person yet.</Text>}
       {person && (
-        <Select
-          aria-label="Sort photos"
-          data={SORT_OPTIONS}
-          value={sort}
-          allowDeselect={false}
-          w={170}
-          onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
-        />
+        <Group gap="xs" justify="flex-end">
+          <SortIcons
+            label="Sort photos"
+            options={SORT_OPTIONS}
+            value={sort}
+            onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
+          />
+          <ColumnsToggle />
+        </Group>
       )}
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
-          footer={(photo) =>
+          badges={(photo) => (person?.canEdit ? <PersonFaceBadge photoId={photo.id} personId={id} /> : null)}
+          actions={(photo) =>
             person?.canEdit ? (
-              <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
+              <PersonFaceActions
+                photoId={photo.id}
+                personId={id}
+                coverFaceId={person?.cover?.id}
+                label={photoCaption(photo)}
+                onChanged={refresh}
+              />
             ) : null
           }
         />
