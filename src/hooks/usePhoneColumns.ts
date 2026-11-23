@@ -10,14 +10,9 @@ export function usePhoneColumns(): [1 | 2, () => void] {
   return [columns, () => setStored(columns === 1 ? 2 : 1)];
 }
 
-/** Photo grid columns: the phone choice below 576px, then 3, 4 and 5 columns. */
+/** Photo grid columns: the phone choice below 576px, then 3 and 4 (4 divides the 12, 24 and 48 page sizes). */
 export function usePhotoColumns(): number {
   const [phone] = usePhoneColumns();
   // Read the media query on the first render, not in an effect, so a wide screen never flashes the phone layout.
-  return useMatches({ base: phone, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
-}
-
-/** Album tile columns: one wide column on a phone (full names and a two line caption fit), then 3, 4 and 5. */
-export function useAlbumColumns(): number {
-  return useMatches({ base: 1, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
+  return useMatches({ base: phone, xs: 3, md: 4 }, { getInitialValueInEffect: false });
 }

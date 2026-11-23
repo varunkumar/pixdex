@@ -4,7 +4,6 @@ import {
   Group,
   Select,
   SimpleGrid,
-  useMatches,
   Stack,
   Text,
   TextInput,
@@ -190,14 +189,9 @@ const PEOPLE_PAGE_SIZES = [12, 24, 48] as const;
 const GROUP_PAGE_SIZES = [6, 12, 24] as const;
 
 const People = () => {
-  const columns = useMatches(
-    { base: 2, sm: 4, lg: 6 },
-    { getInitialValueInEffect: false },
-  );
-  const { params, page, size, option, offset, update } = useListParams(
+  const { params, page, size, offset, update } = useListParams(
     12,
     PEOPLE_PAGE_SIZES,
-    columns,
   );
   const sort =
     SORT_OPTIONS.find((o) => o.value === params.get("sort"))?.value ?? "name";
@@ -283,7 +277,7 @@ const People = () => {
               }
             />
           </Group>
-          <SimpleGrid cols={columns} spacing="md">
+          <SimpleGrid cols={{ base: 2, sm: 4, lg: 6 }} spacing="md">
             {shownPeople.map((p) => (
               <Stack key={p.id} gap={4} align="stretch">
                 <UnstyledButton component={Link} to={`/people/${p.id}`}>
@@ -323,7 +317,6 @@ const People = () => {
           <ListPagination
             page={page}
             size={size}
-            option={option}
             total={people.length}
             sizes={PEOPLE_PAGE_SIZES}
             onPage={onPeoplePage}

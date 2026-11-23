@@ -1,6 +1,6 @@
 # Masonry photo grids and album tiles - design
 
-Date: 2026-11-23. Status: approved (mockups reviewed in the browser companion). Scope: photo grids and the album listing. The photo detail page is
+Date: 2026-11-23. Status: shipped, then revised twice after use on real data: the albums page went back to the classic card (only the sort icons stayed) and the masonry now ends flush by giving columns different widths (no cropping, page sizes exact, at most 4 columns). Scope: photo grids and the album listing. The photo detail page is
 parked and gets its own brainstorm later.
 
 ## Intent

@@ -14,6 +14,10 @@ interface PhotoTileProps {
   badges?: ReactNode;
   /** Owner controls, drawn in the top right corner (outside the link). */
   actions?: ReactNode;
+  /** The shape to lay the tile out in; defaults to the photo's stored size. */
+  ratio?: number;
+  /** Called with the thumbnail's real size once it has loaded. */
+  onThumbnailSize?: (width: number, height: number) => void;
   /** Extra one-line explanation (AI results), shown in the overlay and replacing the caption line tail. */
   note?: string;
   /** Search results span albums: show the album name (chip in the overlay, tail of the caption line). */
@@ -24,7 +28,7 @@ interface PhotoTileProps {
  * Image-first tile. Hover-capable devices get an overlay (caption, date, tags); touch devices get one caption line
  * under the image. Both are always in the DOM, CSS (`@media (hover: ...)`) picks which one is visible.
  */
-const PhotoTile = ({ photo, badges, actions, note, showAlbum = false }: PhotoTileProps) => {
+const PhotoTile = ({ photo, badges, actions, ratio, onThumbnailSize, note, showAlbum = false }: PhotoTileProps) => {
   const caption = photoCaption(photo);
   const date = formatPhotoDate(photo.dateTime);
   const album = showAlbum ? photo.album : null;
@@ -33,9 +37,15 @@ const PhotoTile = ({ photo, badges, actions, note, showAlbum = false }: PhotoTil
 
   return (
     <div className="pdx-tile-item">
-      <div className="pdx-tile" style={{ aspectRatio: photoRatio(photo) }}>
+      <div className="pdx-tile" style={{ aspectRatio: ratio ?? photoRatio(photo) }}>
         <Link to={`/photos/${photo.id}`} className="pdx-tile-link" aria-label={date ? `${caption}, ${date}` : caption}>
-          <img src={workerApiClient.thumbnailUrl(photo)} alt={caption} loading="lazy" className="pdx-tile-img" />
+          <img
+            src={workerApiClient.thumbnailUrl(photo)}
+            alt={caption}
+            loading="lazy"
+            className="pdx-tile-img"
+            onLoad={(e) => onThumbnailSize?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
+          />
         </Link>
         <div className="pdx-tile-overlay">
           {album && <span className="pdx-tile-album">{album}</span>}

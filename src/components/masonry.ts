@@ -26,60 +26,63 @@ const columnHeights = (columns: number[][], ratios: number[]): number[] =>
   columns.map((column) => column.reduce((sum, index) => sum + 1 / ratios[index], 0));
 
 /**
- * The greedy deal, then a few moves and swaps between the tallest and the shortest column while that lowers the taller
- * of the two. Keeps the bottom edge of the grid even, at the price of a slightly looser reading order.
+ * The greedy deal, then moves and swaps between any two columns while they lower the spread of the column heights
+ * (sum of squares). Similar heights keep the column widths of `columnGrow` close to each other. Keeps the reading
+ * order roughly, at the price of a few photos swapping places.
  */
 export function balanceColumns(ratios: number[], columns: number): number[][] {
   const result = assignColumns(ratios, columns).map((column) => [...column]);
   if (columns < 2) return result;
   const height = (index: number) => 1 / ratios[index];
-  for (let round = 0; round < 100; round++) {
+  for (let round = 0; round < 200; round++) {
     const heights = columnHeights(result, ratios);
-    const tall = heights.indexOf(Math.max(...heights));
-    const short = heights.indexOf(Math.min(...heights));
-    if (tall === short) break;
-    const gap = heights[tall] - heights[short];
-    // Best candidate: the one that leaves the taller of the two columns lowest.
-    let bestMax = heights[tall] - 1e-9;
-    let best: { from: number; to: number | null } | null = null;
-    for (const a of result[tall]) {
-      // Move a to the short column.
-      const moved = Math.max(heights[tall] - height(a), heights[short] + height(a));
-      if (moved < bestMax) {
-        bestMax = moved;
-        best = { from: a, to: null };
-      }
-      for (const b of result[short]) {
-        // Swap a and b.
-        const delta = height(a) - height(b);
-        if (delta <= 0 || delta >= gap) continue;
-        const swapped = Math.max(heights[tall] - delta, heights[short] + delta);
-        if (swapped < bestMax) {
-          bestMax = swapped;
-          best = { from: a, to: b };
+    let bestGain = 1e-9;
+    let best: { a: number; b: number; x: number; y: number | null } | null = null;
+    for (let a = 0; a < columns; a++) {
+      for (let b = 0; b < columns; b++) {
+        if (a === b) continue;
+        for (const x of result[a]) {
+          // Move x from column a to column b.
+          const moved = heights[a] ** 2 + heights[b] ** 2 - (heights[a] - height(x)) ** 2 - (heights[b] + height(x)) ** 2;
+          if (moved > bestGain) {
+            bestGain = moved;
+            best = { a, b, x, y: null };
+          }
+          for (const y of result[b]) {
+            // Swap x (column a) with y (column b).
+            const delta = height(x) - height(y);
+            const swapped = heights[a] ** 2 + heights[b] ** 2 - (heights[a] - delta) ** 2 - (heights[b] + delta) ** 2;
+            if (swapped > bestGain) {
+              bestGain = swapped;
+              best = { a, b, x, y };
+            }
+          }
         }
       }
     }
     if (!best) break;
-    result[tall] = result[tall].filter((i) => i !== best.from);
-    if (best.to === null) result[short].push(best.from);
-    else {
-      result[short] = result[short].filter((i) => i !== best.to);
-      result[short].push(best.from);
-      result[tall].push(best.to);
+    const { a, b, x, y } = best;
+    result[a] = result[a].filter((i) => i !== x);
+    result[b].push(x);
+    if (y !== null) {
+      result[b] = result[b].filter((i) => i !== y);
+      result[a].push(y);
     }
-    result[tall].sort((x, y) => x - y);
-    result[short].sort((x, y) => x - y);
+    result[a].sort((p, q) => p - q);
+    result[b].sort((p, q) => p - q);
   }
   return result;
 }
 
 /**
- * Per column: may its tiles grow a little (cropping the photos) so its bottom lines up with the tallest column?
- * Only when the gap is at most `maxExtra` of the column's own height, so a crop stays small; an empty column never.
+ * Relative width (a flex-grow value) for each column so that every column ends at the same height: a column's height
+ * is its width times the sum of its tiles' 1 / ratio, so width is proportional to 1 / that sum. Tiles keep their
+ * exact shape (no cropping); `gap` is the space between tiles in units of a column width. An empty column gets 0.
  */
-export function stretchColumns(columns: number[][], ratios: number[], maxExtra = 0.15): boolean[] {
-  const heights = columnHeights(columns, ratios);
-  const tallest = Math.max(0, ...heights);
-  return heights.map((h) => h > 0 && (tallest - h) / h <= maxExtra);
+export function columnGrow(columns: number[][], ratios: number[], gap = 0.025): number[] {
+  return columns.map((column) => {
+    if (column.length === 0) return 0;
+    const height = column.reduce((sum, index) => sum + 1 / ratios[index], 0) + (column.length - 1) * gap;
+    return 1 / height;
+  });
 }

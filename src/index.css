@@ -22,31 +22,33 @@ body {
   --pixdex-ink-gray: var(--mantine-color-gray-3);
 }
 
-/* Masonry photo grid (MasonryGrid, PhotoTile). */
+/* Masonry photo grid (MasonryGrid, PhotoTile): columns of different widths that all end at the same line. */
 .pdx-masonry {
+  --pdx-gap: 6px;
   display: flex;
-  align-items: stretch; /* equal column heights: a short column can stretch its tiles to a flush bottom edge */
-  gap: 6px;
+  align-items: stretch;
+  gap: var(--pdx-gap);
+}
+@media (min-width: 62em) {
+  .pdx-masonry {
+    --pdx-gap: 8px;
+  }
+}
+.pdx-masonry-col {
+  flex: 1 1 0; /* the grow value comes from MasonryGrid */
+  min-width: 0;
+  /* A sparse group (fewer photos than columns) never stretches one column past 1.5 normal columns. */
+  max-width: calc((100% - (var(--cols, 1) - 1) * var(--pdx-gap)) / var(--cols, 1) * 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pdx-gap);
 }
 .pdx-masonry-col > div {
   display: flex;
   flex-direction: column;
 }
-.pdx-masonry-col[data-stretch='true'] .pdx-tile-img {
-  object-fit: cover; /* the tile may be a little taller than the photo: crop, never letterbox */
-}
-.pdx-masonry-col {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-@media (min-width: 62em) {
-  .pdx-masonry,
-  .pdx-masonry-col {
-    gap: 8px;
-  }
+.pdx-masonry-col .pdx-tile-img {
+  object-fit: cover; /* the tile only differs from the photo by a pixel gap: crop, never letterbox */
 }
 
 /* Photo tile: overlay on hover-capable devices, caption line on touch devices. */
@@ -117,9 +119,7 @@ body {
   transition: opacity 0.15s;
 }
 .pdx-tile:hover .pdx-tile-actions,
-.pdx-tile:focus-within .pdx-tile-actions,
-.pdx-album:hover .pdx-tile-actions,
-.pdx-album:focus-within .pdx-tile-actions {
+.pdx-tile:focus-within .pdx-tile-actions {
   opacity: 1;
 }
 .pdx-tile-cap {
@@ -146,6 +146,17 @@ body {
     opacity: 1;
   }
 }
+.pdx-tile-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.38); /* blends into the photo instead of a solid colour */
+  pointer-events: auto; /* the badges layer ignores the pointer, but the tooltip needs it */
+}
 .pdx-tile-badges {
   position: absolute;
   top: 6px;
@@ -155,93 +166,8 @@ body {
   pointer-events: none;
 }
 
-/* Album tile: uniform 4:3 cover with the name below; count, date and sharing appear on hover (a mouse), or join the name line (touch). */
-.pdx-album {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  border-radius: var(--mantine-radius-md);
-  overflow: hidden;
-  background: var(--mantine-color-default-hover);
-}
-.pdx-album-link {
-  display: block;
-  position: relative;
-  width: 100%;
-  height: 100%;
-  color: inherit;
-  text-decoration: none;
-}
-.pdx-album-text {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 10px;
-  color: #fff;
-  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.72));
-  opacity: 0;
-  transition: opacity 0.15s;
-  pointer-events: none;
-}
-.pdx-album:hover .pdx-album-text,
-.pdx-album:focus-within .pdx-album-text {
-  opacity: 1;
-}
-.pdx-album-chip {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-}
-/* Status bit that follows the hover reveal: the shared chip. */
-.pdx-reveal {
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.pdx-album:hover .pdx-reveal,
-.pdx-album:focus-within .pdx-reveal {
-  opacity: 1;
-}
-.pdx-album-cap {
-  padding: 6px 2px 0;
-}
-.pdx-album-name,
-.pdx-album-cap-meta {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.pdx-album-name {
-  font-size: 13px;
-  font-weight: 600;
-}
-.pdx-album-cap-meta {
-  display: none; /* a mouse sees the count and date on hover instead */
-  font-size: 12px;
-  color: var(--mantine-color-dimmed);
-}
-/* A phone or tablet (touch as the primary input): two line caption, nothing over the cover, no Share (it lives on
-   the album page). */
-@media (hover: none) {
-  .pdx-album-text,
-  .pdx-album-chip,
-  .pdx-album .pdx-tile-actions {
-    display: none;
-  }
-}
-@media (hover: none), (any-pointer: coarse) {
-  .pdx-album-cap-meta {
-    display: block;
-  }
-  .pdx-reveal {
-    opacity: 1;
-  }
-}
-
 /* Keyboard focus ring drawn inside the clipped tile (overflow: hidden would hide an outside outline). */
-.pdx-tile-link:focus-visible,
-.pdx-album-link:focus-visible {
+.pdx-tile-link:focus-visible {
   outline: 3px solid var(--mantine-primary-color-filled);
   outline-offset: -3px;
 }

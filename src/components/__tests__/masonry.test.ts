@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignColumns, balanceColumns, photoRatio, stretchColumns } from '../masonry';
+import { assignColumns, balanceColumns, columnGrow, photoRatio } from '../masonry';
 
 describe('photoRatio', () => {
   it('falls back to 4/3 when a side is missing, zero or not finite', () => {
@@ -68,16 +68,19 @@ describe('balanceColumns', () => {
   });
 });
 
-describe('stretchColumns', () => {
-  const ratios = [1, 1, 1, 1];
-
-  it('stretches a column that is only slightly shorter than the tallest, and not an empty one', () => {
-    // Heights 3 and 2.75 (a 9% gap) stretch; an empty column does not.
-    const r = [1, 1, 1, 1, 1, 4 / 3];
-    expect(stretchColumns([[0, 1, 2], [3, 4, 5], []], r, 0.15)).toEqual([true, true, false]);
+describe('columnGrow', () => {
+  it('gives a shorter column proportionally more width so every column ends at the same height', () => {
+    // Heights 2 and 1 (no gaps): the short column gets twice the width, so both end at height 2 x 1 = 1 x 2.
+    expect(columnGrow([[0, 1], [2]], [1, 1, 1], 0)).toEqual([0.5, 1]);
   });
 
-  it('leaves a column alone when stretching would crop too much', () => {
-    expect(stretchColumns([[0, 1, 2], [3]], ratios, 0.15)).toEqual([true, false]);
+  it('counts the gaps between tiles as part of a column height', () => {
+    const [a, b] = columnGrow([[0, 1], [2]], [1, 1, 1], 0.1);
+    expect(a).toBeCloseTo(1 / 2.1);
+    expect(b).toBeCloseTo(1);
+  });
+
+  it('gives an empty column no width', () => {
+    expect(columnGrow([[0], []], [1], 0)).toEqual([1, 0]);
   });
 });

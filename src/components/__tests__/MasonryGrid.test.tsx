@@ -24,12 +24,13 @@ describe('MasonryGrid', () => {
     expect(texts.sort()).toEqual(['k0', 'k1', 'k2', 'k3', 'k4']);
   });
 
-  it('renders empty columns when there are fewer items than columns', () => {
+  it('renders no empty columns when there are fewer items than columns', () => {
     renderGrid(2, 3);
-    expect(screen.getAllByTestId('masonry-column')).toHaveLength(3);
+    expect(screen.getAllByTestId('masonry-column')).toHaveLength(2);
   });
 
-  it('marks nearly even columns to stretch so the bottom edge is flush, and leaves a far shorter one alone', () => {
+  it('sizes columns by their height so a short column is wider and all of them end flush', () => {
+    // Four equal tiles in 3 columns: heights 2, 1, 1 (plus a gap), so the first column gets about half the width.
     const rendered = render(
       <MasonryGrid
         items={items(4)}
@@ -39,8 +40,46 @@ describe('MasonryGrid', () => {
         columns={3}
       />
     );
-    // 4 equal items in 3 columns: heights 2, 1, 1. Cannot be balanced, 1 vs 2 is a 100% gap: no stretch there.
-    const cols = within(rendered.container).getAllByTestId('masonry-column');
-    expect(cols.map((c) => c.getAttribute('data-stretch'))).toEqual(['true', 'false', 'false']);
+    const grows = within(rendered.container)
+      .getAllByTestId('masonry-column')
+      .map((c) => Number.parseFloat((c as HTMLElement).style.flexGrow));
+    expect(grows[0]).toBeLessThan(grows[1]);
+    expect(grows[1]).toBeCloseTo(grows[2]);
+    expect(grows[1] / grows[0]).toBeGreaterThan(1.8);
+    expect(grows[1] / grows[0]).toBeLessThan(2.1);
+  });
+
+  it('normalises the flex-grow weights to sum to 1, so a grid of tall columns still fills the full width', () => {
+    // CSS only hands out the share of free space equal to the sum of the grow values when that sum is below 1.
+    const rendered = render(
+      <MasonryGrid
+        items={items(6)}
+        ratioOf={() => 0.5}
+        keyOf={(i) => i.id}
+        renderItem={(i) => <span>{i.id}</span>}
+        columns={2}
+      />
+    );
+    const cols = within(rendered.container).getAllByTestId('masonry-column') as HTMLElement[];
+    const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+    expect(sum(cols.map((c) => Number.parseFloat(c.style.flexGrow)))).toBeCloseTo(1);
+    for (const col of cols) {
+      const tiles = [...col.children] as HTMLElement[];
+      expect(sum(tiles.map((t) => Number.parseFloat(t.style.flexGrow)))).toBeCloseTo(1);
+    }
+  });
+
+  it('gives a lone tile in a column the whole column height to grow into', () => {
+    const rendered = render(
+      <MasonryGrid
+        items={items(1)}
+        ratioOf={() => 1.5}
+        keyOf={(i) => i.id}
+        renderItem={(i) => <span>{i.id}</span>}
+        columns={3}
+      />
+    );
+    const tile = within(rendered.container).getAllByTestId('masonry-column')[0].firstElementChild as HTMLElement;
+    expect(Number.parseFloat(tile.style.flexGrow)).toBeCloseTo(1);
   });
 });

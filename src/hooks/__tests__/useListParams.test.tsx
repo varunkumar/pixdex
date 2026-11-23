@@ -15,16 +15,6 @@ describe('useListParams', () => {
     expect(result.current).toMatchObject({ page: 1, size: 12, offset: 0 });
   });
 
-  it('rounds the page size up to whole rows for the given column count, keeping the chosen option', () => {
-    const { result } = renderHook(() => useListParams(12, undefined, 5), { wrapper: wrapperAt('/albums?page=3') });
-    expect(result.current).toMatchObject({ page: 3, size: 15, option: 12, offset: 30 });
-  });
-
-  it('keeps a size that already fills the rows', () => {
-    const { result } = renderHook(() => useListParams(12, undefined, 4), { wrapper: wrapperAt('/albums?size=24') });
-    expect(result.current).toMatchObject({ size: 24, option: 24 });
-  });
-
   it('reads page and size and computes the offset', () => {
     const { result } = renderHook(() => useListParams(), { wrapper: wrapperAt('/search?page=3&size=24') });
     expect(result.current).toMatchObject({ page: 3, size: 24, offset: 48 });

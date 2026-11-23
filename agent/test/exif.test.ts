@@ -30,6 +30,20 @@ describe('extractExifData', () => {
     expect(result.dateTime).toBeUndefined();
   });
 
+  it.each([
+    [1, { width: 800, height: 600 }],
+    [3, { width: 800, height: 600 }],
+    [6, { width: 600, height: 800 }],
+    [8, { width: 600, height: 800 }],
+  ])('reports the upright size of a photo stored with EXIF orientation %i (matches the upright thumbnail)', async (orientation, expected) => {
+    const rotated = path.join(dir, `orient-${orientation}.jpg`);
+    await sharp({ create: { width: 800, height: 600, channels: 3, background: { r: 1, g: 2, b: 3 } } })
+      .withMetadata({ orientation })
+      .jpeg()
+      .toFile(rotated);
+    expect((await extractExifData(rotated)).dimensions).toEqual(expected);
+  });
+
   it('reads camera make, model and lens from EXIF', async () => {
     const withExif = path.join(dir, 'camera.jpg');
     await sharp({ create: { width: 100, height: 100, channels: 3, background: { r: 1, g: 2, b: 3 } } })

@@ -67,6 +67,17 @@ export async function extractCameraExif(filePath: string): Promise<CameraExif> {
   return camera;
 }
 
+/**
+ * The size the photo is shown at. sharp reports the stored pixel grid, but thumbnails are rotated upright, so a phone
+ * photo with EXIF orientation 5 to 8 (quarter turns) is displayed with width and height swapped. The UI lays tiles
+ * out from these numbers, so they must match the thumbnail.
+ */
+function uprightDimensions(metadata: { width?: number; height?: number; orientation?: number }) {
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  return (metadata.orientation ?? 1) >= 5 ? { width: height, height: width } : { width, height };
+}
+
 export async function extractExifData(filePath: string): Promise<PhotoExifData> {
   const metadata = await sharp(filePath).metadata();
 
@@ -83,7 +94,7 @@ export async function extractExifData(filePath: string): Promise<PhotoExifData> 
 
   return {
     dateTime,
-    dimensions: { width: metadata.width ?? 0, height: metadata.height ?? 0 },
+    dimensions: uprightDimensions(metadata),
     format: metadata.format,
     size: metadata.size ?? (await fs.stat(filePath)).size,
     space: metadata.space,
