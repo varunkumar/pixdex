@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { IconType } from 'react-icons';
 import { TbCalendar, TbHash, TbStar } from 'react-icons/tb';
+import { useAlbumColumns } from '../hooks/usePhoneColumns';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type AlbumSort } from '../services/api/WorkerApiClient';
 import AlbumCard from './AlbumCard';
@@ -19,7 +20,8 @@ const SORT_OPTIONS: { value: AlbumSort; label: string; icon?: IconType; text?: s
 ];
 
 const Albums = () => {
-  const { params, page, size, offset, update } = useListParams(12, ALBUM_PAGE_SIZES);
+  const columns = useAlbumColumns();
+  const { params, page, size, option, offset, update } = useListParams(12, ALBUM_PAGE_SIZES, columns);
 
   const requestedSort = params.get('sort');
   const sort = SORT_OPTIONS.find((o) => o.value === requestedSort)?.value ?? 'date';
@@ -52,7 +54,7 @@ const Albums = () => {
       {data && data.albums.length === 0 && <Text c="dimmed">No albums yet.</Text>}
 
       {data && data.albums.length > 0 && (
-        <SimpleGrid cols={{ base: 2, xs: 3, md: 4, xl: 5 }} spacing="sm">
+        <SimpleGrid cols={columns} spacing={8}>
           {data.albums.map((album) => (
             <AlbumCard key={album.name} album={album} />
           ))}
@@ -63,6 +65,7 @@ const Albums = () => {
         <ListPagination
           page={page}
           size={size}
+          option={option}
           total={data.total}
           settled={!isPlaceholderData}
           sizes={ALBUM_PAGE_SIZES}

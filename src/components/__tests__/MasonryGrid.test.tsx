@@ -28,4 +28,19 @@ describe('MasonryGrid', () => {
     renderGrid(2, 3);
     expect(screen.getAllByTestId('masonry-column')).toHaveLength(3);
   });
+
+  it('marks nearly even columns to stretch so the bottom edge is flush, and leaves a far shorter one alone', () => {
+    const rendered = render(
+      <MasonryGrid
+        items={items(4)}
+        ratioOf={() => 1}
+        keyOf={(i) => i.id}
+        renderItem={(i) => <span>{i.id}</span>}
+        columns={3}
+      />
+    );
+    // 4 equal items in 3 columns: heights 2, 1, 1. Cannot be balanced, 1 vs 2 is a 100% gap: no stretch there.
+    const cols = within(rendered.container).getAllByTestId('masonry-column');
+    expect(cols.map((c) => c.getAttribute('data-stretch'))).toEqual(['true', 'false', 'false']);
+  });
 });

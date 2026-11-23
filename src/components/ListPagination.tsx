@@ -3,7 +3,10 @@ import { useEffect } from 'react';
 
 interface Props {
   page: number;
+  /** Items per page in use. */
   size: number;
+  /** The size shown in the selector when it differs from `size` (rows rounded up to the column count). */
+  option?: number;
   total: number;
   sizes: readonly number[];
   /** False while `total` still belongs to a previous query (placeholder data). */
@@ -14,7 +17,7 @@ interface Props {
   onSize: (size: number) => void;
 }
 
-const ListPagination = ({ page, size, total, sizes, settled = true, hasMore = false, onPage, onSize }: Props) => {
+const ListPagination = ({ page, size, option, total, sizes, settled = true, hasMore = false, onPage, onSize }: Props) => {
   const pages = Math.max(1, Math.ceil((total + (hasMore ? 1 : 0)) / size));
 
   // A stale or hand-edited URL can point past the last page: land on the last one.
@@ -38,7 +41,7 @@ const ListPagination = ({ page, size, total, sizes, settled = true, hasMore = fa
       <Select
         aria-label="Results per page"
         data={sizes.map(String)}
-        value={String(size)}
+        value={String(option ?? size)}
         onChange={(value) => value && onSize(Number(value))}
         allowDeselect={false}
         w={90}

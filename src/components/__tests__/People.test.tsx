@@ -112,10 +112,7 @@ describe("People", () => {
         .map((l) => l.getAttribute("href"));
     await screen.findByRole("link", { name: /Amy/ });
     expect(names()).toEqual(["/people/a", "/people/b"]);
-    fireEvent.click(screen.getByRole("combobox", { name: /sort people/i }));
-    fireEvent.click(
-      await screen.findByRole("option", { name: "Most faces", hidden: true }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Most faces" }));
     await waitFor(() => expect(names()).toEqual(["/people/b", "/people/a"]));
   });
 
@@ -358,10 +355,7 @@ describe("People", () => {
     });
     show();
     await screen.findByRole("link", { name: /Person 00/ });
-    fireEvent.click(screen.getByRole("combobox", { name: /sort people/i }));
-    fireEvent.click(
-      await screen.findByRole("option", { name: "Most faces", hidden: true }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Most faces" }));
     await screen.findByRole("link", { name: /Person 13/ });
     fireEvent.click(screen.getByRole("button", { name: "2" }));
     // Page 2 of "most faces" holds the two smallest, and the select still says so.
@@ -369,8 +363,9 @@ describe("People", () => {
       await screen.findByRole("link", { name: /Person 00/ }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Person 13/ })).toBeNull();
-    expect(screen.getByRole("combobox", { name: /sort people/i })).toHaveValue(
-      "Most faces",
+    expect(screen.getByRole("button", { name: "Most faces" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
   });
 

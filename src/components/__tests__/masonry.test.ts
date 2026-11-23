@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignColumns, photoRatio } from '../masonry';
+import { assignColumns, balanceColumns, photoRatio, stretchColumns } from '../masonry';
 
 describe('photoRatio', () => {
   it('falls back to 4/3 when a side is missing, zero or not finite', () => {
@@ -38,5 +38,46 @@ describe('assignColumns', () => {
     const cols = assignColumns(ratios, 5);
     expect(cols.flat().sort((a, b) => a - b)).toEqual(ratios.map((_, i) => i));
     for (const col of cols) expect(col).toEqual([...col].sort((a, b) => a - b));
+  });
+});
+
+const heights = (cols: number[][], ratios: number[]) => cols.map((c) => c.reduce((sum, i) => sum + 1 / ratios[i], 0));
+const spread = (h: number[]) => Math.max(...h) - Math.min(...h);
+
+describe('balanceColumns', () => {
+  // Heights 5, 4, 3, 3, 3: greedy gives 8 and 10, the best split is 9 and 9.
+  const ratios = [1 / 5, 1 / 4, 1 / 3, 1 / 3, 1 / 3];
+
+  it('evens out column heights where the greedy deal leaves a gap', () => {
+    expect(spread(heights(assignColumns(ratios, 2), ratios))).toBeCloseTo(2);
+    expect(spread(heights(balanceColumns(ratios, 2), ratios))).toBeCloseTo(0);
+  });
+
+  it('never makes the spread worse and places every index exactly once, in order within a column', () => {
+    const many = Array.from({ length: 40 }, (_, i) => 0.4 + ((i * 37) % 26) / 10);
+    const greedy = spread(heights(assignColumns(many, 5), many));
+    const balanced = balanceColumns(many, 5);
+    expect(spread(heights(balanced, many))).toBeLessThanOrEqual(greedy + 1e-9);
+    expect(balanced.flat().sort((a, b) => a - b)).toEqual(many.map((_, i) => i));
+    for (const col of balanced) expect(col).toEqual([...col].sort((a, b) => a - b));
+  });
+
+  it('handles an empty list and fewer items than columns', () => {
+    expect(balanceColumns([], 3)).toEqual([[], [], []]);
+    expect(balanceColumns([1, 1], 4).flat().sort()).toEqual([0, 1]);
+  });
+});
+
+describe('stretchColumns', () => {
+  const ratios = [1, 1, 1, 1];
+
+  it('stretches a column that is only slightly shorter than the tallest, and not an empty one', () => {
+    // Heights 3 and 2.75 (a 9% gap) stretch; an empty column does not.
+    const r = [1, 1, 1, 1, 1, 4 / 3];
+    expect(stretchColumns([[0, 1, 2], [3, 4, 5], []], r, 0.15)).toEqual([true, true, false]);
+  });
+
+  it('leaves a column alone when stretching would crop too much', () => {
+    expect(stretchColumns([[0, 1, 2], [3]], ratios, 0.15)).toEqual([true, false]);
   });
 });

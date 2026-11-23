@@ -44,20 +44,36 @@ describe('AlbumCard', () => {
     expect(screen.queryByRole('button', { name: /^share/i })).not.toBeInTheDocument();
   });
 
-  it('tells screen readers who an album is shared with and by, without needing hover', () => {
+  it('names the album, count and sharing in the link name, since the text is hover-only on a mouse', () => {
     const { unmount } = renderWithProviders(
-      <AlbumCard album={makeAlbum({ sharedWith: ['a@example.com', 'b@example.com'] })} />
+      <AlbumCard album={makeAlbum({ photoCount: 12, sharedWith: ['a@example.com', 'b@example.com'] })} />
     );
-    expect(screen.getByRole('link', { name: /kabini/i })).toHaveTextContent('Shared with a@example.com, b@example.com');
+    expect(screen.getByRole('link', { name: 'Kabini, 12 photos, shared with a@example.com, b@example.com' })).toBeInTheDocument();
     unmount();
+    renderWithProviders(<AlbumCard album={makeAlbum({ photoCount: 1, role: 'viewer', ownerEmail: 'owner@example.com' })} />);
+    expect(screen.getByRole('link', { name: 'Kabini, 1 photo, shared by owner@example.com' })).toBeInTheDocument();
+  });
+
+  it('always shows the name below the cover, and the count and date over it on hover', () => {
+    renderWithProviders(<AlbumCard album={makeAlbum({ name: 'Goa 2024', photoCount: 142, latestDate: '2024-03-12T10:00:00Z' })} />);
+    const overlay = document.querySelector('.pdx-album-text') as HTMLElement;
+    const cap = document.querySelector('.pdx-album-cap') as HTMLElement;
+    expect(cap.querySelector('.pdx-album-name')).toHaveTextContent('Goa 2024');
+    expect(overlay).toHaveTextContent('142 photos');
+    expect(overlay).not.toHaveTextContent('Goa 2024'); // the name is not repeated over the image
+    // On touch the count and date join the name line, since there is no hover.
+    expect(cap.querySelector('.pdx-album-cap-meta')).toHaveTextContent('142 photos');
+  });
+
+  it('reveals the sharing avatars and the Shared with you chip together with the hover details', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ role: 'viewer', ownerEmail: 'owner@example.com' })} />);
-    expect(screen.getByRole('link', { name: /kabini/i })).toHaveTextContent('Shared by owner@example.com');
+    expect(screen.getByText('Shared with you').closest('.pdx-reveal')).not.toBeNull();
+    expect(screen.getByLabelText('owner@example.com').closest('.pdx-reveal')).not.toBeNull();
   });
 
   it('does not repeat the album name through the cover image alt', () => {
     renderWithProviders(<AlbumCard album={makeAlbum()} />);
     expect(document.querySelector('img')).toHaveAttribute('alt', '');
-    expect(screen.getByRole('link', { name: 'Kabini 3 photos' })).toBeInTheDocument();
   });
 
   it('shows a placeholder when there is no cover', () => {

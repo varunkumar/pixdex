@@ -16,3 +16,8 @@ export function usePhotoColumns(): number {
   // Read the media query on the first render, not in an effect, so a wide screen never flashes the phone layout.
   return useMatches({ base: phone, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
 }
+
+/** Album tile columns: always at least 2, then 3, 4 and 5 (no 1 column option). */
+export function useAlbumColumns(): number {
+  return useMatches({ base: 2, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
+}
