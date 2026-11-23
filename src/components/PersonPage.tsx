@@ -353,6 +353,7 @@ const PersonPage = () => {
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
+          showAlbum
           badges={(photo) => (person?.canEdit ? <PersonFaceBadge photoId={photo.id} personId={id} /> : null)}
           actions={(photo) =>
             person?.canEdit ? (
