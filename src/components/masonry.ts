@@ -86,3 +86,33 @@ export function columnGrow(columns: number[][], ratios: number[], gap = 0.025): 
     return 1 / height;
   });
 }
+
+const FLUSH_MIN = 0.6;
+const FLUSH_MAX = 1.6;
+const SPARSE_MIN = 0.8;
+const SPARSE_MAX = 1.25;
+
+/**
+ * How wide each (non-empty) column should be, as a multiple of a normal column, and whether the grid can end flush.
+ * Flush needs each column's width proportional to 1 / its height; that only looks right while the widths stay
+ * moderate, and only when the page has enough photos to fill every column. Otherwise the grid does NOT stretch or
+ * crop tiles to hide the gap: a short page keeps about one normal column per photo, and extreme widths fall back to
+ * equal columns. A tile is never stretched or upscaled to chase a flush edge.
+ */
+export function planWidths(
+  columns: number[][],
+  ratios: number[],
+  totalColumns: number,
+  gap = 0.025
+): { flush: boolean; widths: number[] } {
+  const grow = columnGrow(columns, ratios, gap);
+  const mean = grow.reduce((sum, g) => sum + g, 0) / Math.max(1, grow.length);
+  const relative = grow.map((g) => (mean > 0 ? g / mean : 1));
+  if (columns.length < totalColumns) {
+    return { flush: false, widths: relative.map((w) => Math.min(SPARSE_MAX, Math.max(SPARSE_MIN, w))) };
+  }
+  if (relative.some((w) => w < FLUSH_MIN || w > FLUSH_MAX)) {
+    return { flush: false, widths: relative.map(() => 1) };
+  }
+  return { flush: true, widths: relative };
+}

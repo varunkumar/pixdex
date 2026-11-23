@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignColumns, balanceColumns, columnGrow, photoRatio } from '../masonry';
+import { assignColumns, balanceColumns, columnGrow, photoRatio, planWidths } from '../masonry';
 
 describe('photoRatio', () => {
   it('falls back to 4/3 when a side is missing, zero or not finite', () => {
@@ -82,5 +82,32 @@ describe('columnGrow', () => {
 
   it('gives an empty column no width', () => {
     expect(columnGrow([[0], []], [1], 0)).toEqual([1, 0]);
+  });
+});
+
+describe('planWidths', () => {
+  it('makes a full grid flush when the column widths stay moderate', () => {
+    // Two columns of heights 2 and 2.2 (ratios 1): widths differ by about 10%.
+    const plan = planWidths([[0, 1], [2, 3, 4]], [1, 1, 1, 1, 1.5], 2, 0);
+    expect(plan.flush).toBe(true);
+    expect(plan.widths[0]).toBeGreaterThan(plan.widths[1] * 0.9);
+    expect(plan.widths.reduce((a, b) => a + b, 0)).toBeCloseTo(2); // fills the container: widths average 1
+  });
+
+  it('gives up on flush rather than stretching tiles when the widths would be extreme', () => {
+    // A tall portrait column next to a very wide one would need a 5 to 1 width ratio.
+    const plan = planWidths([[0], [1]], [0.4, 3], 2, 0);
+    expect(plan.flush).toBe(false);
+    expect(plan.widths).toEqual([1, 1]); // equal columns, every tile keeps its own shape
+  });
+
+  it('keeps a sparse grid at roughly normal column width and never stretches it', () => {
+    // 2 photos on a 4 column layout: they cannot fill the row, so they stay about one normal column wide.
+    const plan = planWidths([[0], [1]], [0.667, 1.5], 4, 0);
+    expect(plan.flush).toBe(false);
+    for (const w of plan.widths) {
+      expect(w).toBeGreaterThanOrEqual(0.8);
+      expect(w).toBeLessThanOrEqual(1.25);
+    }
   });
 });
