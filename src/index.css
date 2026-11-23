@@ -21,3 +21,23 @@ body {
   --pixdex-ink-green: var(--mantine-color-green-3);
   --pixdex-ink-gray: var(--mantine-color-gray-3);
 }
+
+/* Masonry photo grid (MasonryGrid, PhotoTile). */
+.pdx-masonry {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pdx-masonry-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+@media (min-width: 62em) {
+  .pdx-masonry,
+  .pdx-masonry-col {
+    gap: 8px;
+  }
+}
