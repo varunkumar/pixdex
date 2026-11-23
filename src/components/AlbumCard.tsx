@@ -1,6 +1,7 @@
-import { Badge, Box, Button, Card, Center, Group, Image, Stack, Text } from '@mantine/core';
+import { ActionIcon, Badge, Box, Center, Image, Text, Tooltip } from '@mantine/core';
 import { useState } from 'react';
 import { MdPhoto } from 'react-icons/md';
+import { TbShare } from 'react-icons/tb';
 import { Link, useLocation } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
@@ -8,82 +9,72 @@ import type { AlbumSummary } from '../types/api';
 import ShareAlbumModal from './ShareAlbumModal';
 import { AvatarStack, UserAvatar } from './UserAvatar';
 
+/** Uniform 4:3 cover-first tile: name and count over the cover, who it is shared with at the bottom right. */
 const AlbumCard = ({ album }: { album: AlbumSummary }) => {
   const location = useLocation();
   const [sharing, setSharing] = useState(false);
   const isOwner = album.role === 'owner';
-  const shared = isOwner && (album.sharedWith?.length ?? 0) > 0;
+  const sharedWith = isOwner ? (album.sharedWith ?? []) : [];
   const date = formatPhotoDate(album.latestDate);
   const cover = album.coverThumbnailUrl ? workerApiClient.thumbnailUrl({ thumbnailUrl: album.coverThumbnailUrl }) : '';
+  const hasAvatars = sharedWith.length > 0 || (album.role === 'viewer' && !!album.ownerEmail);
 
   return (
-    <Card withBorder padding={0} radius="md">
+    <div className="pdx-album">
       <Link
         to={`/albums/${encodeURIComponent(album.name)}`}
         // Lets "All albums" return to this listing with its sort and page intact.
         state={{ albumsList: `${location.pathname}${location.search}` }}
-        style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
+        className="pdx-album-link"
       >
-        <Card.Section>
-          {cover ? (
-            <Image src={cover} alt={album.name} h={180} fit="contain" bg="var(--mantine-color-default-hover)" />
-          ) : (
-            <Center h={180} bg="var(--mantine-color-default-hover)">
-              <Box c="dimmed" fz={40} lh={1}>
-                <MdPhoto aria-hidden />
-              </Box>
-            </Center>
-          )}
-        </Card.Section>
-        <Stack gap={2} p="md" pb={isOwner ? 'xs' : 'md'}>
-          <Group gap="xs" wrap="nowrap">
-            <Text fw={600} lineClamp={1}>
-              {album.name}
-            </Text>
-            {album.role === 'viewer' && (
-              <Badge size="sm" variant="light" color="grape">
-                Shared with you
-              </Badge>
-            )}
-          </Group>
-          <Text size="sm" c="dimmed">
+        {cover ? (
+          <Image src={cover} alt={album.name} fit="cover" h="100%" w="100%" />
+        ) : (
+          <Center h="100%" bg="var(--mantine-color-default-hover)">
+            <Box c="dimmed" fz={40} lh={1}>
+              <MdPhoto aria-hidden />
+            </Box>
+          </Center>
+        )}
+        <div className="pdx-album-text" style={hasAvatars ? { paddingRight: 84 } : undefined}>
+          <Text fw={600} size="sm" lineClamp={1} inherit>
+            {album.name}
+          </Text>
+          <Text size="xs" lineClamp={1} inherit style={{ opacity: 0.85 }}>
             {album.photoCount} {album.photoCount === 1 ? 'photo' : 'photos'}
             {date && ` · ${date}`}
           </Text>
-          {shared && (
-            <Group gap="xs" mt={4} wrap="nowrap">
-              <AvatarStack emails={album.sharedWith ?? []} />
-              <Text size="xs" c="dimmed">
-                Shared with {album.sharedWith!.length}
-              </Text>
-            </Group>
-          )}
-          {album.role === 'viewer' && album.ownerEmail && (
-            <Group gap="xs" mt={4} wrap="nowrap">
-              <UserAvatar email={album.ownerEmail} size="sm" />
-              <Text size="xs" c="dimmed" lineClamp={1}>
-                Shared by {album.ownerEmail}
-              </Text>
-            </Group>
-          )}
-        </Stack>
+        </div>
       </Link>
+      {album.role === 'viewer' && (
+        <Badge className="pdx-album-chip" size="sm" variant="filled" color="grape">
+          Shared with you
+        </Badge>
+      )}
+      {hasAvatars && (
+        <div className="pdx-album-people">
+          {album.role === 'viewer' && album.ownerEmail ? (
+            <UserAvatar email={album.ownerEmail} size={26} />
+          ) : (
+            <AvatarStack emails={sharedWith} size={26} />
+          )}
+        </div>
+      )}
       {isOwner && (
         <>
-          <Button variant="subtle" size="compact-xs" mx="md" mb="md" w="fit-content" onClick={() => setSharing(true)}>
-            Share
-          </Button>
+          <div className="pdx-tile-actions">
+            <Tooltip label="Share">
+              <ActionIcon variant="filled" color="dark" size="md" aria-label="Share" onClick={() => setSharing(true)}>
+                <TbShare aria-hidden />
+              </ActionIcon>
+            </Tooltip>
+          </div>
           {sharing && (
-            <ShareAlbumModal
-              album={album.name}
-              sharedWith={album.sharedWith ?? []}
-              opened
-              onClose={() => setSharing(false)}
-            />
+            <ShareAlbumModal album={album.name} sharedWith={sharedWith} opened onClose={() => setSharing(false)} />
           )}
         </>
       )}
-    </Card>
+    </div>
   );
 };
 

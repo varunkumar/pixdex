@@ -52,7 +52,7 @@ const Albums = () => {
       {data && data.albums.length === 0 && <Text c="dimmed">No albums yet.</Text>}
 
       {data && data.albums.length > 0 && (
-        <SimpleGrid cols={{ base: 1, xs: 2, md: 3, lg: 4 }} spacing="md">
+        <SimpleGrid cols={{ base: 2, xs: 3, md: 4, xl: 5 }} spacing="sm">
           {data.albums.map((album) => (
             <AlbumCard key={album.name} album={album} />
           ))}

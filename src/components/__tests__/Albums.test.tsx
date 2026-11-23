@@ -37,8 +37,8 @@ describe('Albums', () => {
     expect(screen.getAllByText(/3 photos/).length).toBeGreaterThan(0);
     const cover = screen.getByRole('img', { name: /kanha 2026/i });
     expect(cover).toHaveAttribute('src', '/api/thumbnails/h1');
-    // The whole cover photo is shown, never cropped.
-    expect(cover.getAttribute('style')).toContain('--image-object-fit: contain');
+    // Uniform 4:3 tiles: the cover fills the tile.
+    expect(cover.getAttribute('style')).toContain('--image-object-fit: cover');
     expect(screen.getByText('Showing 1-12 of 30')).toBeInTheDocument();
   });
 
@@ -92,9 +92,8 @@ describe('Albums', () => {
     await screen.findByText('Mine');
     // Two owned albums get a Share button, the viewer album does not.
     expect(screen.getAllByRole('button', { name: 'Share' })).toHaveLength(2);
-    expect(screen.getByText('Shared with 1')).toBeInTheDocument();
     expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
-    expect(screen.getByText('Shared by owner@example.com')).toBeInTheDocument();
+    expect(screen.getByLabelText('owner@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('Shared with you')).toHaveLength(1);
     const theirs = screen.getByText('Theirs').closest('a') as HTMLElement;
     expect(theirs.parentElement?.querySelector('button')).toBeNull();

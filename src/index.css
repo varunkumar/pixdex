@@ -104,7 +104,9 @@ body {
   transition: opacity 0.15s;
 }
 .pdx-tile:hover .pdx-tile-actions,
-.pdx-tile:focus-within .pdx-tile-actions {
+.pdx-tile:focus-within .pdx-tile-actions,
+.pdx-album:hover .pdx-tile-actions,
+.pdx-album:focus-within .pdx-tile-actions {
   opacity: 1;
 }
 .pdx-tile-cap {
@@ -126,4 +128,41 @@ body {
   .pdx-tile-actions {
     opacity: 1;
   }
+}
+
+/* Album tile: uniform 4:3 cover with name and count over a bottom gradient. */
+.pdx-album {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+  background: var(--mantine-color-default-hover);
+}
+.pdx-album-link {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+.pdx-album-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px;
+  color: #fff;
+  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.72));
+}
+.pdx-album-chip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+.pdx-album-people {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
 }
