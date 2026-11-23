@@ -33,14 +33,14 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
   matching), Dashboard,
-  DailySuggestion, Lightbox, PhotoGrid/PhotoTile/MasonryGrid (masonry, see Photo grids below), AlbumCard (uniform 4:3 cover tiles), SortIcons, ColumnsToggle, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
+  DailySuggestion, Lightbox, PhotoGrid/PhotoTile/MasonryGrid (masonry, see Photo grids below), AlbumCard (the classic card), SortIcons, ColumnsToggle, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
 - Photo grids (frontend only, no Worker or D1 cost): `components/MasonryGrid.tsx` deals tiles into the shortest of N columns from each photo's
   `width / height` (`components/masonry.ts`: `photoRatio` falls back to 4/3 and clamps to 0.4 to 3, `assignColumns`); N is 2 below 576px
   (1 or 2 by the phone toggle, `hooks/usePhoneColumns.ts`, localStorage `pixdex.phoneColumns`), then 3, 4 (992px) and 5 (1408px).
   `PhotoTile.tsx` always renders both a hover overlay and a one-line caption; CSS (`@media (hover: none)`, classes `pdx-*` in `index.css`)
   shows the overlay on hover-capable devices and the caption line on touch devices. `PhotoGrid` takes `badges` (always-visible status, top left), `actions` (corner controls, outside the
   link), `note` (AI results) and `showAlbum` (Search). Owner actions stay gated as before (album owner: "Set as cover" icon or "Cover" badge;
-  person owner: "Photo actions" menu). Album tiles (`AlbumCard`) are uniform 4:3 with the name below the cover; the count and date and the shared chip show on hover, the owner's Share button on hover; on a phone the albums page is one column with a two line caption (name, then count and date) and no Share or chip over the cover. List pages fill whole rows: `useListParams(default, sizes, columns)` rounds the page size up to the column count. `MasonryGrid` balances the columns and stretches nearly-even ones (at most 15%, cropping) so the bottom edge is flush.
+  person owner: "Photo actions" menu). The albums page keeps the classic `AlbumCard` (cover, name, count, date, avatars, Share) with `SortIcons`. Page sizes are exactly the selector's value. `MasonryGrid` balances the columns and sets each column's width from its height (`columnGrow`), so every column ends on the same line without cropping; photo columns are 1 or 2 on a phone, then 3 and 4.
   Sort controls are `SortIcons` (icon group from 576px, one menu button below; no direction control, the API has none).
 - AI Search (part of Search: `components/Search.tsx`, `components/AiResults.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
   entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI", Cmd+Enter and the plain-mode "Add keywords" button, which opens the keyword row without the model,

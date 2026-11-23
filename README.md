@@ -60,7 +60,7 @@ machine. Originals stay on local disk or Google Drive.
 - **Browse by photo.** Photo grids are masonry layouts that keep every photo's own
   shape. On a mouse device the caption, date and tags appear over a photo on hover; on
   a phone or tablet each photo has one caption line under it, two columns by default
-  (a small icon switches to one). Grids fill whole rows (the page size rounds up to the column count) and end flush at the bottom. Sort with the icon buttons (also on People); albums are uniform cover tiles with the name below, and count, date and sharing on hover.
+  (a small icon switches to one). Photo grids end flush at the bottom: columns get different widths so they all finish on the same line, with no cropping and no empty corners. Page sizes are exactly what the selector says. Sort with the icon buttons (also on People); albums keep the classic cards with the cover, name, count, date and sharing.
 - **See the details.** Camera, lens, focal length, aperture, shutter, ISO and GPS
   when the file has them, plus "View Original" for the full-resolution file.
 

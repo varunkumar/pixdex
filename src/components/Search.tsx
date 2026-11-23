@@ -7,7 +7,6 @@ import { MdSearch } from 'react-icons/md';
 import { TbCalendar, TbStar, TbTarget } from 'react-icons/tb';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { PAGE_SIZES, useListParams } from '../hooks/useListParams';
-import { usePhotoColumns } from '../hooks/usePhoneColumns';
 import type { OmniboxSelection } from '../hooks/useOmniboxData';
 import { usePromptApiSupport } from '../hooks/usePromptApiSupport';
 import { runAiSearch, type AiFilters } from '../services/aiSearch/pipeline';
@@ -55,8 +54,7 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
  * `mode=ai` with `kw` selects AI mode, and album, people, known and dates are chips in the bar that filter both.
  */
 const Search = () => {
-  const columns = usePhotoColumns();
-  const { params, page, size, option, offset, update } = useListParams(12, PAGE_SIZES, columns);
+  const { params, page, size, offset, update } = useListParams();
   const [, setParams] = useSearchParams();
   const support = usePromptApiSupport();
   const state = readOmniboxState(params);
@@ -399,7 +397,6 @@ const Search = () => {
         <ListPagination
           page={page}
           size={size}
-          option={option}
           total={data.total}
           settled={!isPlaceholderData}
           sizes={PAGE_SIZES}

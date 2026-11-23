@@ -95,13 +95,15 @@ describe('PersonPage', () => {
     expect(heading.closest('div')?.parentElement?.querySelector('[data-testid="face-tile"]')).not.toBeNull();
   });
 
-  it('marks auto-matched faces with an Auto badge and a Not action', async () => {
+  it('marks auto-matched faces with a quiet icon (not a loud badge) and a Not action', async () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
       face('a1', { personId: 'pe1', personName: 'Asha', status: 'auto' }),
     ]);
     vi.mocked(workerApiClient.rejectFace).mockResolvedValue(face('a1'));
     show();
-    expect((await screen.findByText('Auto')).closest('.pdx-tile-actions')).toBeNull(); // visible without hover
+    const marker = await screen.findByLabelText('Matched automatically');
+    expect(marker.closest('.pdx-tile-actions')).toBeNull(); // visible without hover
+    expect(screen.queryByText('Auto')).not.toBeInTheDocument(); // an icon, not a text badge
     expect(await screen.findByRole('button', { name: /^photo actions for .*leopard/i })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));

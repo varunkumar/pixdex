@@ -35,31 +35,11 @@ describe('Albums', () => {
     expect(await screen.findByText('Kanha 2026')).toBeInTheDocument();
     expect(workerApiClient.getAlbumsPage).toHaveBeenCalledWith({ limit: 12, offset: 0, sort: 'date' });
     expect(screen.getAllByText(/3 photos/).length).toBeGreaterThan(0);
-    const cover = document.querySelector('img') as HTMLImageElement;
+    const cover = screen.getByRole('img', { name: /kanha 2026/i });
     expect(cover).toHaveAttribute('src', '/api/thumbnails/h1');
-    // Uniform 4:3 tiles: the cover fills the tile.
-    expect(cover.getAttribute('style')).toContain('--image-object-fit: cover');
+    // The whole cover photo is shown, never cropped.
+    expect(cover.getAttribute('style')).toContain('--image-object-fit: contain');
     expect(screen.getByText('Showing 1-12 of 30')).toBeInTheDocument();
-  });
-
-  it('fills whole rows: on a 5 column screen the page size 12 becomes 15', async () => {
-    const original = window.matchMedia;
-    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: true,
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-    })) as unknown as typeof window.matchMedia;
-    try {
-      renderWithProviders(<Albums />, { route: '/albums?page=2' });
-      await screen.findByText('Kanha 2026');
-      expect(workerApiClient.getAlbumsPage).toHaveBeenCalledWith({ limit: 15, offset: 15, sort: 'date' });
-      expect(screen.getByText('Showing 16-30 of 30')).toBeInTheDocument();
-    } finally {
-      window.matchMedia = original;
-    }
   });
 
   it('links each album to its own page with the name encoded', async () => {
@@ -111,9 +91,12 @@ describe('Albums', () => {
     renderWithProviders(<Albums />, { route: '/albums' });
     await screen.findByText('Mine');
     // Two owned albums get a Share button, the viewer album does not.
-    expect(screen.getAllByRole('button', { name: /^share /i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Share' })).toHaveLength(2);
+    expect(screen.getByText('Shared with 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Shared by owner@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('Shared with you')).toHaveLength(1);
-    const theirs = screen.getByText('Theirs').closest('.pdx-album-item') as HTMLElement;
-    expect(theirs.querySelector('button')).toBeNull();
+    const theirs = screen.getByText('Theirs').closest('a') as HTMLElement;
+    expect(theirs.parentElement?.querySelector('button')).toBeNull();
   });
 });

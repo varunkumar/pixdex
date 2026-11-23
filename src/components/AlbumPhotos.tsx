@@ -5,7 +5,6 @@ import type { IconType } from 'react-icons';
 import { TbCalendar, TbPhotoStar, TbStar } from 'react-icons/tb';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
-import { usePhotoColumns } from '../hooks/usePhoneColumns';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { photoCaption } from '../services/text';
@@ -29,8 +28,7 @@ const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: s
 const AlbumPhotos = () => {
   const { name = '' } = useParams();
   const albumsList = (useLocation().state as { albumsList?: string } | null)?.albumsList ?? '/albums';
-  const columns = usePhotoColumns();
-  const { params, page, size, option, offset, update } = useListParams(12, ALBUM_PHOTO_SIZES, columns);
+  const { params, page, size, offset, update } = useListParams(12, ALBUM_PHOTO_SIZES);
 
   const requestedSort = params.get('sort');
   const sort = SORT_OPTIONS.find((o) => o.value === requestedSort)?.value ?? 'date';
@@ -215,7 +213,6 @@ const AlbumPhotos = () => {
               <ListPagination
                 page={page}
                 size={size}
-                option={option}
                 total={data.total}
                 settled={!isPlaceholderData}
                 sizes={ALBUM_PHOTO_SIZES}
