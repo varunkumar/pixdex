@@ -39,13 +39,13 @@ const usePersonFaces = (photoId: string, personId: string, coverFaceId: string |
   return { auto, candidate, isCover };
 };
 
-/** A small, translucent sparkle on a photo whose face match for this person was automatic (not a loud badge). */
+/** A small sparkle before the title of a photo whose face match for this person was automatic (not a loud badge). */
 const PersonFaceBadge = ({ photoId, personId }: { photoId: string; personId: string }) => {
   const { auto } = usePersonFaces(photoId, personId, undefined);
   return auto ? (
     <Tooltip label="Matched automatically">
-      <span className="pdx-tile-chip" role="img" aria-label="Matched automatically">
-        <TbSparkles size={14} aria-hidden />
+      <span className="pdx-tile-mark" role="img" aria-label="Matched automatically">
+        <TbSparkles size={13} aria-hidden />
       </span>
     </Tooltip>
   ) : null;
@@ -354,7 +354,7 @@ const PersonPage = () => {
         <PhotoGrid
           photos={photos}
           showAlbum
-          badges={(photo) => (person?.canEdit ? <PersonFaceBadge photoId={photo.id} personId={id} /> : null)}
+          mark={(photo) => (person?.canEdit ? <PersonFaceBadge photoId={photo.id} personId={id} /> : null)}
           actions={(photo) =>
             person?.canEdit ? (
               <PersonFaceActions

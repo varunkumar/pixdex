@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { TbSparkles } from 'react-icons/tb';
 import { Link } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
@@ -12,6 +13,8 @@ interface PhotoTileProps {
   photo: SerializedPhoto;
   /** Always-visible status badges (Cover, Auto), drawn in the top left corner. */
   badges?: ReactNode;
+  /** A small marker drawn before the title in the hover text (an icon with its own label); touch shows a plain sparkle in the caption line. */
+  mark?: ReactNode;
   /** Owner controls, drawn in the top right corner (outside the link). */
   actions?: ReactNode;
   /** The shape to lay the tile out in; defaults to the photo's stored size. */
@@ -29,7 +32,7 @@ interface PhotoTileProps {
  * its date on one line and a single row of tags (or the AI note) at the bottom; touch devices get one caption line
  * under the image. Both are always in the DOM, CSS (`@media (hover: ...)`) picks which one is visible.
  */
-const PhotoTile = ({ photo, badges, actions, ratio, onThumbnailSize, note, showAlbum = false }: PhotoTileProps) => {
+const PhotoTile = ({ photo, badges, mark, actions, ratio, onThumbnailSize, note, showAlbum = false }: PhotoTileProps) => {
   const caption = photoCaption(photo);
   const date = formatPhotoDate(photo.dateTime);
   const album = showAlbum ? photo.album : null;
@@ -52,6 +55,7 @@ const PhotoTile = ({ photo, badges, actions, ratio, onThumbnailSize, note, showA
           {album && <span className="pdx-tile-album">{album}</span>}
           <div className="pdx-tile-info">
             <div className="pdx-tile-line">
+              {mark}
               <b>{caption}</b>
               {date && <span className="pdx-tile-date">{date}</span>}
             </div>
@@ -67,6 +71,7 @@ const PhotoTile = ({ photo, badges, actions, ratio, onThumbnailSize, note, showA
         {actions && <div className="pdx-tile-actions">{actions}</div>}
       </div>
       <div className="pdx-tile-cap">
+        {mark && <TbSparkles size={11} aria-hidden className="pdx-tile-cap-mark" />}
         <span>{caption}</span>
         {tail && (
           <>

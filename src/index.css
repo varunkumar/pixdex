@@ -182,16 +182,16 @@ body {
     opacity: 1;
   }
 }
-.pdx-tile-chip {
+.pdx-tile-mark {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.38); /* blends into the photo instead of a solid colour */
-  pointer-events: auto; /* the badges layer ignores the pointer, but the tooltip needs it */
+  flex: none;
+  align-self: center;
+  margin-right: -2px;
+  pointer-events: auto; /* the overlay ignores the pointer, but the tooltip needs it */
+}
+.pdx-tile-cap-mark {
+  margin-right: 3px;
+  vertical-align: -1px;
 }
 .pdx-tile-badges {
   position: absolute;

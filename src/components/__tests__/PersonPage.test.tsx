@@ -102,7 +102,9 @@ describe('PersonPage', () => {
     vi.mocked(workerApiClient.rejectFace).mockResolvedValue(face('a1'));
     show();
     const marker = await screen.findByLabelText('Matched automatically');
-    expect(marker.closest('.pdx-tile-actions')).toBeNull(); // visible without hover
+    expect(marker.closest('.pdx-tile-actions')).toBeNull();
+    expect(marker.closest('.pdx-tile-line')).not.toBeNull(); // sits before the title, clear of the album name at the top left
+    expect(marker.closest('.pdx-tile-badges')).toBeNull();
     expect(screen.queryByText('Auto')).not.toBeInTheDocument(); // an icon, not a text badge
     expect(await screen.findByRole('button', { name: /^photo actions for .*leopard/i })).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));

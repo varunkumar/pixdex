@@ -10,6 +10,8 @@ interface PhotoGridProps {
   photos: SerializedPhoto[];
   /** Always-visible status badges per photo (top left corner). */
   badges?: (photo: SerializedPhoto) => ReactNode;
+  /** A small marker per photo, drawn before the title (person page: matched automatically). */
+  mark?: (photo: SerializedPhoto) => ReactNode;
   /** Owner controls per photo, drawn in the tile's top right corner. */
   actions?: (photo: SerializedPhoto) => ReactNode;
   /** Extra one-line explanation per photo (AI results). */
@@ -18,7 +20,7 @@ interface PhotoGridProps {
   showAlbum?: boolean;
 }
 
-const PhotoGrid = ({ photos, badges, actions, note, showAlbum }: PhotoGridProps) => {
+const PhotoGrid = ({ photos, badges, mark, actions, note, showAlbum }: PhotoGridProps) => {
   const columns = usePhotoColumns();
   const { ratios, report } = useThumbRatios();
   const shapeOf = useCallback((photo: SerializedPhoto) => ratios[photo.id] ?? photoRatio(photo), [ratios]);
@@ -43,6 +45,7 @@ const PhotoGrid = ({ photos, badges, actions, note, showAlbum }: PhotoGridProps)
           ratio={shapeOf(photo)}
           onThumbnailSize={learnShape(photo)}
           badges={badges?.(photo)}
+          mark={mark?.(photo)}
           actions={actions?.(photo)}
           note={note?.(photo)}
           showAlbum={showAlbum}
