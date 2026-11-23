@@ -112,8 +112,6 @@ describe('Albums', () => {
     await screen.findByText('Mine');
     // Two owned albums get a Share button, the viewer album does not.
     expect(screen.getAllByRole('button', { name: /^share /i })).toHaveLength(2);
-    expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
-    expect(screen.getByLabelText('owner@example.com')).toBeInTheDocument();
     expect(screen.getAllByText('Shared with you')).toHaveLength(1);
     const theirs = screen.getByText('Theirs').closest('.pdx-album-item') as HTMLElement;
     expect(theirs.querySelector('button')).toBeNull();

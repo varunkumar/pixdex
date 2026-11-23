@@ -193,12 +193,7 @@ body {
   top: 8px;
   left: 8px;
 }
-.pdx-album-people {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-}
-/* Status bits that follow the hover reveal: the shared chip and the avatars. */
+/* Status bit that follows the hover reveal: the shared chip. */
 .pdx-reveal {
   opacity: 0;
   transition: opacity 0.15s;
@@ -209,27 +204,35 @@ body {
 }
 .pdx-album-cap {
   padding: 6px 2px 0;
-  font-size: 13px;
-  white-space: nowrap;
+}
+.pdx-album-name,
+.pdx-album-cap-meta {
+  display: block;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 .pdx-album-name {
+  font-size: 13px;
   font-weight: 600;
 }
 .pdx-album-cap-meta {
-  display: none;
-  font-size: 11px;
+  display: none; /* a mouse sees the count and date on hover instead */
+  font-size: 12px;
   color: var(--mantine-color-dimmed);
 }
+/* A phone or tablet (touch as the primary input): two line caption, nothing over the cover, no Share (it lives on
+   the album page). */
 @media (hover: none) {
-  .pdx-album-text {
+  .pdx-album-text,
+  .pdx-album-chip,
+  .pdx-album .pdx-tile-actions {
     display: none;
   }
 }
 @media (hover: none), (any-pointer: coarse) {
   .pdx-album-cap-meta {
-    display: inline;
+    display: block;
   }
   .pdx-reveal {
     opacity: 1;

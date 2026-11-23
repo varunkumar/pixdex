@@ -17,7 +17,7 @@ export function usePhotoColumns(): number {
   return useMatches({ base: phone, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
 }
 
-/** Album tile columns: always at least 2, then 3, 4 and 5 (no 1 column option). */
+/** Album tile columns: one wide column on a phone (full names and a two line caption fit), then 3, 4 and 5. */
 export function useAlbumColumns(): number {
-  return useMatches({ base: 2, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
+  return useMatches({ base: 1, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
 }

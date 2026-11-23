@@ -7,12 +7,11 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
 import type { AlbumSummary } from '../types/api';
 import ShareAlbumModal from './ShareAlbumModal';
-import { AvatarStack, UserAvatar } from './UserAvatar';
 
 /**
- * Uniform 4:3 cover tile with the album name always shown below it. On a mouse device the count and date, the sharing
- * avatars and the Share button appear over the cover on hover (or focus); on touch devices the count and date join the
- * name line and the rest stays visible.
+ * Uniform 4:3 cover tile with the album name always shown below it. On a mouse device the count and date, the shared
+ * chip and the Share button appear over the cover on hover (or focus). On a phone or tablet the caption is two lines
+ * (name, then count and date) and nothing sits over the cover: sharing is managed from the album page.
  */
 const AlbumCard = ({ album }: { album: AlbumSummary }) => {
   const location = useLocation();
@@ -28,9 +27,6 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
       : album.role === 'viewer' && album.ownerEmail
         ? `shared by ${album.ownerEmail}`
         : null;
-  const hasAvatars = sharedWith.length > 0 || (album.role === 'viewer' && !!album.ownerEmail);
-  // Avatars shown: up to 3 sharees plus a "+N" bubble, or the single owner avatar.
-  const avatarCount = album.role === 'viewer' ? 1 : Math.min(sharedWith.length, 3) + (sharedWith.length > 3 ? 1 : 0);
 
   return (
     <div className="pdx-album-item">
@@ -52,10 +48,7 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
               </Box>
             </Center>
           )}
-          <div
-            className="pdx-album-text"
-            style={hasAvatars ? { paddingRight: 28 + 20 * Math.min(avatarCount, 4) } : undefined}
-          >
+          <div className="pdx-album-text">
             <Text size="xs" lineClamp={2} inherit>
               {count}
               {date && ` · ${date}`}
@@ -66,15 +59,6 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
           <Badge className="pdx-album-chip pdx-reveal" size="sm" variant="filled" color="grape">
             Shared with you
           </Badge>
-        )}
-        {hasAvatars && (
-          <div className="pdx-album-people pdx-reveal">
-            {album.role === 'viewer' && album.ownerEmail ? (
-              <UserAvatar email={album.ownerEmail} size={26} />
-            ) : (
-              <AvatarStack emails={sharedWith} size={26} />
-            )}
-          </div>
         )}
         {isOwner && (
           <div className="pdx-tile-actions">
@@ -95,7 +79,6 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
       <div className="pdx-album-cap">
         <span className="pdx-album-name">{album.name}</span>
         <span className="pdx-album-cap-meta">
-          {' · '}
           {count}
           {date && ` · ${date}`}
         </span>

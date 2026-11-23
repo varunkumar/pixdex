@@ -21,26 +21,24 @@ describe('AlbumCard', () => {
     expect(link).toHaveTextContent('142 photos');
   });
 
-  it('shows the sharee avatars and a Share button (outside the link) to the owner', () => {
+  it('offers Share to the owner, outside the link, and shows no avatar stack', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ sharedWith: ['a@example.com', 'b@example.com'] })} />);
-    expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
-    expect(screen.getByLabelText('b@example.com')).toBeInTheDocument();
+    expect(screen.queryByLabelText('a@example.com')).not.toBeInTheDocument();
     const share = screen.getByRole('button', { name: 'Share Kabini' });
     expect(screen.getByRole('link', { name: /kabini/i }).contains(share)).toBe(false);
     fireEvent.click(share);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('shows no avatars for an owner album that is not shared, but still the Share button', () => {
+  it('still offers Share for an owner album that is not shared', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ sharedWith: [] })} />);
-    expect(screen.queryByLabelText(/@example\.com/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Share Kabini' })).toBeInTheDocument();
   });
 
-  it('shows Shared with you and the owner avatar, and no Share button, on a viewer album', () => {
+  it('shows the Shared with you chip, no Share button and no avatar on a viewer album', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ role: 'viewer', ownerEmail: 'owner@example.com' })} />);
     expect(screen.getByText('Shared with you')).toBeInTheDocument();
-    expect(screen.getByLabelText('owner@example.com')).toBeInTheDocument();
+    expect(screen.queryByLabelText('owner@example.com')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^share/i })).not.toBeInTheDocument();
   });
 
@@ -62,13 +60,15 @@ describe('AlbumCard', () => {
     expect(overlay).toHaveTextContent('142 photos');
     expect(overlay).not.toHaveTextContent('Goa 2024'); // the name is not repeated over the image
     // On touch the count and date join the name line, since there is no hover.
-    expect(cap.querySelector('.pdx-album-cap-meta')).toHaveTextContent('142 photos');
+    // On touch the caption is two lines: the name, then the dimmed count and date.
+    const meta = cap.querySelector('.pdx-album-cap-meta') as HTMLElement;
+    expect(meta).toHaveTextContent(/^142 photos · /);
+    expect(meta.textContent).not.toContain('Goa 2024');
   });
 
-  it('reveals the sharing avatars and the Shared with you chip together with the hover details', () => {
+  it('reveals the Shared with you chip together with the hover details', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ role: 'viewer', ownerEmail: 'owner@example.com' })} />);
     expect(screen.getByText('Shared with you').closest('.pdx-reveal')).not.toBeNull();
-    expect(screen.getByLabelText('owner@example.com').closest('.pdx-reveal')).not.toBeNull();
   });
 
   it('does not repeat the album name through the cover image alt', () => {
