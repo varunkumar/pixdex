@@ -70,7 +70,7 @@ machine. Originals stay on local disk or Google Drive.
 | **Photo page** | **People** |
 | ![Photo page with metadata, review and faces](docs/screenshots/photo.png) | ![People and unnamed face groups](docs/screenshots/people.png) |
 | **Album page** | **On a phone** |
-| ![Album page with masonry photos, sorting icons and a hover overlay](docs/screenshots/album.png) | <img src="docs/screenshots/mobile.png" alt="Album page on a phone: two columns with a caption line under each photo" width="300"> |
+| ![Album page with masonry photos, sorting icons and the Cover badge](docs/screenshots/album.png) | <img src="docs/screenshots/mobile.png" alt="Album page on a phone: two columns with a caption line under each photo" width="300"> |
 
 ## Architecture
 

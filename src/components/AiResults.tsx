@@ -1,4 +1,5 @@
 import { Badge, Group, Stack, Text } from '@mantine/core';
+import { useMemo } from 'react';
 import { RESULT_LIMIT, type AiSearchResult, type RankedPhoto } from '../services/aiSearch/pipeline';
 import PhotoGrid from './PhotoGrid';
 
@@ -15,7 +16,9 @@ const resultNote = (item: RankedPhoto): string =>
 export default function AiResults({ result }: { result: AiSearchResult }) {
   const noMatches = result.keywords.filter((k) => !k.failed && k.total === 0);
   const failed = result.keywords.filter((k) => k.failed);
-  const items = result.items.slice(0, RESULT_LIMIT);
+  const items = useMemo(() => result.items.slice(0, RESULT_LIMIT), [result.items]);
+  const photos = useMemo(() => items.map((item) => item.photo), [items]);
+  const notes = useMemo(() => new Map(items.map((item) => [item.photo.id, resultNote(item)])), [items]);
 
   return (
     <Stack gap="sm">
@@ -43,10 +46,7 @@ export default function AiResults({ result }: { result: AiSearchResult }) {
               {result.hiddenPeople} people photos hidden.
             </Text>
           )}
-          <PhotoGrid
-            photos={items.map((item) => item.photo)}
-            note={(photo) => resultNote(items.find((item) => item.photo.id === photo.id)!)}
-          />
+          <PhotoGrid photos={photos} note={(photo) => notes.get(photo.id)} />
         </>
       )}
     </Stack>

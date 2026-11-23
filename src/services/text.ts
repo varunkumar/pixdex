@@ -13,3 +13,13 @@ export function shortDescription(text: string | null | undefined, maxLength = 14
   const lastSpace = cut.lastIndexOf(' ');
   return `${(lastSpace > maxLength / 2 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.-]+$/, '')}…`;
 }
+
+/** The one-line name of a photo in listings: its short caption, else a short description, else the file name. */
+export function photoCaption(photo: {
+  shortCaption?: string | null;
+  description?: string | null;
+  filename?: string | null;
+  id: string;
+}): string {
+  return photo.shortCaption || shortDescription(photo.description, 60) || photo.filename || photo.id;
+}

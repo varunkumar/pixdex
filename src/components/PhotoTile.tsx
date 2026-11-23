@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
-import { shortDescription } from '../services/text';
+import { photoCaption } from '../services/text';
 import type { SerializedPhoto } from '../types/api';
 import { photoRatio } from './masonry';
 
@@ -10,6 +10,8 @@ const MAX_TILE_TAGS = 3;
 
 interface PhotoTileProps {
   photo: SerializedPhoto;
+  /** Always-visible status badges (Cover, Auto), drawn in the top left corner. */
+  badges?: ReactNode;
   /** Owner controls, drawn in the top right corner (outside the link). */
   actions?: ReactNode;
   /** Extra one-line explanation (AI results), shown in the overlay and replacing the caption line tail. */
@@ -22,8 +24,8 @@ interface PhotoTileProps {
  * Image-first tile. Hover-capable devices get an overlay (caption, date, tags); touch devices get one caption line
  * under the image. Both are always in the DOM, CSS (`@media (hover: ...)`) picks which one is visible.
  */
-const PhotoTile = ({ photo, actions, note, showAlbum = false }: PhotoTileProps) => {
-  const caption = photo.shortCaption || shortDescription(photo.description, 60) || photo.filename || photo.id;
+const PhotoTile = ({ photo, badges, actions, note, showAlbum = false }: PhotoTileProps) => {
+  const caption = photoCaption(photo);
   const date = formatPhotoDate(photo.dateTime);
   const album = showAlbum ? photo.album : null;
   const tail = note ?? album ?? date;
@@ -42,6 +44,7 @@ const PhotoTile = ({ photo, actions, note, showAlbum = false }: PhotoTileProps) 
           {tags.length > 0 && <span className="pdx-tile-tags">{tags.map((t) => `#${t}`).join(' ')}</span>}
           {note && <span>{note}</span>}
         </div>
+        {badges && <div className="pdx-tile-badges">{badges}</div>}
         {actions && <div className="pdx-tile-actions">{actions}</div>}
       </div>
       <div className="pdx-tile-cap">

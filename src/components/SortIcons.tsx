@@ -22,7 +22,7 @@ interface SortIconsProps<V extends string> {
 function SortIcons<V extends string>({ options, value, onChange, label }: SortIconsProps<V>) {
   return (
     <>
-      <ActionIcon.Group visibleFrom="xs">
+      <ActionIcon.Group visibleFrom="xs" aria-label={label}>
         {options.map(({ value: v, label: optionLabel, icon: Icon, text }) => (
           <Tooltip key={v} label={optionLabel}>
             <ActionIcon
@@ -46,7 +46,7 @@ function SortIcons<V extends string>({ options, value, onChange, label }: SortIc
       <Box hiddenFrom="xs">
         <Menu position="bottom-end" withinPortal>
           <Menu.Target>
-            <ActionIcon variant="default" size={42} aria-label={label}>
+            <ActionIcon variant="default" size={42} aria-label={`${label}, ${options.find((o) => o.value === value)?.label ?? ''}`}>
               <TbArrowsSort size={22} aria-hidden />
             </ActionIcon>
           </Menu.Target>
@@ -54,6 +54,8 @@ function SortIcons<V extends string>({ options, value, onChange, label }: SortIc
             {options.map(({ value: v, label: optionLabel }) => (
               <Menu.Item
                 key={v}
+                // Mantine fixes the item role to "menuitem", so the current choice is part of its name.
+                aria-label={v === value ? `${optionLabel} (current)` : optionLabel}
                 rightSection={v === value ? <TbCheck aria-hidden /> : null}
                 onClick={() => onChange(v)}
               >

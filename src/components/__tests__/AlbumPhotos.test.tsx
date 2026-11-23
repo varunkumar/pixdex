@@ -239,7 +239,10 @@ describe('AlbumPhotos', () => {
 
   it('sets a photo as the album cover', async () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    fireEvent.click(await screen.findByRole('button', { name: /set as cover/i }));
+    // Each tile's button names its photo, so a screen reader can tell them apart.
+    const buttons = await screen.findAllByRole('button', { name: /^set as cover: /i });
+    expect(buttons[0]).toHaveAccessibleName(/leopard in a tree/i);
+    fireEvent.click(buttons[0]);
     await waitFor(() => expect(workerApiClient.setAlbumCover).toHaveBeenCalledWith('Kanha', makePhoto().id));
   });
 
@@ -258,7 +261,8 @@ describe('AlbumPhotos', () => {
       total: 1,
     });
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    expect(await screen.findByText('Cover')).toBeInTheDocument();
+    const badge = await screen.findByText('Cover');
+    expect(badge.closest('.pdx-tile-actions')).toBeNull(); // visible without hover
     expect(screen.queryByRole('button', { name: /set as cover/i })).not.toBeInTheDocument();
   });
 
@@ -297,8 +301,8 @@ describe('AlbumPhotos', () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
     expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Shared with you')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Set as cover' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /set as cover/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^share/i })).not.toBeInTheDocument();
   });
 
   it('shows Share and the sharee avatars to the owner of a shared album', async () => {
@@ -317,7 +321,7 @@ describe('AlbumPhotos', () => {
       total: 1,
     });
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    expect(await screen.findByRole('button', { name: 'Share' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^share/i })).toBeInTheDocument();
     expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
   });
 });

@@ -360,6 +360,7 @@ const Search = () => {
                   checked={leaveRoom}
                   onChange={(e) => update({ room: e.currentTarget.checked ? null : '0' }, { resetPage: true })}
                 />
+                <ColumnsToggle />
               </Group>
             )}
             {ai ? (

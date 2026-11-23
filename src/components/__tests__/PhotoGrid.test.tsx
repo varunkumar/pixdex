@@ -45,6 +45,12 @@ describe('PhotoGrid', () => {
     expect(screen.getAllByText('Goa').length).toBeGreaterThanOrEqual(3);
   });
 
+  it('calls badges per photo', () => {
+    renderWithProviders(<PhotoGrid photos={photos} badges={(p) => <span>badge-{p.id}</span>} />);
+    expect(screen.getByText('badge-a')).toBeInTheDocument();
+    expect(screen.getByText('badge-c')).toBeInTheDocument();
+  });
+
   it('renders nothing broken for an empty list', () => {
     renderWithProviders(<PhotoGrid photos={[]} />);
     expect(document.querySelector('a')).toBeNull();

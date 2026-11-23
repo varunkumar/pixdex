@@ -101,8 +101,9 @@ describe('PersonPage', () => {
     ]);
     vi.mocked(workerApiClient.rejectFace).mockResolvedValue(face('a1'));
     show();
-    expect(await screen.findByText('Auto')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    expect((await screen.findByText('Auto')).closest('.pdx-tile-actions')).toBeNull(); // visible without hover
+    expect(await screen.findByRole('button', { name: /^photo actions for .*leopard/i })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
     await waitFor(() => expect(workerApiClient.rejectFace).toHaveBeenCalledWith('a1', 'pe1'));
   });
@@ -113,7 +114,7 @@ describe('PersonPage', () => {
     ]);
     vi.mocked(workerApiClient.rejectFace).mockRejectedValue(new Error('boom'));
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
     expect(await screen.findByText('Something went wrong, try again')).toBeInTheDocument();
   });
@@ -126,7 +127,7 @@ describe('PersonPage', () => {
     ]);
     vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as cover' }));
     await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'big'));
   });
@@ -139,7 +140,7 @@ describe('PersonPage', () => {
       face('c9', { personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
     ]);
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     expect(await screen.findByRole('menuitem', { name: 'Current cover' })).toBeDisabled();
     expect(screen.queryByRole('menuitem', { name: 'Set as cover' })).toBeNull();
   });
@@ -235,7 +236,7 @@ describe('PersonPage', () => {
     expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument();
     await screen.findAllByText('A leopard in a tree.');
     for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover', 'Photo actions']) {
-      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: new RegExp(`^${name}`, 'i') })).not.toBeInTheDocument();
     }
   });
 

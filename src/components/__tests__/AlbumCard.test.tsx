@@ -25,7 +25,7 @@ describe('AlbumCard', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ sharedWith: ['a@example.com', 'b@example.com'] })} />);
     expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
     expect(screen.getByLabelText('b@example.com')).toBeInTheDocument();
-    const share = screen.getByRole('button', { name: 'Share' });
+    const share = screen.getByRole('button', { name: 'Share Kabini' });
     expect(screen.getByRole('link', { name: /kabini/i }).contains(share)).toBe(false);
     fireEvent.click(share);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -34,14 +34,30 @@ describe('AlbumCard', () => {
   it('shows no avatars for an owner album that is not shared, but still the Share button', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ sharedWith: [] })} />);
     expect(screen.queryByLabelText(/@example\.com/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share Kabini' })).toBeInTheDocument();
   });
 
   it('shows Shared with you and the owner avatar, and no Share button, on a viewer album', () => {
     renderWithProviders(<AlbumCard album={makeAlbum({ role: 'viewer', ownerEmail: 'owner@example.com' })} />);
     expect(screen.getByText('Shared with you')).toBeInTheDocument();
     expect(screen.getByLabelText('owner@example.com')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^share/i })).not.toBeInTheDocument();
+  });
+
+  it('tells screen readers who an album is shared with and by, without needing hover', () => {
+    const { unmount } = renderWithProviders(
+      <AlbumCard album={makeAlbum({ sharedWith: ['a@example.com', 'b@example.com'] })} />
+    );
+    expect(screen.getByRole('link', { name: /kabini/i })).toHaveTextContent('Shared with a@example.com, b@example.com');
+    unmount();
+    renderWithProviders(<AlbumCard album={makeAlbum({ role: 'viewer', ownerEmail: 'owner@example.com' })} />);
+    expect(screen.getByRole('link', { name: /kabini/i })).toHaveTextContent('Shared by owner@example.com');
+  });
+
+  it('does not repeat the album name through the cover image alt', () => {
+    renderWithProviders(<AlbumCard album={makeAlbum()} />);
+    expect(document.querySelector('img')).toHaveAttribute('alt', '');
+    expect(screen.getByRole('link', { name: 'Kabini 3 photos' })).toBeInTheDocument();
   });
 
   it('shows a placeholder when there is no cover', () => {

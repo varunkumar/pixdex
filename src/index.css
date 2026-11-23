@@ -118,16 +118,28 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Touch as the primary input: no overlay, a caption line and always-visible controls. A touch screen next to a
+   mouse (hybrid laptop) also gets the caption line and the controls, and keeps the hover overlay. */
 @media (hover: none) {
   .pdx-tile-overlay {
     display: none;
   }
+}
+@media (hover: none), (any-pointer: coarse) {
   .pdx-tile-cap {
     display: block;
   }
   .pdx-tile-actions {
     opacity: 1;
   }
+}
+.pdx-tile-badges {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
 }
 
 /* Album tile: uniform 4:3 cover with name and count over a bottom gradient. */

@@ -92,6 +92,11 @@ describe('Timeline', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it('offers the phone column toggle next to the zoom control', async () => {
+    renderAt('/timeline');
+    expect(await screen.findByRole('button', { name: /switch to 1 column/i })).toBeInTheDocument();
+  });
+
   it('shows month headings with total and shown counts', async () => {
     renderAt('/timeline');
     expect(await screen.findByText('November 2026')).toBeInTheDocument();

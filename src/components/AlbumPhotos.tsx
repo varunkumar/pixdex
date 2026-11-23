@@ -7,6 +7,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
+import { photoCaption } from '../services/text';
 import AlbumFilterChip from './AlbumFilterChip';
 import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
 import ColumnsToggle from './ColumnsToggle';
@@ -183,26 +184,27 @@ const AlbumPhotos = () => {
             {data && data.results.length > 0 && (
               <PhotoGrid
                 photos={data.results}
+                badges={(photo) =>
+                  isOwner && photo.id === coverId ? (
+                    <Badge color="yellow" variant="filled" size="sm">
+                      Cover
+                    </Badge>
+                  ) : null
+                }
                 actions={(photo) =>
-                  isOwner ? (
-                    photo.id === coverId ? (
-                      <Badge color="yellow" variant="filled" size="sm">
-                        Cover
-                      </Badge>
-                    ) : (
-                      <Tooltip label="Set as cover">
-                        <ActionIcon
-                          variant="filled"
-                          color="dark"
-                          size="md"
-                          aria-label="Set as cover"
-                          loading={setCover.isPending && setCover.variables === photo.id}
-                          onClick={() => setCover.mutate(photo.id)}
-                        >
-                          <TbPhotoStar aria-hidden />
-                        </ActionIcon>
-                      </Tooltip>
-                    )
+                  isOwner && photo.id !== coverId ? (
+                    <Tooltip label="Set as cover">
+                      <ActionIcon
+                        variant="filled"
+                        color="dark"
+                        size="md"
+                        aria-label={`Set as cover: ${photoCaption(photo)}`}
+                        loading={setCover.isPending && setCover.variables === photo.id}
+                        onClick={() => setCover.mutate(photo.id)}
+                      >
+                        <TbPhotoStar aria-hidden />
+                      </ActionIcon>
+                    </Tooltip>
                   ) : null
                 }
               />

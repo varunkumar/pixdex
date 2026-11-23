@@ -7,6 +7,8 @@ import PhotoTile from './PhotoTile';
 
 interface PhotoGridProps {
   photos: SerializedPhoto[];
+  /** Always-visible status badges per photo (top left corner). */
+  badges?: (photo: SerializedPhoto) => ReactNode;
   /** Owner controls per photo, drawn in the tile's top right corner. */
   actions?: (photo: SerializedPhoto) => ReactNode;
   /** Extra one-line explanation per photo (AI results). */
@@ -15,7 +17,7 @@ interface PhotoGridProps {
   showAlbum?: boolean;
 }
 
-const PhotoGrid = ({ photos, actions, note, showAlbum }: PhotoGridProps) => {
+const PhotoGrid = ({ photos, badges, actions, note, showAlbum }: PhotoGridProps) => {
   const columns = usePhotoColumns();
   return (
     <MasonryGrid
@@ -24,7 +26,13 @@ const PhotoGrid = ({ photos, actions, note, showAlbum }: PhotoGridProps) => {
       keyOf={(photo) => photo.id}
       columns={columns}
       renderItem={(photo) => (
-        <PhotoTile photo={photo} actions={actions?.(photo)} note={note?.(photo)} showAlbum={showAlbum} />
+        <PhotoTile
+          photo={photo}
+          badges={badges?.(photo)}
+          actions={actions?.(photo)}
+          note={note?.(photo)}
+          showAlbum={showAlbum}
+        />
       )}
     />
   );

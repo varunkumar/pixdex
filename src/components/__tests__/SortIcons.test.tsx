@@ -26,8 +26,10 @@ describe('SortIcons', () => {
   it('offers the same choices from the single phone menu button', async () => {
     const onChange = vi.fn();
     renderWithProviders(<SortIcons options={options} value="date" onChange={onChange} label="Sort photos" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Sort photos' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Best rated' }));
+    // The trigger names the current choice, and so does its menu item.
+    fireEvent.click(screen.getByRole('button', { name: 'Sort photos, Newest first' }));
+    expect(await screen.findByRole('menuitem', { name: 'Newest first (current)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Best rated' }));
     expect(onChange).toHaveBeenCalledWith('rating');
   });
 });

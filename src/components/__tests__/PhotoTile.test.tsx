@@ -75,6 +75,15 @@ describe('PhotoTile', () => {
     expect(screen.getAllByText(/matched: cat/)).toHaveLength(2);
   });
 
+  it('renders badges in an always-visible slot, apart from the hover-only actions', () => {
+    renderWithProviders(
+      <PhotoTile photo={makePhoto()} badges={<span>Cover</span>} actions={<button type="button">Do it</button>} />
+    );
+    const badge = screen.getByText('Cover');
+    expect(badge.closest('.pdx-tile-badges')).not.toBeNull();
+    expect(badge.closest('.pdx-tile-actions')).toBeNull();
+  });
+
   it('renders actions outside the link', () => {
     renderWithProviders(<PhotoTile photo={makePhoto()} actions={<button type="button">Do it</button>} />);
     const link = screen.getByRole('link', { name: /leopard in a tree/i });

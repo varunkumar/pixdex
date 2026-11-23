@@ -409,6 +409,11 @@ describe('Search (AI mode)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Ask AI/ }));
   };
 
+  it('offers the phone column toggle in AI mode too', async () => {
+    go('/search?mode=ai&q=lion&kw=diya');
+    expect(await screen.findByRole('button', { name: /switch to 1 column/i })).toBeInTheDocument();
+  });
+
   it('in AI mode the button is Search again: it re-runs the keywords without the model and stays in AI mode', async () => {
     const { router } = go('/search?mode=ai&q=Xmas+lights&kw=diya');
     await waitFor(() => expect(runAiSearch).toHaveBeenCalledTimes(1));

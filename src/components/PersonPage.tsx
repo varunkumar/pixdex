@@ -7,6 +7,7 @@ import { TbCalendar, TbDotsVertical, TbStar } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
+import { photoCaption } from '../services/text';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import ColumnsToggle from './ColumnsToggle';
@@ -24,18 +25,8 @@ const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: s
   { value: 'name', label: 'Alphabetical', text: 'A-Z' },
 ];
 
-/** Per photo: an "Auto" flag on an automatic match, and a menu to set the person's cover or reject the match. */
-const PersonFaceActions = ({
-  photoId,
-  personId,
-  coverFaceId,
-  onChanged,
-}: {
-  photoId: string;
-  personId: string;
-  coverFaceId: string | undefined;
-  onChanged: () => void;
-}) => {
+/** This person's faces in one photo: the automatic match, and the largest face to offer as the cover. */
+const usePersonFaces = (photoId: string, personId: string, coverFaceId: string | undefined) => {
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
@@ -45,9 +36,37 @@ const PersonFaceActions = ({
   // Offer the largest of this person's faces in the photo as the cover candidate.
   const candidate = [...mine].sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)[0];
   const isCover = coverFaceId != null && mine.some((f) => f.id === coverFaceId);
+  return { auto, candidate, isCover };
+};
+
+/** Always-visible "Auto" flag on a photo whose face match for this person was automatic. */
+const PersonFaceBadge = ({ photoId, personId }: { photoId: string; personId: string }) => {
+  const { auto } = usePersonFaces(photoId, personId, undefined);
+  return auto ? (
+    <Badge size="sm" variant="filled" color="grape">
+      Auto
+    </Badge>
+  ) : null;
+};
+
+/** Per photo: a menu to set the person's cover or reject an automatic match. */
+const PersonFaceActions = ({
+  photoId,
+  personId,
+  coverFaceId,
+  label,
+  onChanged,
+}: {
+  photoId: string;
+  personId: string;
+  coverFaceId: string | undefined;
+  /** The photo's caption, so each menu button has its own accessible name. */
+  label: string;
+  onChanged: () => void;
+}) => {
+  const { auto, candidate, isCover } = usePersonFaces(photoId, personId, coverFaceId);
   // The menu closes on click, so a failure is reported as a notification, not inside the dropdown.
-  const onError = (error: unknown) =>
-    notifications.show({ color: 'red', message: errorMessage(error, false) });
+  const onError = (error: unknown) => notifications.show({ color: 'red', message: errorMessage(error, false) });
   const reject = useMutation({
     mutationFn: (faceId: string) => workerApiClient.rejectFace(faceId, personId),
     onSuccess: onChanged,
@@ -60,38 +79,31 @@ const PersonFaceActions = ({
   });
   if (!candidate) return null;
   return (
-    <Group gap={4} wrap="nowrap">
-      {auto && (
-        <Badge size="sm" variant="filled" color="grape">
-          Auto
-        </Badge>
-      )}
-      <Menu position="bottom-end" withinPortal>
-        <Menu.Target>
-          <ActionIcon
-            variant="filled"
-            color="dark"
-            size="md"
-            aria-label="Photo actions"
-            loading={reject.isPending || setCover.isPending}
-          >
-            <TbDotsVertical aria-hidden />
-          </ActionIcon>
-        </Menu.Target>
-        <Menu.Dropdown>
-          {isCover ? (
-            <Menu.Item disabled>Current cover</Menu.Item>
-          ) : (
-            <Menu.Item onClick={() => setCover.mutate(candidate.id)}>Set as cover</Menu.Item>
-          )}
-          {auto && (
-            <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
-              Not {auto.personName}
-            </Menu.Item>
-          )}
-        </Menu.Dropdown>
-      </Menu>
-    </Group>
+    <Menu position="bottom-end" withinPortal>
+      <Menu.Target>
+        <ActionIcon
+          variant="filled"
+          color="dark"
+          size="md"
+          aria-label={`Photo actions for ${label}`}
+          loading={reject.isPending || setCover.isPending}
+        >
+          <TbDotsVertical aria-hidden />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {isCover ? (
+          <Menu.Item disabled>Current cover</Menu.Item>
+        ) : (
+          <Menu.Item onClick={() => setCover.mutate(candidate.id)}>Set as cover</Menu.Item>
+        )}
+        {auto && (
+          <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
+            Not {auto.personName}
+          </Menu.Item>
+        )}
+      </Menu.Dropdown>
+    </Menu>
   );
 };
 
@@ -339,9 +351,16 @@ const PersonPage = () => {
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
+          badges={(photo) => (person?.canEdit ? <PersonFaceBadge photoId={photo.id} personId={id} /> : null)}
           actions={(photo) =>
             person?.canEdit ? (
-              <PersonFaceActions photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
+              <PersonFaceActions
+                photoId={photo.id}
+                personId={id}
+                coverFaceId={person?.cover?.id}
+                label={photoCaption(photo)}
+                onChanged={refresh}
+              />
             ) : null
           }
         />

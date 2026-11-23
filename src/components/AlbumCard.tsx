@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Box, Center, Image, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Box, Center, Image, Text, Tooltip, VisuallyHidden } from '@mantine/core';
 import { useState } from 'react';
 import { MdPhoto } from 'react-icons/md';
 import { TbShare } from 'react-icons/tb';
@@ -30,7 +30,7 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
         className="pdx-album-link"
       >
         {cover ? (
-          <Image src={cover} alt={album.name} fit="cover" h="100%" w="100%" />
+          <Image src={cover} alt="" fit="cover" h="100%" w="100%" />
         ) : (
           <Center h="100%" bg="var(--mantine-color-default-hover)">
             <Box c="dimmed" fz={40} lh={1}>
@@ -42,6 +42,9 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
           <Text fw={600} size="sm" lineClamp={1} inherit>
             {album.name}
           </Text>
+          {/* Who it is shared with, for screen readers (the avatars need a mouse for their tooltips). */}
+          {sharedWith.length > 0 && <VisuallyHidden>Shared with {sharedWith.join(', ')}</VisuallyHidden>}
+          {album.role === 'viewer' && album.ownerEmail && <VisuallyHidden>Shared by {album.ownerEmail}</VisuallyHidden>}
           <Text size="xs" lineClamp={2} inherit style={{ opacity: 0.85 }}>
             {album.photoCount} {album.photoCount === 1 ? 'photo' : 'photos'}
             {date && ` · ${date}`}
@@ -66,7 +69,13 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
         <>
           <div className="pdx-tile-actions">
             <Tooltip label="Share">
-              <ActionIcon variant="filled" color="dark" size="md" aria-label="Share" onClick={() => setSharing(true)}>
+              <ActionIcon
+                variant="filled"
+                color="dark"
+                size="md"
+                aria-label={`Share ${album.name}`}
+                onClick={() => setSharing(true)}
+              >
                 <TbShare aria-hidden />
               </ActionIcon>
             </Tooltip>
