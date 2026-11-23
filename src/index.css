@@ -22,12 +22,18 @@ body {
   --pixdex-ink-gray: var(--mantine-color-gray-3);
 }
 
-/* Masonry photo grid (MasonryGrid, PhotoTile): columns of different widths that all end at the same line. */
+/* Masonry photo grid (MasonryGrid, PhotoTile): when the page allows it, columns of different widths all end at the same
+   line; otherwise tiles keep their own shape and the bottom edge is uneven (never stretched). */
 .pdx-masonry {
   --pdx-gap: 6px;
+  /* One normal column: the container width minus the gaps, shared by the configured column count. */
+  --pdx-col: calc((100% - (var(--cols, 1) - 1) * var(--pdx-gap)) / var(--cols, 1));
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: var(--pdx-gap);
+}
+.pdx-masonry[data-flush='true'] {
+  align-items: stretch;
 }
 @media (min-width: 62em) {
   .pdx-masonry {
@@ -35,10 +41,8 @@ body {
   }
 }
 .pdx-masonry-col {
-  flex: 1 1 0; /* the grow value comes from MasonryGrid */
+  flex: 1 1 0; /* the width or grow value comes from MasonryGrid */
   min-width: 0;
-  /* A sparse group (fewer photos than columns) never stretches one column past 1.5 normal columns. */
-  max-width: calc((100% - (var(--cols, 1) - 1) * var(--pdx-gap)) / var(--cols, 1) * 1.5);
   display: flex;
   flex-direction: column;
   gap: var(--pdx-gap);
@@ -47,7 +51,7 @@ body {
   display: flex;
   flex-direction: column;
 }
-.pdx-masonry-col .pdx-tile-img {
+.pdx-masonry[data-flush='true'] .pdx-tile-img {
   object-fit: cover; /* the tile only differs from the photo by a pixel gap: crop, never letterbox */
 }
 
