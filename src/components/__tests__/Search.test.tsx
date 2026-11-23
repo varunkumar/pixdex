@@ -59,7 +59,7 @@ describe('Search (plain mode)', () => {
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ q: 'eagle', sort: 'rating' }))
     );
-    expect(screen.getByLabelText('Sort results')).toHaveValue('Best rated');
+    expect(await screen.findByRole('button', { name: 'Best rated' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('runs from the URL on load and fills the bar from it', async () => {

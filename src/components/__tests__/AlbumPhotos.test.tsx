@@ -226,8 +226,7 @@ describe('AlbumPhotos', () => {
 
   it('sorts photos through the URL', async () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    fireEvent.click(await screen.findByRole('combobox', { name: /sort photos/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Alphabetical', hidden: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Alphabetical' }));
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenLastCalledWith({
         album: 'Kanha',

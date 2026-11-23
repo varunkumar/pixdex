@@ -1,24 +1,27 @@
-import { ActionIcon, Anchor, Badge, Button, Group, Select, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Group, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
-import { TbPhotoStar } from 'react-icons/tb';
+import type { IconType } from 'react-icons';
+import { TbCalendar, TbPhotoStar, TbSortAZ, TbStar } from 'react-icons/tb';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import AlbumFilterChip from './AlbumFilterChip';
 import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
+import ColumnsToggle from './ColumnsToggle';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
 import ShareAlbumModal from './ShareAlbumModal';
+import SortIcons from './SortIcons';
 import { AvatarStack, UserAvatar } from './UserAvatar';
 
 const ALBUM_PHOTO_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
-  { value: 'date', label: 'Newest first' },
-  { value: 'rating', label: 'Best rated' },
-  { value: 'name', label: 'Alphabetical' },
+const SORT_OPTIONS: { value: PhotoSort; label: string; icon: IconType }[] = [
+  { value: 'date', label: 'Newest first', icon: TbCalendar },
+  { value: 'rating', label: 'Best rated', icon: TbStar },
+  { value: 'name', label: 'Alphabetical', icon: TbSortAZ },
 ];
 
 const AlbumPhotos = () => {
@@ -135,14 +138,13 @@ const AlbumPhotos = () => {
               {data.total} {data.total === 1 ? 'photo' : 'photos'}
             </Text>
           )}
-          <Select
-            aria-label="Sort photos"
-            data={SORT_OPTIONS}
+          <SortIcons
+            label="Sort photos"
+            options={SORT_OPTIONS}
             value={sort}
-            allowDeselect={false}
-            w={170}
             onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
           />
+          <ColumnsToggle />
         </Group>
       </Group>
       {setCover.error && (

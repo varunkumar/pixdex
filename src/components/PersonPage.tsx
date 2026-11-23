@@ -1,24 +1,27 @@
-import { ActionIcon, Anchor, Badge, Button, Group, Menu, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Group, Menu, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import { TbDotsVertical } from 'react-icons/tb';
+import type { IconType } from 'react-icons';
+import { TbCalendar, TbDotsVertical, TbSortAZ, TbStar } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
+import ColumnsToggle from './ColumnsToggle';
 import FaceTile from './FaceTile';
 import ListPagination from './ListPagination';
 import PersonLabelEditor from './PersonLabelEditor';
 import PhotoGrid from './PhotoGrid';
+import SortIcons from './SortIcons';
 
 const PHOTO_PAGE_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
-  { value: 'date', label: 'Newest first' },
-  { value: 'rating', label: 'Best rated' },
-  { value: 'name', label: 'Alphabetical' },
+const SORT_OPTIONS: { value: PhotoSort; label: string; icon: IconType }[] = [
+  { value: 'date', label: 'Newest first', icon: TbCalendar },
+  { value: 'rating', label: 'Best rated', icon: TbStar },
+  { value: 'name', label: 'Alphabetical', icon: TbSortAZ },
 ];
 
 /** Per photo: an "Auto" flag on an automatic match, and a menu to set the person's cover or reject the match. */
@@ -324,14 +327,15 @@ const PersonPage = () => {
       {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
       {photos && photos.length === 0 && <Text c="dimmed">No photos for this person yet.</Text>}
       {person && (
-        <Select
-          aria-label="Sort photos"
-          data={SORT_OPTIONS}
-          value={sort}
-          allowDeselect={false}
-          w={170}
-          onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
-        />
+        <Group gap="xs" justify="flex-end">
+          <SortIcons
+            label="Sort photos"
+            options={SORT_OPTIONS}
+            value={sort}
+            onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
+          />
+          <ColumnsToggle />
+        </Group>
       )}
       {photos && photos.length > 0 && (
         <PhotoGrid

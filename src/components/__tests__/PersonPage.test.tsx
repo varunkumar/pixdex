@@ -78,8 +78,7 @@ describe('PersonPage', () => {
         expect.objectContaining({ people: ['pe1'], sort: 'date' })
       )
     );
-    fireEvent.click(await screen.findByRole('combobox', { name: /sort photos/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Best rated', hidden: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Best rated' }));
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenLastCalledWith(
         expect.objectContaining({ people: ['pe1'], sort: 'rating' })

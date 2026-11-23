@@ -1,8 +1,10 @@
-import { Alert, Button, Card, Chip, Group, Loader, Select, Stack, Switch, Text } from '@mantine/core';
+import { Alert, Button, Card, Chip, Group, Loader, Stack, Switch, Text } from '@mantine/core';
 import { DatePickerInput, type DatesRangeValue } from '@mantine/dates';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { IconType } from 'react-icons';
 import { MdSearch } from 'react-icons/md';
+import { TbCalendar, TbSortAZ, TbStar, TbTarget } from 'react-icons/tb';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { PAGE_SIZES, useListParams } from '../hooks/useListParams';
 import type { OmniboxSelection } from '../hooks/useOmniboxData';
@@ -15,15 +17,17 @@ import { onThisDayToday, parseDateQuery, quickRange } from '../services/dateQuer
 import { readOmniboxState, stripAiParams } from '../services/omnibox/urlState';
 import { parsePeopleSelection } from '../services/peopleSelection';
 import AiResults from './AiResults';
+import ColumnsToggle from './ColumnsToggle';
 import ListPagination from './ListPagination';
 import Omnibox, { type KeywordRowHandle } from './omnibox/Omnibox';
 import PhotoGrid from './PhotoGrid';
+import SortIcons from './SortIcons';
 
-const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string }[] = [
-  { value: 'relevance', label: 'Best match' },
-  { value: 'rating', label: 'Best rated' },
-  { value: 'date', label: 'Newest first' },
-  { value: 'name', label: 'Alphabetical' },
+const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string; icon: IconType }[] = [
+  { value: 'relevance', label: 'Best match', icon: TbTarget },
+  { value: 'rating', label: 'Best rated', icon: TbStar },
+  { value: 'date', label: 'Newest first', icon: TbCalendar },
+  { value: 'name', label: 'Alphabetical', icon: TbSortAZ },
 ];
 
 const QUICK_CHIPS = [
@@ -332,14 +336,15 @@ const Search = () => {
               </Chip>
             </Group>
             {!ai && (
-              <Select
-                label="Sort by"
-                aria-label="Sort results"
-                data={SORT_OPTIONS}
-                value={sort}
-                allowDeselect={false}
-                onChange={(value) => update({ sort: value === 'relevance' ? null : value }, { resetPage: true })}
-              />
+              <Group gap="xs">
+                <SortIcons
+                  label="Sort results"
+                  options={SORT_OPTIONS}
+                  value={sort}
+                  onChange={(value) => update({ sort: value === 'relevance' ? null : value }, { resetPage: true })}
+                />
+                <ColumnsToggle />
+              </Group>
             )}
             {ai && (
               <Group gap="lg">

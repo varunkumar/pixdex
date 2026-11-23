@@ -66,8 +66,7 @@ describe('Albums', () => {
 
   it('sorts through the URL and resets to the first page', async () => {
     const { router } = renderWithRouter([{ path: '/albums', element: <Albums /> }], ['/albums?page=2']);
-    fireEvent.click(await screen.findByRole('combobox', { name: /sort albums/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Best rated', hidden: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Best rated' }));
     await waitFor(() => expect(router.state.location.search).toBe('?sort=rating'));
     await waitFor(() =>
       expect(workerApiClient.getAlbumsPage).toHaveBeenLastCalledWith({ limit: 12, offset: 0, sort: 'rating' })
