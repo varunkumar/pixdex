@@ -119,8 +119,8 @@ const PersonPage = () => {
   const photos = photoPage?.results;
   const onPage = useCallback(
     (p: number, replace?: boolean) => update({ page: p }, { replace }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page, size]
+    [update]
+
   );
 
   const refresh = () => {

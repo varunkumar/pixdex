@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { useListParams } from '../useListParams';
 
@@ -42,5 +42,17 @@ describe('useListParams', () => {
     const { result } = renderHook(() => useListParams(), { wrapper: wrapperAt('/search?size=24') });
     act(() => result.current.update({ size: 12 }));
     expect(result.current.params.has('size')).toBe(false);
+  });
+
+  it('keeps the navigation state (e.g. the albums list to return to) across an update', () => {
+    const { result } = renderHook(() => ({ list: useListParams(), location: useLocation() }), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <MemoryRouter initialEntries={[{ pathname: '/albums/x', state: { albumsList: '/albums?page=3' } }]}>
+          {children}
+        </MemoryRouter>
+      ),
+    });
+    act(() => result.current.list.update({ tab: 'people' }));
+    expect(result.current.location.state).toEqual({ albumsList: '/albums?page=3' });
   });
 });

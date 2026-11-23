@@ -340,6 +340,40 @@ describe("People", () => {
     expect(screen.queryByRole("link", { name: /Person 00/ })).toBeNull();
   });
 
+  it("keeps the chosen sort when moving to the second page", async () => {
+    // Most faces first reverses the alphabetical order: Person 13 leads, Person 00 is last.
+    const lots = Array.from({ length: 14 }, (_, i) => ({
+      id: `p${i}`,
+      name: `Person ${String(i).padStart(2, "0")}`,
+      faceCount: i + 1,
+      photoCount: 1,
+      canEdit: true,
+      cover: null,
+    }));
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue(lots);
+    vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
+      groups: [],
+      scanned: 0,
+      nextCursor: null,
+    });
+    show();
+    await screen.findByRole("link", { name: /Person 00/ });
+    fireEvent.click(screen.getByRole("combobox", { name: /sort people/i }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Most faces", hidden: true }),
+    );
+    await screen.findByRole("link", { name: /Person 13/ });
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    // Page 2 of "most faces" holds the two smallest, and the select still says so.
+    expect(
+      await screen.findByRole("link", { name: /Person 00/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Person 13/ })).toBeNull();
+    expect(screen.getByRole("combobox", { name: /sort people/i })).toHaveValue(
+      "Most faces",
+    );
+  });
+
   it("shows each person with their cover face and name", async () => {
     show();
     const link = await screen.findByRole("link", { name: /Asha/ });

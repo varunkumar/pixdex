@@ -49,7 +49,9 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 - `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
   It calls same-origin `/api/*`.
 - `hooks/useListParams.ts` - sort/page state kept in the URL so listings are
-  linkable and "back" returns to the same sort and page.
+  linkable and "back" returns to the same sort and page. Its `update` is
+  stable and always reads the latest URL, so a memoized `onPage` never drops `sort`. It also carries `location.state` through every
+  update (the album page keeps its "All albums" return link there).
 - `types/api.ts` - API response types shared by components.
 - Date pickers use `@mantine/dates` and its `dayjs` peer dependency.
 - Tests sit next to code in `__tests__/`; helpers in `src/test/`.
