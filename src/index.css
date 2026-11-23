@@ -124,24 +124,22 @@ body {
   text-overflow: ellipsis;
   opacity: 0.8;
 }
-/* The album chip uses the same teal as the album chip in the search box (the Mantine "light" tint), laid over an opaque
-   base so it stays readable on a photo. */
+/* Album name: plain white text with a shadow on the photo, no pill, so it stays readable on any picture. */
 .pdx-tile-album {
   position: absolute;
   top: 6px;
-  left: 6px;
+  left: 8px;
   max-width: calc(100% - 52px); /* leaves room for the corner controls on the right */
-  padding: 1px 10px;
-  border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.5;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--mantine-color-teal-light-color);
-  background:
-    linear-gradient(var(--mantine-color-teal-light), var(--mantine-color-teal-light)),
-    var(--mantine-color-body);
+  color: #fff;
+  text-shadow:
+    0 0 3px rgba(0, 0, 0, 0.9),
+    0 1px 2px rgba(0, 0, 0, 0.8);
 }
 .pdx-tile:hover .pdx-tile-overlay,
 .pdx-tile:focus-within .pdx-tile-overlay {
