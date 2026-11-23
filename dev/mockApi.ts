@@ -127,6 +127,35 @@ const THEMES: Theme[] = [
     scene: 'garden',
   },
 ];
+// More albums so the albums page has several pages of whole rows (the first four are the README ones).
+const MORE: [string, number, string, string, string[], string[], string][] = [
+  ['Mountain Weekend', 5, '#8fb8de', '#1f3552', ['Pine marten', 'Himalayan monal', 'Hiker'], ['mountain', 'trail', 'clouds', 'hiking'], 'mountain'],
+  ['Birthday Party', 5, '#f2b36d', '#5a2a3c', ['Birthday cake', 'Balloons', 'Children playing'], ['family', 'celebration', 'indoor', 'candles'], 'living room'],
+  ['Temple Visit', 6, '#e6c27a', '#4a2a14', ['Temple gopuram', 'Lamp', 'Devotee'], ['temple', 'architecture', 'festival', 'stone'], 'temple courtyard'],
+  ['Backwater Boat Ride', 6, '#7fc9c0', '#15404a', ['Kingfisher', 'Houseboat', 'Egret'], ['backwaters', 'boat', 'calm', 'palm'], 'backwaters'],
+  ['Summer Camp', 7, '#a7d676', '#26441e', ['Campfire', 'Tent', 'Children playing'], ['camp', 'outdoor', 'friends', 'summer'], 'campsite'],
+  ['Diwali Lights', 11, '#f0a15c', '#3b1a3f', ['Diya', 'Rangoli', 'Sparkler'], ['festival', 'lights', 'night', 'family'], 'courtyard'],
+  ['Rainy Season', 8, '#9db4c9', '#1f2d3d', ['Peacock', 'Umbrella', 'Frog'], ['rain', 'monsoon', 'green', 'puddle'], 'garden'],
+  ['School Annual Day', 12, '#c99ae0', '#2c1a4f', ['Stage', 'Dancer', 'Group photo'], ['school', 'stage', 'costume', 'event'], 'auditorium'],
+  ['Bandipur Safari', 9, '#d9b36b', '#3a2c12', ['Tiger', 'Spotted deer', 'Gaur'], ['safari', 'wildlife', 'jungle', 'jeep'], 'dry forest'],
+  ['Hampi Ruins', 10, '#e8b27c', '#4a2a1c', ['Stone chariot', 'Boulders', 'Monkey'], ['ruins', 'heritage', 'boulders', 'sunset'], 'ruins'],
+  ['Wedding Weekend', 12, '#f4a6b8', '#4a1f3a', ['Bride and groom', 'Mehendi', 'Group photo'], ['wedding', 'celebration', 'ceremony', 'family'], 'wedding hall'],
+  ['Tea Estate Trek', 3, '#9ccf95', '#143a25', ['Tea pickers', 'Mist', 'Hornbill'], ['tea', 'hills', 'mist', 'trail'], 'tea estate'],
+  ['Beach Bonfire', 4, '#f5a56a', '#1b2a52', ['Bonfire', 'Friends', 'Crab'], ['beach', 'night', 'friends', 'waves'], 'beach'],
+  ['New Year Eve', 12, '#8e8be6', '#161a3f', ['Fireworks', 'Friends', 'Cake'], ['party', 'night', 'celebration', 'lights'], 'rooftop'],
+];
+for (const [name, month, from, to, subjects, tags, scene] of MORE) {
+  THEMES.push({
+    name,
+    month,
+    from,
+    to,
+    subjects,
+    tags,
+    scene,
+    captions: ['Golden light', 'Together', 'Quiet moment', 'Just after sunrise'],
+  });
+}
 const ALBUMS = THEMES.map((t) => t.name);
 
 /** Small deterministic PRNG so the dummy library is identical on every run. */
@@ -149,7 +178,7 @@ function buildLibrary(): MockPhoto[] {
   const rand = rng(42);
   const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)];
   const out: MockPhoto[] = [];
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 270; i++) {
     const people = OWN.filter(() => rand() < 0.22).map((p) => p.id);
     const known = KNOWN.filter(() => rand() < 0.15).map((k) => k.id);
     const theme = THEMES[i % THEMES.length];
@@ -265,7 +294,7 @@ function thumbnailSvg(id: string): string {
     `<circle cx="${Math.round(W * sx)}" cy="${Math.round(H * sy)}" r="${Math.round(Math.min(W, H) * 0.17)}" fill="url(#s)"/>` +
     `<path d="M0,${hill} C${W * 0.3},${hill - H * 0.08} ${W * 0.6},${hill + H * 0.06} ${W},${hill - H * 0.03} L${W},${H} L0,${H} Z" fill="#000" fill-opacity="0.32"/>` +
     (subject
-      ? `<text x="12" y="${H - 12}" font-family="sans-serif" font-size="14" fill="#fff" fill-opacity="0.75">${subject}</text>`
+      ? `<text x="${W / 2}" y="${H - 12}" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#fff" fill-opacity="0.75">${subject}</text>`
       : '') +
     `</svg>`
   );
@@ -326,7 +355,12 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
             }),
       };
     });
-    return sendJson(res, 200, { albums, total: albums.length });
+    // Same paging as the Worker: an optional `name`, then `limit` and `offset`.
+    const named = url.searchParams.get('name');
+    const matching = named ? albums.filter((a) => a.name === named) : albums;
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 12, 1), 48);
+    const offset = Math.max(Number(url.searchParams.get('offset')) || 0, 0);
+    return sendJson(res, 200, { albums: matching.slice(offset, offset + limit), total: albums.length });
   }
   if (path === '/albums/contents') {
     const inAlbum = LIBRARY.filter((m) => m.photo.album === url.searchParams.get('name'));

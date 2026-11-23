@@ -33,7 +33,7 @@ use as much space as the image.
   over a bottom gradient on hover.
 - Direction "C" on touch: same masonry, plus one dimmed caption line under each tile (short caption only).
 - Album listing: UNIFORM 4:3 tiles (not masonry: the album summary has no cover width or height, and uniform tiles keep
-  names aligned), cover fills the tile, name and count over a bottom gradient, 2 to 5 per row.
+  names aligned), cover fills the tile, the name below it, count, date and sharing on hover (revised after review: they were first always visible over the cover), 2 to 5 per row.
 - Sharing on album tiles: an overlapping avatar stack (up to 3, then "+N") at the bottom right of the cover for owner albums
   that are shared; the owner's avatar there for albums shared with you, plus the "Shared with you" chip. Always visible.
 - Sort controls become icon groups with tooltips (no direction control: the API has none): albums (latest photo, name, photo count), album page

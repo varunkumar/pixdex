@@ -4,6 +4,7 @@ import {
   Group,
   Select,
   SimpleGrid,
+  useMatches,
   Stack,
   Text,
   TextInput,
@@ -18,6 +19,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
+import { TbUsers } from "react-icons/tb";
 import { Link } from "react-router-dom";
 import { useListParams } from "../hooks/useListParams";
 import { workerApiClient } from "../services/api/WorkerApiClient";
@@ -31,13 +33,14 @@ import {
 import type { FaceGroup, PersonSummary } from "../types/api";
 import FaceTile from "./FaceTile";
 import ListPagination from "./ListPagination";
+import SortIcons from "./SortIcons";
 import PersonLabelEditor from "./PersonLabelEditor";
 
 const GROUP_TILES = 8;
 
 const SORT_OPTIONS = [
-  { value: "name", label: "Alphabetical" },
-  { value: "count", label: "Most faces" },
+  { value: "name", label: "Alphabetical", text: "A-Z" },
+  { value: "count", label: "Most faces", icon: TbUsers },
 ];
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
@@ -187,9 +190,14 @@ const PEOPLE_PAGE_SIZES = [12, 24, 48] as const;
 const GROUP_PAGE_SIZES = [6, 12, 24] as const;
 
 const People = () => {
-  const { params, page, size, offset, update } = useListParams(
+  const columns = useMatches(
+    { base: 2, sm: 4, lg: 6 },
+    { getInitialValueInEffect: false },
+  );
+  const { params, page, size, option, offset, update } = useListParams(
     12,
     PEOPLE_PAGE_SIZES,
+    columns,
   );
   const sort =
     SORT_OPTIONS.find((o) => o.value === params.get("sort"))?.value ?? "name";
@@ -262,20 +270,20 @@ const People = () => {
 
       {people.length > 0 && (
         <>
-          <Select
-            aria-label="Sort people"
-            data={SORT_OPTIONS}
-            value={sort}
-            allowDeselect={false}
-            w={170}
-            onChange={(value) =>
-              update(
-                { sort: value === "name" ? null : value },
-                { resetPage: true },
-              )
-            }
-          />
-          <SimpleGrid cols={{ base: 2, sm: 4, lg: 6 }} spacing="md">
+          <Group justify="flex-end">
+            <SortIcons
+              label="Sort people"
+              options={SORT_OPTIONS}
+              value={sort}
+              onChange={(value) =>
+                update(
+                  { sort: value === "name" ? null : value },
+                  { resetPage: true },
+                )
+              }
+            />
+          </Group>
+          <SimpleGrid cols={columns} spacing="md">
             {shownPeople.map((p) => (
               <Stack key={p.id} gap={4} align="stretch">
                 <UnstyledButton component={Link} to={`/people/${p.id}`}>
@@ -315,6 +323,7 @@ const People = () => {
           <ListPagination
             page={page}
             size={size}
+            option={option}
             total={people.length}
             sizes={PEOPLE_PAGE_SIZES}
             onPage={onPeoplePage}

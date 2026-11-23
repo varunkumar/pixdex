@@ -11,6 +11,12 @@ describe('ListPagination', () => {
     expect(screen.getByText('Showing 11-20 of 56')).toBeInTheDocument();
   });
 
+  it('counts pages by the effective size but shows the chosen option in the selector', () => {
+    renderWithProviders(<ListPagination {...base} size={15} option={10} page={2} />);
+    expect(screen.getByText('Showing 16-30 of 56')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /results per page/i })).toHaveValue('10');
+  });
+
   it('caps the range end at the total', () => {
     renderWithProviders(<ListPagination {...base} page={6} />);
     expect(screen.getByText('Showing 51-56 of 56')).toBeInTheDocument();

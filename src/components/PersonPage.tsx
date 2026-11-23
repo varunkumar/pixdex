@@ -6,6 +6,7 @@ import type { IconType } from 'react-icons';
 import { TbCalendar, TbDotsVertical, TbStar } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
+import { usePhotoColumns } from '../hooks/usePhoneColumns';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { photoCaption } from '../services/text';
 import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
@@ -111,7 +112,8 @@ const PersonPage = () => {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { params, page, size, offset, update } = useListParams(24, PHOTO_PAGE_SIZES);
+  const columns = usePhotoColumns();
+  const { params, page, size, option, offset, update } = useListParams(24, PHOTO_PAGE_SIZES, columns);
   const requestedSort = params.get('sort');
   const sort = SORT_OPTIONS.find((o) => o.value === requestedSort)?.value ?? 'date';
   const [renaming, setRenaming] = useState(false);
@@ -369,6 +371,7 @@ const PersonPage = () => {
         <ListPagination
           page={page}
           size={size}
+          option={option}
           total={photoPage.total}
           settled={!isPlaceholderData}
           sizes={PHOTO_PAGE_SIZES}
