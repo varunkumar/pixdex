@@ -58,6 +58,10 @@ machine. Originals stay on local disk or Google Drive.
   Your edits survive re-indexing.
 - **Find people.** Faces are detected locally, grouped, and matched to the names
   you give them.
+- **Browse by photo.** Photo grids are masonry layouts that keep every photo's own
+  shape. On a mouse device the caption, date and tags appear over a photo on hover; on
+  a phone or tablet each photo has one caption line under it, two columns by default
+  (a small icon switches to one). Sort with the icon buttons; albums are uniform cover tiles.
 - **See the details.** Camera, lens, focal length, aperture, shutter, ISO and GPS
   when the file has them, plus "View Original" for the full-resolution file.
 

@@ -40,7 +40,7 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
           <Text fw={600} size="sm" lineClamp={1} inherit>
             {album.name}
           </Text>
-          <Text size="xs" lineClamp={1} inherit style={{ opacity: 0.85 }}>
+          <Text size="xs" lineClamp={2} inherit style={{ opacity: 0.85 }}>
             {album.photoCount} {album.photoCount === 1 ? 'photo' : 'photos'}
             {date && ` · ${date}`}
           </Text>

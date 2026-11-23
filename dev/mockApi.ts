@@ -17,6 +17,21 @@ import type {
   SerializedPhoto,
 } from '../src/types/api.ts';
 
+/** Dummy photo shapes (portrait, square, 4:3, 3:2, panorama) so the masonry grid has something to lay out. */
+const MOCK_SIZES: [number, number][] = [
+  [1600, 1067],
+  [1067, 1600],
+  [1600, 1600],
+  [1600, 1200],
+  [1200, 1600],
+  [2400, 1000],
+  [1600, 1067],
+];
+function mockSize(i: number): { width: number; height: number } {
+  const [width, height] = MOCK_SIZES[i % MOCK_SIZES.length];
+  return { width, height };
+}
+
 const EMAIL = 'demo.viewer@example.com';
 
 const OWN: PersonSummary[] = [
@@ -104,8 +119,7 @@ function buildLibrary(): MockPhoto[] {
         source: 'local',
         filename: `DEMO_${String(i).padStart(4, '0')}.jpg`,
         dateTime: dated ? `${year}-${pad(month)}-${pad(day)}T10:00:00` : null,
-        width: 1600,
-        height: i % 3 === 0 ? 1600 : 1067,
+        ...mockSize(i),
         format: 'jpeg',
         fileSize: 1_000_000,
         subjects: tags,
@@ -172,16 +186,20 @@ function search(params: URLSearchParams): { results: SerializedPhoto[]; total: n
   return { results: sorted.slice(offset, offset + limit), total: matched.length };
 }
 
-/** A gradient placeholder, hue derived from the id. */
+/** A gradient placeholder in the photo's own shape, hue derived from the id. */
 function thumbnailSvg(id: string): string {
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  const index = Number(/(\d+)$/.exec(id)?.[1] ?? 0);
+  const { width: w, height: ht } = mockSize(index);
+  const W = 400;
+  const H = Math.round((W * ht) / w);
   const h2 = (h + 60) % 360;
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
     `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
     `<stop offset="0" stop-color="hsl(${h},65%,55%)"/><stop offset="1" stop-color="hsl(${h2},65%,35%)"/>` +
-    `</linearGradient></defs><rect width="400" height="300" fill="url(#g)"/></svg>`
+    `</linearGradient></defs><rect width="${W}" height="${H}" fill="url(#g)"/></svg>`
   );
 }
 
