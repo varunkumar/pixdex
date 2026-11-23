@@ -233,8 +233,8 @@ const People = () => {
 
   const onPeoplePage = useCallback(
     (p: number, replace?: boolean) => update({ page: p }, { replace }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [page, size],
+    [update],
+
   );
   const onGroupPage = useCallback((p: number) => setGroupPage(p), []);
 
