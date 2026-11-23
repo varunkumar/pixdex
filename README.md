@@ -8,8 +8,7 @@
 [![Frontend build](https://img.shields.io/github/check-runs/varunkumar/pixdex/main?nameFilter=Cloudflare%20Pages&label=frontend%20build)](https://github.com/varunkumar/pixdex/commits/main)
 [![Worker build](https://img.shields.io/github/check-runs/varunkumar/pixdex/main?nameFilter=Workers%20Builds%3A%20pixdex-worker&label=worker%20build)](https://github.com/varunkumar/pixdex/commits/main)
 
-A private, searchable home for a personal photo library, built around wildlife and
-nature photography. A local vision model (Ollama) describes, tags and rates every
+A private, searchable home for a personal photo library. A local vision model (Ollama) describes, tags and rates every
 photo, a local face model groups the people in them, and a small Cloudflare backend
 lets you search it all from any browser. Only metadata and thumbnails leave your
 machine. Originals stay on local disk or Google Drive.
@@ -67,9 +66,11 @@ machine. Originals stay on local disk or Google Drive.
 
 | Search | Albums |
 |---|---|
-| ![Search results for "lion"](docs/screenshots/search.png) | ![Album grid](docs/screenshots/albums.png) |
+| ![Masonry search results for "wildlife", one photo showing its hover details](docs/screenshots/search.png) | ![Album grid with cover tiles and sharing avatars](docs/screenshots/albums.png) |
 | **Photo page** | **People** |
 | ![Photo page with metadata, review and faces](docs/screenshots/photo.png) | ![People and unnamed face groups](docs/screenshots/people.png) |
+| **Album page** | **On a phone** |
+| ![Album page with masonry photos, sorting icons and a hover overlay](docs/screenshots/album.png) | <img src="docs/screenshots/mobile.png" alt="Album page on a phone: two columns with a caption line under each photo" width="300"> |
 
 ## Architecture
 

@@ -4,7 +4,7 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IconType } from 'react-icons';
 import { MdSearch } from 'react-icons/md';
-import { TbCalendar, TbSortAZ, TbStar, TbTarget } from 'react-icons/tb';
+import { TbCalendar, TbStar, TbTarget } from 'react-icons/tb';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { PAGE_SIZES, useListParams } from '../hooks/useListParams';
 import type { OmniboxSelection } from '../hooks/useOmniboxData';
@@ -23,11 +23,11 @@ import Omnibox, { type KeywordRowHandle } from './omnibox/Omnibox';
 import PhotoGrid from './PhotoGrid';
 import SortIcons from './SortIcons';
 
-const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string; icon: IconType }[] = [
+const SORT_OPTIONS: { value: PhotoSort | 'relevance'; label: string; icon?: IconType; text?: string }[] = [
   { value: 'relevance', label: 'Best match', icon: TbTarget },
   { value: 'rating', label: 'Best rated', icon: TbStar },
   { value: 'date', label: 'Newest first', icon: TbCalendar },
-  { value: 'name', label: 'Alphabetical', icon: TbSortAZ },
+  { value: 'name', label: 'Alphabetical', text: 'A-Z' },
 ];
 
 const QUICK_CHIPS = [

@@ -5,7 +5,9 @@ import type { IconType } from 'react-icons';
 interface SortOption<V extends string> {
   value: V;
   label: string;
-  icon: IconType;
+  /** An icon, or short bold `text` for a choice no icon draws legibly (A-Z). */
+  icon?: IconType;
+  text?: string;
 }
 
 interface SortIconsProps<V extends string> {
@@ -21,16 +23,22 @@ function SortIcons<V extends string>({ options, value, onChange, label }: SortIc
   return (
     <>
       <ActionIcon.Group visibleFrom="xs">
-        {options.map(({ value: v, label: optionLabel, icon: Icon }) => (
+        {options.map(({ value: v, label: optionLabel, icon: Icon, text }) => (
           <Tooltip key={v} label={optionLabel}>
             <ActionIcon
               variant={v === value ? 'light' : 'default'}
-              size="lg"
+              size={42}
               aria-label={optionLabel}
               aria-pressed={v === value}
               onClick={() => onChange(v)}
             >
-              <Icon aria-hidden />
+              {Icon ? (
+                <Icon size={22} aria-hidden />
+              ) : (
+                <span aria-hidden style={{ fontWeight: 700, fontSize: 14, letterSpacing: -0.5 }}>
+                  {text}
+                </span>
+              )}
             </ActionIcon>
           </Tooltip>
         ))}
@@ -38,8 +46,8 @@ function SortIcons<V extends string>({ options, value, onChange, label }: SortIc
       <Box hiddenFrom="xs">
         <Menu position="bottom-end" withinPortal>
           <Menu.Target>
-            <ActionIcon variant="default" size="lg" aria-label={label}>
-              <TbArrowsSort aria-hidden />
+            <ActionIcon variant="default" size={42} aria-label={label}>
+              <TbArrowsSort size={22} aria-hidden />
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>

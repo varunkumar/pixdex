@@ -2,7 +2,7 @@ import { ActionIcon, Anchor, Badge, Button, Group, Stack, Tabs, Text, Title, Too
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import type { IconType } from 'react-icons';
-import { TbCalendar, TbPhotoStar, TbSortAZ, TbStar } from 'react-icons/tb';
+import { TbCalendar, TbPhotoStar, TbStar } from 'react-icons/tb';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
@@ -18,10 +18,10 @@ import { AvatarStack, UserAvatar } from './UserAvatar';
 
 const ALBUM_PHOTO_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: PhotoSort; label: string; icon: IconType }[] = [
+const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: string }[] = [
   { value: 'date', label: 'Newest first', icon: TbCalendar },
   { value: 'rating', label: 'Best rated', icon: TbStar },
-  { value: 'name', label: 'Alphabetical', icon: TbSortAZ },
+  { value: 'name', label: 'Alphabetical', text: 'A-Z' },
 ];
 
 const AlbumPhotos = () => {

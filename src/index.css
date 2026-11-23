@@ -166,3 +166,10 @@ body {
   right: 10px;
   bottom: 10px;
 }
+
+/* Keyboard focus ring drawn inside the clipped tile (overflow: hidden would hide an outside outline). */
+.pdx-tile-link:focus-visible,
+.pdx-album-link:focus-visible {
+  outline: 3px solid var(--mantine-primary-color-filled);
+  outline-offset: -3px;
+}

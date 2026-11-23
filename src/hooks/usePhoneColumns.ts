@@ -13,5 +13,6 @@ export function usePhoneColumns(): [1 | 2, () => void] {
 /** Photo grid columns: the phone choice below 576px, then 3, 4 and 5 columns. */
 export function usePhotoColumns(): number {
   const [phone] = usePhoneColumns();
-  return useMatches({ base: phone, xs: 3, md: 4, xl: 5 });
+  // Read the media query on the first render, not in an effect, so a wide screen never flashes the phone layout.
+  return useMatches({ base: phone, xs: 3, md: 4, xl: 5 }, { getInitialValueInEffect: false });
 }

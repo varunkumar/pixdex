@@ -18,6 +18,8 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
   const date = formatPhotoDate(album.latestDate);
   const cover = album.coverThumbnailUrl ? workerApiClient.thumbnailUrl({ thumbnailUrl: album.coverThumbnailUrl }) : '';
   const hasAvatars = sharedWith.length > 0 || (album.role === 'viewer' && !!album.ownerEmail);
+  // Avatars shown: up to 3 sharees plus a "+N" bubble, or the single owner avatar.
+  const avatarCount = album.role === 'viewer' ? 1 : Math.min(sharedWith.length, 3) + (sharedWith.length > 3 ? 1 : 0);
 
   return (
     <div className="pdx-album">
@@ -36,7 +38,7 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
             </Box>
           </Center>
         )}
-        <div className="pdx-album-text" style={hasAvatars ? { paddingRight: 84 } : undefined}>
+        <div className="pdx-album-text" style={hasAvatars ? { paddingRight: 28 + 20 * Math.min(avatarCount, 4) } : undefined}>
           <Text fw={600} size="sm" lineClamp={1} inherit>
             {album.name}
           </Text>

@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import type { IconType } from 'react-icons';
-import { TbCalendar, TbDotsVertical, TbSortAZ, TbStar } from 'react-icons/tb';
+import { TbCalendar, TbDotsVertical, TbStar } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
@@ -18,10 +18,10 @@ import SortIcons from './SortIcons';
 
 const PHOTO_PAGE_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: PhotoSort; label: string; icon: IconType }[] = [
+const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: string }[] = [
   { value: 'date', label: 'Newest first', icon: TbCalendar },
   { value: 'rating', label: 'Best rated', icon: TbStar },
-  { value: 'name', label: 'Alphabetical', icon: TbSortAZ },
+  { value: 'name', label: 'Alphabetical', text: 'A-Z' },
 ];
 
 /** Per photo: an "Auto" flag on an automatic match, and a menu to set the person's cover or reject the match. */
@@ -45,16 +45,20 @@ const PersonFaceActions = ({
   // Offer the largest of this person's faces in the photo as the cover candidate.
   const candidate = [...mine].sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)[0];
   const isCover = coverFaceId != null && mine.some((f) => f.id === coverFaceId);
+  // The menu closes on click, so a failure is reported as a notification, not inside the dropdown.
+  const onError = (error: unknown) =>
+    notifications.show({ color: 'red', message: errorMessage(error, false) });
   const reject = useMutation({
     mutationFn: (faceId: string) => workerApiClient.rejectFace(faceId, personId),
     onSuccess: onChanged,
+    onError,
   });
   const setCover = useMutation({
     mutationFn: (faceId: string) => workerApiClient.setPersonCover(personId, faceId),
     onSuccess: onChanged,
+    onError,
   });
   if (!candidate) return null;
-  const error = reject.error ?? setCover.error;
   return (
     <Group gap={4} wrap="nowrap">
       {auto && (
@@ -84,11 +88,6 @@ const PersonFaceActions = ({
             <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
               Not {auto.personName}
             </Menu.Item>
-          )}
-          {error && (
-            <Text size="xs" c="red" px="sm" py={4}>
-              {errorMessage(error, false)}
-            </Text>
           )}
         </Menu.Dropdown>
       </Menu>

@@ -107,6 +107,17 @@ describe('PersonPage', () => {
     await waitFor(() => expect(workerApiClient.rejectFace).toHaveBeenCalledWith('a1', 'pe1'));
   });
 
+  it('shows a failed Not action as a notification even though the menu closes', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face('a1', { personId: 'pe1', personName: 'Asha', status: 'auto' }),
+    ]);
+    vi.mocked(workerApiClient.rejectFace).mockRejectedValue(new Error('boom'));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
+    expect(await screen.findByText('Something went wrong, try again')).toBeInTheDocument();
+  });
+
   it('Set as cover offers the largest face of the person in the photo and marks the current cover', async () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
       face('small', { personId: 'pe1', personName: 'Asha', status: 'confirmed', bbox: { x: 0, y: 0, w: 0.1, h: 0.1 } }),

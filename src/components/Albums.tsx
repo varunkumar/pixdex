@@ -2,7 +2,7 @@ import { Group, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { IconType } from 'react-icons';
-import { TbCalendar, TbHash, TbSortAZ, TbStar } from 'react-icons/tb';
+import { TbCalendar, TbHash, TbStar } from 'react-icons/tb';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type AlbumSort } from '../services/api/WorkerApiClient';
 import AlbumCard from './AlbumCard';
@@ -11,10 +11,10 @@ import SortIcons from './SortIcons';
 
 const ALBUM_PAGE_SIZES = [12, 24, 48] as const;
 
-const SORT_OPTIONS: { value: AlbumSort; label: string; icon: IconType }[] = [
+const SORT_OPTIONS: { value: AlbumSort; label: string; icon?: IconType; text?: string }[] = [
   { value: 'date', label: 'Newest first', icon: TbCalendar },
   { value: 'rating', label: 'Best rated', icon: TbStar },
-  { value: 'name', label: 'Alphabetical', icon: TbSortAZ },
+  { value: 'name', label: 'Alphabetical', text: 'A-Z' },
   { value: 'count', label: 'Most photos', icon: TbHash },
 ];
 
