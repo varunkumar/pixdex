@@ -1,7 +1,8 @@
-import { Anchor, Badge, Button, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Group, Menu, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
+import { TbDotsVertical } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
@@ -20,8 +21,8 @@ const SORT_OPTIONS: { value: PhotoSort; label: string }[] = [
   { value: 'name', label: 'Alphabetical' },
 ];
 
-/** Shown under each photo: the person's cover control, plus a flag on an automatic match with a way to reject it. */
-const PersonFaceFooter = ({
+/** Per photo: an "Auto" flag on an automatic match, and a menu to set the person's cover or reject the match. */
+const PersonFaceActions = ({
   photoId,
   personId,
   coverFaceId,
@@ -50,38 +51,44 @@ const PersonFaceFooter = ({
     onSuccess: onChanged,
   });
   if (!candidate) return null;
+  const error = reject.error ?? setCover.error;
   return (
-    <Group gap="xs">
+    <Group gap={4} wrap="nowrap">
       {auto && (
-        <>
-          <Badge size="sm" variant="light" color="grape">
-            Auto
-          </Badge>
-          <Button
-            size="xs"
-            variant="light"
-            color="red"
-            loading={reject.isPending}
-            onClick={() => reject.mutate(auto.id)}
-          >
-            Not {auto.personName}
-          </Button>
-        </>
-      )}
-      {isCover ? (
-        <Badge size="sm" variant="light" color="teal">
-          Cover
+        <Badge size="sm" variant="filled" color="grape">
+          Auto
         </Badge>
-      ) : (
-        <Button size="xs" variant="light" loading={setCover.isPending} onClick={() => setCover.mutate(candidate.id)}>
-          Set as cover
-        </Button>
       )}
-      {(reject.error ?? setCover.error) && (
-        <Text size="xs" c="red">
-          {errorMessage(reject.error ?? setCover.error, false)}
-        </Text>
-      )}
+      <Menu position="bottom-end" withinPortal>
+        <Menu.Target>
+          <ActionIcon
+            variant="filled"
+            color="dark"
+            size="md"
+            aria-label="Photo actions"
+            loading={reject.isPending || setCover.isPending}
+          >
+            <TbDotsVertical aria-hidden />
+          </ActionIcon>
+        </Menu.Target>
+        <Menu.Dropdown>
+          {isCover ? (
+            <Menu.Item disabled>Current cover</Menu.Item>
+          ) : (
+            <Menu.Item onClick={() => setCover.mutate(candidate.id)}>Set as cover</Menu.Item>
+          )}
+          {auto && (
+            <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
+              Not {auto.personName}
+            </Menu.Item>
+          )}
+          {error && (
+            <Text size="xs" c="red" px="sm" py={4}>
+              {errorMessage(error, false)}
+            </Text>
+          )}
+        </Menu.Dropdown>
+      </Menu>
     </Group>
   );
 };
@@ -329,9 +336,9 @@ const PersonPage = () => {
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
-          footer={(photo) =>
+          actions={(photo) =>
             person?.canEdit ? (
-              <PersonFaceFooter photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
+              <PersonFaceActions photoId={photo.id} personId={id} coverFaceId={person?.cover?.id} onChanged={refresh} />
             ) : null
           }
         />

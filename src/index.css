@@ -41,3 +41,89 @@ body {
     gap: 8px;
   }
 }
+
+/* Photo tile: overlay on hover-capable devices, caption line on touch devices. */
+.pdx-tile {
+  position: relative;
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  background: var(--mantine-color-default-hover);
+}
+.pdx-tile-link {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pdx-tile-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.pdx-tile-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1px;
+  padding: 8px;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+  background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.75));
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.pdx-tile-overlay b {
+  font-size: 13px;
+}
+.pdx-tile-tags {
+  opacity: 0.85;
+}
+.pdx-tile-album {
+  align-self: flex-start;
+  margin-bottom: 2px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: rgba(8, 127, 91, 0.92);
+}
+.pdx-tile:hover .pdx-tile-overlay,
+.pdx-tile:focus-within .pdx-tile-overlay {
+  opacity: 1;
+}
+.pdx-tile-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.pdx-tile:hover .pdx-tile-actions,
+.pdx-tile:focus-within .pdx-tile-actions {
+  opacity: 1;
+}
+.pdx-tile-cap {
+  display: none;
+  padding: 3px 2px 0;
+  font-size: 11px;
+  color: var(--mantine-color-dimmed);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (hover: none) {
+  .pdx-tile-overlay {
+    display: none;
+  }
+  .pdx-tile-cap {
+    display: block;
+  }
+  .pdx-tile-actions {
+    opacity: 1;
+  }
+}

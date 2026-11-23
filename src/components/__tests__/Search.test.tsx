@@ -25,7 +25,7 @@ vi.mock('../../services/aiSearch/pipeline', async (importOriginal) => ({
 vi.mock('../../services/originals', () => ({ getOriginalUrl: vi.fn(() => null) }));
 
 const page = (n: number) =>
-  Array.from({ length: n }, (_, i) => makePhoto({ id: `p${i}`, description: `Photo number ${i}.` }));
+  Array.from({ length: n }, (_, i) => makePhoto({ id: `p${i}`, description: `Photo number ${i}.`, album: i === 0 ? 'Goa 2024' : null }));
 
 const routes = [
   { path: '/search', element: <Search /> },
@@ -75,8 +75,13 @@ describe('Search (plain mode)', () => {
     );
     expect(await box()).toHaveValue('big cat');
     expect(screen.getByRole('button', { name: 'Remove Kanha' })).toBeInTheDocument();
-    expect(await screen.findByText('Photo number 0.')).toBeInTheDocument();
+    expect((await screen.findAllByText('Photo number 0.')).length).toBeGreaterThan(0);
     expect(screen.getByText('Showing 25-48 of 56')).toBeInTheDocument();
+  });
+
+  it("shows each result's album name on its tile", async () => {
+    renderWithProviders(<Search />, { route: '/search?q=lion' });
+    expect((await screen.findAllByText('Goa 2024')).length).toBeGreaterThan(0);
   });
 
   it('has no separate album or People select any more', async () => {
@@ -852,13 +857,14 @@ describe('Search (AI mode)', () => {
     });
     go('/search?mode=ai&kw=diya,golden');
 
-    expect(await screen.findByText('matched: diya, golden')).toBeInTheDocument();
-    expect(screen.getByText('Text space: 72% (top)')).toBeInTheDocument();
-    expect(screen.getByText('Rating: 8.4')).toBeInTheDocument();
-    expect(screen.getByText('matched: golden')).toBeInTheDocument();
-    expect(screen.getAllByText(/Text space:/)).toHaveLength(1);
+    expect((await screen.findAllByText(/matched: diya, golden/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Text space: 72% \(top\)/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Rating: 8\.4/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^matched: golden · Rating: 7\.0$/).length).toBeGreaterThan(0);
+    // overlay line plus caption line of the one photo that has a text space
+    expect(screen.getAllByText(/Text space:/)).toHaveLength(2);
     expect(screen.getByText(/3 people photos hidden/)).toBeInTheDocument();
-    expect(screen.getByText('Lamps at dusk.').closest('a')).toHaveAttribute('href', '/photos/p1');
+    expect(screen.getByRole('link', { name: /Lamps at dusk/ })).toHaveAttribute('href', '/photos/p1');
     expect(screen.queryByText(/^Showing /)).not.toBeInTheDocument();
   });
 
@@ -872,8 +878,9 @@ describe('Search (AI mode)', () => {
     }));
     vi.mocked(runAiSearch).mockResolvedValue({ items, keywords: [], hiddenPeople: 0 });
     go('/search?mode=ai&kw=diya');
-    expect(await screen.findByText('Ranked 0.')).toBeInTheDocument();
-    expect(screen.getAllByText('matched: diya')).toHaveLength(48);
+    expect((await screen.findAllByText('Ranked 0.')).length).toBeGreaterThan(0);
+    // each of the 48 tiles shows its note in the overlay and on the caption line
+    expect(screen.getAllByText(/^matched: diya/)).toHaveLength(96);
     expect(screen.queryByText('Ranked 48.')).not.toBeInTheDocument();
   });
 });

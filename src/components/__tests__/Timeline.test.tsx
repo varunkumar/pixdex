@@ -96,7 +96,7 @@ describe('Timeline', () => {
     renderAt('/timeline');
     expect(await screen.findByText('November 2026')).toBeInTheDocument();
     expect(screen.getByText('142 photos, 18 shown')).toBeInTheDocument();
-    expect(screen.getByText('Photo n0.')).toBeInTheDocument();
+    expect(screen.getAllByText('Photo n0.').length).toBeGreaterThan(0);
     expect(workerApiClient.getTimeline).toHaveBeenCalledWith(expect.objectContaining({ zoom: 'month' }));
   });
 

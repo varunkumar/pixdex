@@ -385,7 +385,7 @@ const Search = () => {
 
       {!ai && hasCriteria && data && data.results.length === 0 && <Text c="dimmed">No photos match your search.</Text>}
 
-      {!ai && hasCriteria && data && data.results.length > 0 && <PhotoGrid photos={data.results} />}
+      {!ai && hasCriteria && data && data.results.length > 0 && <PhotoGrid photos={data.results} showAlbum />}
 
       {!ai && hasCriteria && data && (
         <ListPagination

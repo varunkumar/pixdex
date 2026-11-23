@@ -68,7 +68,7 @@ describe('PersonPage', () => {
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenCalledWith(expect.objectContaining({ people: ['pe1'] }))
     );
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
   });
 
   it('sorts newest first by default and re-sorts through the URL', async () => {
@@ -103,7 +103,8 @@ describe('PersonPage', () => {
     vi.mocked(workerApiClient.rejectFace).mockResolvedValue(face('a1'));
     show();
     expect(await screen.findByText('Auto')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Not Asha' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
     await waitFor(() => expect(workerApiClient.rejectFace).toHaveBeenCalledWith('a1', 'pe1'));
   });
 
@@ -115,11 +116,12 @@ describe('PersonPage', () => {
     ]);
     vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Set as cover' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as cover' }));
     await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'big'));
   });
 
-  it('shows a Cover badge instead of the button when this photo holds the cover face', async () => {
+  it('shows a disabled Current cover item instead of Set as cover when this photo holds the cover face', async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       { id: 'pe1', name: 'Asha', faceCount: 3, photoCount: 1, canEdit: true, cover: face('c9', { personId: 'pe1' }) },
     ]);
@@ -127,8 +129,9 @@ describe('PersonPage', () => {
       face('c9', { personId: 'pe1', personName: 'Asha', status: 'confirmed' }),
     ]);
     show();
-    expect(await screen.findByText('Cover')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Set as cover' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Photo actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Current cover' })).toBeDisabled();
+    expect(screen.queryByRole('menuitem', { name: 'Set as cover' })).toBeNull();
   });
 
   it('Review suggestions shows only the suggestion band', async () => {
@@ -220,8 +223,8 @@ describe('PersonPage', () => {
     ]);
     show();
     expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument();
-    await screen.findByText('A leopard in a tree.');
-    for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover']) {
+    await screen.findAllByText('A leopard in a tree.');
+    for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover', 'Photo actions']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
   });

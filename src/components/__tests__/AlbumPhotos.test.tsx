@@ -83,7 +83,7 @@ describe('AlbumPhotos tabs', () => {
   it('hides both tabs for empty contents', async () => {
     vi.mocked(workerApiClient.getAlbumContents).mockResolvedValue({ people: [], known: [], species: [] });
     renderAlbum();
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
     await waitFor(() => expect(workerApiClient.getAlbumContents).toHaveBeenCalled());
     expect(screen.queryByRole('tab', { name: /People/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Species/ })).not.toBeInTheDocument();
@@ -93,7 +93,7 @@ describe('AlbumPhotos tabs', () => {
     vi.mocked(workerApiClient.getAlbumContents).mockRejectedValue(new Error('boom'));
     renderAlbum();
     expect(await screen.findByText(/could not load people and species/i)).toBeInTheDocument();
-    expect(screen.getByText('A leopard in a tree.')).toBeInTheDocument();
+    expect(screen.getAllByText('A leopard in a tree.').length).toBeGreaterThan(0);
   });
 
   it('filters by a person tile, shows the chip and the total, and clearing drops the param', async () => {
@@ -220,7 +220,7 @@ describe('AlbumPhotos', () => {
         offset: 0,
       })
     );
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /all albums/i })).toHaveAttribute('href', '/albums');
   });
 
@@ -242,6 +242,25 @@ describe('AlbumPhotos', () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
     fireEvent.click(await screen.findByRole('button', { name: /set as cover/i }));
     await waitFor(() => expect(workerApiClient.setAlbumCover).toHaveBeenCalledWith('Kanha', makePhoto().id));
+  });
+
+  it('marks the current cover photo with a Cover badge instead of a button', async () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: [
+        {
+          name: 'Kanha',
+          photoCount: 1,
+          coverPhotoId: makePhoto().id,
+          coverThumbnailUrl: null,
+          latestDate: null,
+          role: 'owner',
+        },
+      ],
+      total: 1,
+    });
+    renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
+    expect(await screen.findByText('Cover')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /set as cover/i })).not.toBeInTheDocument();
   });
 
   it('returns to the albums listing it came from, keeping its sort', async () => {
@@ -277,7 +296,7 @@ describe('AlbumPhotos', () => {
       total: 1,
     });
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
-    expect(await screen.findByText('A leopard in a tree.')).toBeInTheDocument();
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Shared with you')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set as cover' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();

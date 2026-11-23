@@ -1,22 +1,15 @@
-import { Badge, Group, SimpleGrid, Stack, Text } from '@mantine/core';
+import { Badge, Group, Stack, Text } from '@mantine/core';
 import { RESULT_LIMIT, type AiSearchResult, type RankedPhoto } from '../services/aiSearch/pipeline';
-import PhotoCard from './PhotoCard';
+import PhotoGrid from './PhotoGrid';
 
-const ResultFooter = ({ item }: { item: RankedPhoto }) => (
-  <Stack gap={2}>
-    <Text size="xs" c="dimmed">
-      matched: {item.hits.join(', ')}
-    </Text>
-    {item.textSpace && (
-      <Text size="xs" c="dimmed">
-        Text space: {Math.round(item.textSpace.score * 100)}% ({item.textSpace.side})
-      </Text>
-    )}
-    <Text size="xs" c="dimmed">
-      Rating: {item.rating.toFixed(1)}
-    </Text>
-  </Stack>
-);
+const resultNote = (item: RankedPhoto): string =>
+  [
+    `matched: ${item.hits.join(', ')}`,
+    item.textSpace ? `Text space: ${Math.round(item.textSpace.score * 100)}% (${item.textSpace.side})` : null,
+    `Rating: ${item.rating.toFixed(1)}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
 /** The ranked AI results: per-keyword badges, the "people photos hidden" line and at most 48 cards. */
 export default function AiResults({ result }: { result: AiSearchResult }) {
@@ -50,11 +43,10 @@ export default function AiResults({ result }: { result: AiSearchResult }) {
               {result.hiddenPeople} people photos hidden.
             </Text>
           )}
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-            {items.map((item) => (
-              <PhotoCard key={item.photo.id} photo={item.photo} footer={<ResultFooter item={item} />} />
-            ))}
-          </SimpleGrid>
+          <PhotoGrid
+            photos={items.map((item) => item.photo)}
+            note={(photo) => resultNote(items.find((item) => item.photo.id === photo.id)!)}
+          />
         </>
       )}
     </Stack>

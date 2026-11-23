@@ -1,6 +1,7 @@
-import { Anchor, Badge, Button, Group, Select, Stack, Tabs, Text, Title } from '@mantine/core';
+import { ActionIcon, Anchor, Badge, Button, Group, Select, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
+import { TbPhotoStar } from 'react-icons/tb';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
@@ -180,18 +181,26 @@ const AlbumPhotos = () => {
             {data && data.results.length > 0 && (
               <PhotoGrid
                 photos={data.results}
-                footer={(photo) =>
+                actions={(photo) =>
                   isOwner ? (
-                    <Button
-                      variant="light"
-                      size="xs"
-                      w="fit-content"
-                      disabled={photo.id === coverId}
-                      loading={setCover.isPending && setCover.variables === photo.id}
-                      onClick={() => setCover.mutate(photo.id)}
-                    >
-                      {photo.id === coverId ? 'Album cover' : 'Set as cover'}
-                    </Button>
+                    photo.id === coverId ? (
+                      <Badge color="yellow" variant="filled" size="sm">
+                        Cover
+                      </Badge>
+                    ) : (
+                      <Tooltip label="Set as cover">
+                        <ActionIcon
+                          variant="filled"
+                          color="dark"
+                          size="md"
+                          aria-label="Set as cover"
+                          loading={setCover.isPending && setCover.variables === photo.id}
+                          onClick={() => setCover.mutate(photo.id)}
+                        >
+                          <TbPhotoStar aria-hidden />
+                        </ActionIcon>
+                      </Tooltip>
+                    )
                   ) : null
                 }
               />

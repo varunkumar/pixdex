@@ -1,20 +1,33 @@
-import { SimpleGrid } from '@mantine/core';
 import type { ReactNode } from 'react';
+import { usePhotoColumns } from '../hooks/usePhoneColumns';
 import type { SerializedPhoto } from '../types/api';
-import PhotoCard from './PhotoCard';
+import MasonryGrid from './MasonryGrid';
+import { photoRatio } from './masonry';
+import PhotoTile from './PhotoTile';
 
-const PhotoGrid = ({
-  photos,
-  footer,
-}: {
+interface PhotoGridProps {
   photos: SerializedPhoto[];
-  footer?: (photo: SerializedPhoto) => ReactNode;
-}) => (
-  <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-    {photos.map((photo) => (
-      <PhotoCard key={photo.id} photo={photo} footer={footer?.(photo)} />
-    ))}
-  </SimpleGrid>
-);
+  /** Owner controls per photo, drawn in the tile's top right corner. */
+  actions?: (photo: SerializedPhoto) => ReactNode;
+  /** Extra one-line explanation per photo (AI results). */
+  note?: (photo: SerializedPhoto) => string | undefined;
+  /** Show each photo's album name (Search). */
+  showAlbum?: boolean;
+}
+
+const PhotoGrid = ({ photos, actions, note, showAlbum }: PhotoGridProps) => {
+  const columns = usePhotoColumns();
+  return (
+    <MasonryGrid
+      items={photos}
+      ratioOf={photoRatio}
+      keyOf={(photo) => photo.id}
+      columns={columns}
+      renderItem={(photo) => (
+        <PhotoTile photo={photo} actions={actions?.(photo)} note={note?.(photo)} showAlbum={showAlbum} />
+      )}
+    />
+  );
+};
 
 export default PhotoGrid;
