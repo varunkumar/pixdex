@@ -78,6 +78,19 @@ describe('FaceGrid', () => {
     expect(screen.getByTestId('face-cut').style.backgroundPosition).toBe('0% 0%');
   });
 
+  it('shows only the date under a small face, and the file caption when there is no date', () => {
+    const items = faceItems(
+      [face('a', 'p1'), face('b', 'p2')],
+      [makePhoto({ id: 'p1', dateTime: '2026-03-05T10:00:00' }), makePhoto({ id: 'p2' })],
+      'pe1'
+    );
+    const { container } = renderWithProviders(<FaceGrid items={items} />);
+    const [dated, undated] = [...container.querySelectorAll('.pdx-tile-cap')];
+    expect(dated.textContent).toMatch(/2026/);
+    expect(dated.textContent).not.toMatch(/leopard/i);
+    expect(undated.textContent).toMatch(/leopard/i);
+  });
+
   it('puts badges, mark and actions in the photo tile places', () => {
     renderWithProviders(
       <FaceGrid

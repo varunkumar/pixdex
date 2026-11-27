@@ -55,28 +55,29 @@ body {
   object-fit: cover; /* the tile only differs from the photo by a pixel gap: crop, never letterbox */
 }
 
-/* Face grid (person page, Faces tab): equal squares that fill the width. Three across on a phone. */
+/* Face grid (person page, Faces tab): small faces like the "Review auto matches" grid. 96px with the same spacing;
+   phones fit three across in slightly smaller columns. */
 .pdx-faces {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 96px));
+  gap: 8px;
 }
 .pdx-faces > * {
   min-width: 0; /* a long caption must not widen its column */
 }
 @media (min-width: 36em) {
   .pdx-faces {
-    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
-  }
-}
-@media (min-width: 62em) {
-  .pdx-faces {
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, 96px);
+    gap: var(--mantine-spacing-md);
   }
 }
 .pdx-tile.pdx-face {
   flex: none; /* a square: a caption line in a taller row must not stretch it */
   aspect-ratio: 1;
+  border-radius: var(--mantine-radius-md);
+}
+.pdx-face .pdx-tile-line {
+  flex-wrap: wrap; /* a face tile is narrow: the date goes under the title when both do not fit */
 }
 .pdx-face-cut {
   width: 100%;

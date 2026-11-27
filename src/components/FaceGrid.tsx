@@ -47,7 +47,7 @@ interface FaceGridProps {
   actions?: (item: FaceItem) => ReactNode;
 }
 
-/** Square face tiles with the photo tile's overlay, caption line and control places (see `PhotoTile`). */
+/** Small square face tiles, sized like the "Review auto matches" grid, with the photo tile's overlay, caption line and control places (see `PhotoTile`). */
 const FaceGrid = ({ items, badges, mark, actions }: FaceGridProps) => (
   <div className="pdx-faces">
     {items.map((item) => {
@@ -76,13 +76,8 @@ const FaceGrid = ({ items, badges, mark, actions }: FaceGridProps) => (
           </div>
           <div className="pdx-tile-cap">
             {marker && <TbSparkles size={11} aria-hidden className="pdx-tile-cap-mark" />}
-            <span>{photoCaption(photo)}</span>
-            {date && (
-              <>
-                {' · '}
-                <span>{date}</span>
-              </>
-            )}
+            {/* A small tile has room for one short thing; the caption is in the link's name. */}
+            <span>{date || photoCaption(photo)}</span>
           </div>
         </div>
       );

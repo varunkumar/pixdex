@@ -33,8 +33,8 @@ The view must agree with the existing design.
 
 ### Grid
 
-- Square, rounded face tiles in a grid that fills the width. Tiles are about 120 px or more (3 across on a phone).
-- The gap is the same as in the photo grid.
+- Small square tiles like "Review auto matches": 96 px, medium radius and spacing. A phone shows 3 across, 8 px apart.
+  (Changed during the build, at the owner's request. The first design used larger tiles that filled the width.)
 - Faces follow the photo order. Two faces in one photo show as two tiles, left to right.
 - A tile opens the photo. Its accessible name includes the photo caption.
 - Show confirmed and auto faces only.
@@ -45,7 +45,7 @@ The view must agree with the existing design.
 These agree with photo tiles:
 
 - Hover shows the photo title and date.
-- A touch screen shows a caption line and keeps the controls visible.
+- A touch screen shows the date under the face (the caption if there is no date) and keeps the controls visible.
 - An auto match has the sparkle mark.
 - The person's creator gets "Set as cover" and, for an auto face, "Confirm X" and "Not X". Each acts on that face.
 - "Confirm X" needs `canEdit` on the photo.
