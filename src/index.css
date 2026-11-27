@@ -207,3 +207,57 @@ body {
   outline: 3px solid var(--mantine-primary-color-filled);
   outline-offset: -3px;
 }
+
+/* Album hero banner (AlbumHero): the cover cropped to fill, the album name and count bottom left over a gradient. */
+.pdx-hero {
+  position: relative;
+  isolation: isolate; /* keeps the blurred child inside the rounded corners */
+  flex: none;
+  height: 340px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--mantine-color-dark-6);
+}
+.pdx-hero-blur,
+.pdx-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.pdx-hero-blur {
+  filter: blur(18px);
+  transform: scale(1.1); /* hides the soft edge the blur leaves */
+}
+.pdx-hero-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 72px 20px 16px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+  color: #fff;
+}
+.pdx-hero-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: #fff;
+  font-size: 32px;
+  line-height: 1.25;
+}
+@media (max-width: 575.98px) {
+  .pdx-hero {
+    height: 220px;
+  }
+  .pdx-hero-text {
+    padding: 56px 14px 12px;
+  }
+  .pdx-hero-name {
+    font-size: 23px;
+  }
+}

@@ -14,6 +14,7 @@ import { ingestSpeciesRoute, pendingSpeciesRoute, speciesSummaryRoute } from './
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { ingestRelocateRoute } from './routes/ingest-relocate';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
+import { getHeroRoute, putHeroRoute } from './routes/heroes';
 import { albumContentsRoute } from './routes/album-contents';
 import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
 import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute } from './routes/faces';
@@ -75,6 +76,10 @@ app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);
 
 app.use('/thumbnails/*', requireReadToken);
 app.get('/thumbnails/:contentHash', getThumbnailRoute);
+
+app.use('/heroes/*', requireReadToken);
+app.get('/heroes/:contentHash', getHeroRoute);
+guardedWrite('PUT', '/heroes/:contentHash', putHeroRoute);
 
 app.use('/search', requireReadToken);
 app.get('/search', searchRoute);

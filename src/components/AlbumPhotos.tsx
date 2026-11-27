@@ -9,6 +9,7 @@ import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/alb
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { photoCaption } from '../services/text';
 import AlbumFilterChip from './AlbumFilterChip';
+import AlbumHero from './AlbumHero';
 import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
 import ColumnsToggle from './ColumnsToggle';
 import ListPagination from './ListPagination';
@@ -93,6 +94,8 @@ const AlbumPhotos = () => {
   const coverId = summary?.coverPhotoId;
   // The role comes from the same summary query (GET /albums?name=&limit=1); until it loads, no owner controls show.
   const isOwner = summary?.role === 'owner';
+  // With a cover the hero carries the album name and its photo count; the row then counts only filtered results.
+  const heroCover = summary?.coverThumbnailUrl;
   const [sharing, setSharing] = useState(false);
 
   const setCover = useMutation({
@@ -114,9 +117,18 @@ const AlbumPhotos = () => {
       <Anchor component={Link} to={albumsList} size="sm">
         ← All albums
       </Anchor>
-      <Group justify="space-between" align="baseline">
+      {summary && heroCover && (
+        <AlbumHero
+          name={name}
+          photoCount={summary.photoCount}
+          coverPhotoId={summary.coverPhotoId}
+          coverThumbnailUrl={heroCover}
+          canCreate={isOwner}
+        />
+      )}
+      <Group justify="space-between" align={heroCover ? 'center' : 'baseline'}>
         <Group gap="sm" align="center">
-          <Title order={2}>{name}</Title>
+          {!heroCover && <Title order={2}>{name}</Title>}
           {isOwner && (summary?.sharedWith?.length ?? 0) > 0 && <AvatarStack emails={summary?.sharedWith ?? []} size="md" />}
           {summary?.role === 'viewer' && (
             <Badge
@@ -134,7 +146,7 @@ const AlbumPhotos = () => {
           )}
         </Group>
         <Group gap="md" align="center">
-          {data && (
+          {data && (!heroCover || filter) && (
             <Text c="dimmed">
               {data.total} {data.total === 1 ? 'photo' : 'photos'}
             </Text>
