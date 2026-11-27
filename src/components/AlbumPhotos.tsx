@@ -1,16 +1,18 @@
-import { Anchor, Badge, Button, Group, Stack, Tabs, Text, Title } from '@mantine/core';
+import { Badge, Button, Group, Stack, Tabs, Text, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import type { IconType } from 'react-icons';
 import { TbCalendar, TbStar } from 'react-icons/tb';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useLastAddress } from '../hooks/useLastAddress';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { photoCaption } from '../services/text';
 import AlbumFilterChip from './AlbumFilterChip';
 import AlbumHero from './AlbumHero';
+import BackLink from './BackLink';
 import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
 import ColumnsToggle from './ColumnsToggle';
 import CoverBadge from './CoverBadge';
@@ -31,7 +33,7 @@ const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: s
 
 const AlbumPhotos = () => {
   const { name = '' } = useParams();
-  const albumsList = (useLocation().state as { albumsList?: string } | null)?.albumsList ?? '/albums';
+  const albumsList = useLastAddress('/albums');
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PHOTO_SIZES);
 
   const requestedSort = params.get('sort');
@@ -119,9 +121,7 @@ const AlbumPhotos = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to={albumsList} size="sm">
-        ← All albums
-      </Anchor>
+      <BackLink to={albumsList}>All albums</BackLink>
       {summary && heroCover && (
         <AlbumHero
           name={name}

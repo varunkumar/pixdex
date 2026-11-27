@@ -1,10 +1,11 @@
-import { Anchor, Button, Card, Group, Stack, Text, Title } from '@mantine/core';
+import { Button, Card, Group, Stack, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useLastAddress } from '../hooks/useLastAddress';
 import { useReviewQueue } from '../hooks/useReviewQueue';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { UNNAMED_PERSON } from '../services/peopleKeys';
+import BackLink from './BackLink';
 import FaceTile from './FaceTile';
 
 const FACE = 56;
@@ -24,9 +25,7 @@ const ReviewQueue = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to={peopleList} size="sm">
-        ← Back to People
-      </Anchor>
+      <BackLink to={peopleList}>All people</BackLink>
       <Title order={2}>To review</Title>
       {failed && (
         <Group gap="xs">

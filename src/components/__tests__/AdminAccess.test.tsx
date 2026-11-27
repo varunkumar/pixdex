@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessRequest, AccessRequestsResponse } from '../../types/api';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
-import { renderWithProviders } from '../../test/renderWithProviders';
+import { renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
 import AdminAccess from '../AdminAccess';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
@@ -39,6 +39,21 @@ describe('AdminAccess', () => {
       list([row(1, 'a@example.com', 'pending', 'Hello there'), row(2, 'b@example.com')])
     );
     vi.mocked(workerApiClient.decideAccessRequest).mockResolvedValue(row(1, 'a@example.com', 'approved'));
+  });
+
+  it('opens the tab named in the address and drops the name again for Pending', async () => {
+    const { router } = renderWithRouter([{ path: '/admin/access', element: <AdminAccess /> }], ['/admin/access?status=revoked']);
+    await waitFor(() => expect(workerApiClient.listAccessRequests).toHaveBeenCalledWith('revoked'));
+    expect(screen.getByRole('tab', { name: 'Revoked' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Approved' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?status=approved'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Pending' }));
+    await waitFor(() => expect(router.state.location.search).toBe(''));
+  });
+
+  it('treats an unknown tab name as Pending', async () => {
+    renderWithProviders(<AdminAccess />, { route: '/admin/access?status=nonsense' });
+    await waitFor(() => expect(workerApiClient.listAccessRequests).toHaveBeenCalledWith('pending'));
   });
 
   it('lists pending rows with email, note and date, and Approve and Deny buttons', async () => {

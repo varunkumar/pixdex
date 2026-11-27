@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { IconType } from 'react-icons';
 import { TbCalendar, TbHash, TbStar } from 'react-icons/tb';
+import { useRememberAddress } from '../hooks/useLastAddress';
 import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type AlbumSort } from '../services/api/WorkerApiClient';
 import AlbumCard from './AlbumCard';
@@ -19,6 +20,7 @@ const SORT_OPTIONS: { value: AlbumSort; label: string; icon?: IconType; text?: s
 ];
 
 const Albums = () => {
+  useRememberAddress();
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PAGE_SIZES);
 
   const requestedSort = params.get('sort');

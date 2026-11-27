@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Button, Group, Menu, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Button, Group, Menu, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -14,6 +14,7 @@ import { markReviewQueueStale, noteRemovedName } from '../services/matchQueue';
 import { photoCaption } from '../services/text';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
+import BackLink from './BackLink';
 import ColumnsToggle from './ColumnsToggle';
 import CoverBadge from './CoverBadge';
 import FaceTile from './FaceTile';
@@ -229,9 +230,7 @@ const PersonPage = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to={peopleList} size="sm">
-        ← All people
-      </Anchor>
+      <BackLink to={peopleList}>All people</BackLink>
       {peopleLoaded && !person && <Text c="dimmed">This person was not found.</Text>}
       {person && (
         <>

@@ -1,7 +1,7 @@
 import { Badge, Box, Button, Card, Center, Group, Image, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 import { MdPhoto } from 'react-icons/md';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
 import type { AlbumSummary } from '../types/api';
@@ -9,7 +9,6 @@ import ShareAlbumModal from './ShareAlbumModal';
 import { AvatarStack, UserAvatar } from './UserAvatar';
 
 const AlbumCard = ({ album }: { album: AlbumSummary }) => {
-  const location = useLocation();
   const [sharing, setSharing] = useState(false);
   const isOwner = album.role === 'owner';
   const shared = isOwner && (album.sharedWith?.length ?? 0) > 0;
@@ -20,8 +19,6 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
     <Card withBorder padding={0} radius="md">
       <Link
         to={`/albums/${encodeURIComponent(album.name)}`}
-        // Lets "All albums" return to this listing with its sort and page intact.
-        state={{ albumsList: `${location.pathname}${location.search}` }}
         style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
       >
         <Card.Section>

@@ -292,3 +292,10 @@ body {
     font-size: 23px;
   }
 }
+
+/* A text link that is a control of its own: at least 24px high (WCAG 2.5.8). */
+.pdx-target {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}

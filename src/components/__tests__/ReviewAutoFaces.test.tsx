@@ -197,7 +197,7 @@ describe('ReviewAutoFaces', () => {
 
   it('links back to the list and asks for it only once the pages are finished', async () => {
     await showPage();
-    expect(screen.getByRole('link', { name: 'All to review' })).toHaveAttribute('href', '/review');
+    expect(screen.getByRole('link', { name: '← To review' })).toHaveAttribute('href', '/review');
     expect(workerApiClient.getReviewQueue).not.toHaveBeenCalled();
   });
 

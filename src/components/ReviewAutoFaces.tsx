@@ -11,6 +11,7 @@ import { noteRemovedName, refreshAfterReview } from '../services/matchQueue';
 import { errorMessage, UNNAMED_PERSON } from '../services/peopleKeys';
 import { finishedReviews, noteReviewFinished } from '../services/reviewVisit';
 import type { PersonSummary, SerializedFace } from '../types/api';
+import BackLink from './BackLink';
 import FaceTile from './FaceTile';
 
 const TILE = 96;
@@ -305,14 +306,8 @@ const ReviewAutoFaces = () => {
   return (
     <Stack gap="lg">
       <Group gap="lg">
-        <Anchor component={Link} to={personPage} size="sm">
-          ← Back to the person
-        </Anchor>
-        {person?.canEdit && (
-          <Anchor component={Link} to="/review" size="sm">
-            All to review
-          </Anchor>
-        )}
+        <BackLink to={personPage}>{person ? name : 'Person'}</BackLink>
+        {person?.canEdit && <BackLink to="/review">To review</BackLink>}
       </Group>
       {isSuccess && !person && <Text c="dimmed">This person was not found.</Text>}
       {person && !person.canEdit && <Text c="dimmed">Only the owner of this person can review their matches.</Text>}

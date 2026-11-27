@@ -24,6 +24,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 import { getDriveUrl, getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
+import BackLink from './BackLink';
 import FaceOverlay from './FaceOverlay';
 import Lightbox from './Lightbox';
 import PhotoFaces from './PhotoFaces';
@@ -151,9 +152,7 @@ const PhotoDetail = () => {
           ← Back
         </Anchor>
       ) : (
-        <Anchor component={Link} to={albumHref ?? '/search'} size="sm" w="fit-content">
-          {albumHref ? '← Back to album' : '← Back to search'}
-        </Anchor>
+        <BackLink to={albumHref ?? '/search'}>{albumHref ? 'Back to album' : 'Back to search'}</BackLink>
       )}
 
       <Card withBorder>

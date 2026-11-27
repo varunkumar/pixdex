@@ -1,7 +1,7 @@
 import { Alert, Button, Card, Group, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useMe } from '../hooks/useMe';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import type { AccessRequest } from '../types/api';
@@ -31,8 +31,11 @@ const AdminAccess = () => {
   const queryClient = useQueryClient();
   const { email: myEmail, admin, loading } = useMe();
   const me = myEmail?.toLowerCase() ?? null;
-  const [status, setStatus] = useState<Status>('pending');
-  const tab = TABS.find((t) => t.status === status) ?? TABS[0];
+  // The tab lives in the address, so Back and a reload keep it; Pending is the plain address.
+  const [params, setParams] = useSearchParams();
+  const tab = TABS.find((t) => t.status === params.get('status')) ?? TABS[0];
+  const status = tab.status;
+  const setStatus = (next: Status) => setParams(next === 'pending' ? {} : { status: next });
 
   // Gated on admin: a non-admin makes no admin call at all.
   const requests = useQuery({
