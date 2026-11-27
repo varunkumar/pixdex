@@ -11,7 +11,8 @@
 A private, searchable home for a personal photo library. A local vision model (Ollama) describes, tags and rates every
 photo, a local face model groups the people in them, and a small Cloudflare backend
 lets you search it all from any browser. Only metadata and thumbnails leave your
-machine. Originals stay on local disk or Google Drive.
+machine, plus a 2048px copy of each album cover that is stored in R2 (made by the
+album owner's browser). Originals stay on local disk or Google Drive.
 
 ![Dashboard with library totals and recently indexed photos](docs/screenshots/home.png)
 
@@ -63,6 +64,10 @@ machine. Originals stay on local disk or Google Drive.
   shape. On a mouse device the caption, date and tags appear over a photo on hover; on
   a phone or tablet each photo has one caption line under it, two columns by default
   (a small icon switches to one). Photo grids end flush at the bottom: columns get different widths so they all finish on the same line, with no cropping and no empty corners. Page sizes are exactly what the selector says. Sort with the icon buttons (also on People); albums keep the classic cards with the cover, name, count, date and sharing.
+- **Open an album on its cover.** The album page starts with a large banner of the cover photo, with the album name and
+  photo count. The first time the owner opens the album, their browser makes a 2048px copy from the original and stores it; this
+  needs [Originals](#originals-optional) to be set up and reachable. Until then (or for a format the browser cannot decode, such
+  as HEIC) a blurred thumbnail is shown.
 - **See the details.** Camera, lens, focal length, aperture, shutter, ISO and GPS
   when the file has them, plus "View Original" for the full-resolution file.
 
@@ -78,7 +83,8 @@ machine. Originals stay on local disk or Google Drive.
 
 PixdeX is a React app backed by a Cloudflare Worker (D1 + R2). A local agent
 indexes your photos with Ollama and InsightFace and pushes only metadata and
-thumbnails to the Worker. Originals never leave your disk or Drive.
+thumbnails to the Worker. Originals never leave your disk or Drive; a 2048px copy
+of each album cover is stored in R2 for the album page banner.
 
 ```
 photos ─► agent (Ollama + InsightFace sidecar) ─► Worker (D1, R2) ◄─ Pages proxy ◄─ browser

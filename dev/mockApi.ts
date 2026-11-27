@@ -272,7 +272,7 @@ function search(params: URLSearchParams): { results: SerializedPhoto[]; total: n
 }
 
 /** A themed placeholder in the photo's own shape: album colours, a soft sun, a dark hill and the subject as a label. */
-function thumbnailSvg(id: string): string {
+function thumbnailSvg(id: string, longSide?: number): string {
   const index = Number(/(\d+)$/.exec(id)?.[1] ?? 0);
   const { width: w, height: ht } = mockSize(index);
   const photo = LIBRARY.find((m) => m.photo.id === id)?.photo;
@@ -285,8 +285,10 @@ function thumbnailSvg(id: string): string {
   const sx = 0.2 + ((index * 37) % 60) / 100;
   const sy = 0.2 + ((index * 17) % 25) / 100;
   const hill = H * (0.78 + ((index * 7) % 8) / 100);
+  // The same drawing at a larger rendered size (album heroes).
+  const scale = longSide ? longSide / Math.max(W, H) : 1;
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(W * scale)}" height="${Math.round(H * scale)}" viewBox="0 0 ${W} ${H}">` +
     `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
     `<stop offset="0" stop-color="${theme.from}"/><stop offset="1" stop-color="${theme.to}"/></linearGradient>` +
     `<radialGradient id="s"><stop offset="0" stop-color="#fff" stop-opacity="0.95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>` +
@@ -397,11 +399,13 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   if (path === '/search') return sendJson(res, 200, search(url.searchParams));
   if (path === '/timeline') return sendJson(res, 200, { groups: [], nextCursor: null });
   if (path === '/timeline/buckets') return sendJson(res, 200, { buckets: [], undated: 0 });
-  if (path.startsWith('/thumbnails/') || path.startsWith('/originals/')) {
+  // A hero is always "already made" here (a mock photo's content hash is its id), so the mock never gets an upload.
+  const isHero = path.startsWith('/heroes/');
+  if (isHero || path.startsWith('/thumbnails/') || path.startsWith('/originals/')) {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'image/svg+xml');
     res.setHeader('Cache-Control', 'no-store');
-    res.end(thumbnailSvg(decodeURIComponent(path.split('/').pop() ?? '')));
+    res.end(thumbnailSvg(decodeURIComponent(path.split('/').pop() ?? ''), isHero ? 2048 : undefined));
     return true;
   }
   const photo = /^\/photos\/([^/]+)$/.exec(path);

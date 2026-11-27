@@ -1,6 +1,7 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
+import { loadHero } from '../../services/heroImage';
 import { makePhoto } from '../../test/fixtures';
 import { renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
 import AlbumPhotos from '../AlbumPhotos';
@@ -16,6 +17,10 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
   },
 }));
 vi.mock('../../services/originals', () => ({ getOriginalUrl: vi.fn(() => null) }));
+vi.mock('../../services/heroImage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/heroImage')>()),
+  loadHero: vi.fn(),
+}));
 
 const FACE = {
   id: 'f1',
@@ -69,6 +74,7 @@ beforeEach(() => {
   });
   vi.mocked(workerApiClient.setAlbumCover).mockResolvedValue();
   vi.mocked(workerApiClient.getAlbumContents).mockResolvedValue(CONTENTS);
+  vi.mocked(loadHero).mockResolvedValue(null);
 });
 
 describe('AlbumPhotos tabs', () => {
@@ -323,5 +329,57 @@ describe('AlbumPhotos', () => {
     renderWithProviders(<AlbumPhotos />, { route: '/albums/Kanha', path: '/albums/:name' });
     expect(await screen.findByRole('button', { name: /^share/i })).toBeInTheDocument();
     expect(screen.getByLabelText('a@example.com')).toBeInTheDocument();
+  });
+});
+
+describe('AlbumPhotos hero', () => {
+  const HASH = 'c'.repeat(32);
+  const withCover = (role: 'owner' | 'viewer', coverThumbnailUrl: string | null = `/thumbnails/${HASH}`) =>
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: [{ name: 'Kanha', photoCount: 128, coverPhotoId: 'cov', coverThumbnailUrl, latestDate: null, role }],
+      total: 1,
+    });
+
+  it('shows the name and the album photo count once, inside the hero', async () => {
+    withCover('owner');
+    const { container } = renderAlbum();
+    await waitFor(() => expect(container.querySelector('.pdx-hero')).toBeInTheDocument());
+    expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
+    const headings = screen.getAllByRole('heading', { name: 'Kanha' });
+    expect(headings).toHaveLength(1);
+    const hero = headings[0].closest<HTMLElement>('.pdx-hero');
+    expect(hero).not.toBeNull();
+    expect(within(hero!).getByText('128 photos')).toBeInTheDocument();
+    // The row's own count (the photo list total is 1) is gone without a filter.
+    expect(screen.queryByText('1 photo')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Alphabetical' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['owner', true],
+    ['viewer', false],
+  ] as const)('lets only the owner create the hero (%s)', async (role, canCreate) => {
+    withCover(role);
+    renderAlbum();
+    await waitFor(() => expect(loadHero).toHaveBeenCalledWith(HASH, 'cov', canCreate));
+  });
+
+  it('keeps the filtered total in the row while a filter is active', async () => {
+    withCover('owner');
+    const { container } = renderAlbum('/albums/Kanha?species=Nope');
+    await waitFor(() => expect(container.querySelector('.pdx-hero')).toBeInTheDocument());
+    const count = await screen.findByText('1 photo');
+    expect(count.closest('.pdx-hero')).toBeNull();
+    expect(screen.getByText('128 photos').closest('.pdx-hero')).not.toBeNull();
+  });
+
+  it('keeps the old header without a cover thumbnail', async () => {
+    withCover('owner', null);
+    const { container } = renderAlbum();
+    expect(await screen.findByRole('button', { name: /^share/i })).toBeInTheDocument();
+    expect(await screen.findByText('1 photo')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Kanha' })).toHaveLength(1);
+    expect(container.querySelector('.pdx-hero')).toBeNull();
+    expect(loadHero).not.toHaveBeenCalled();
   });
 });

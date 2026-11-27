@@ -2,7 +2,7 @@
 
 PixdeX is a browse and search UI for a personal photo collection. Original
 photos never leave local disk or Google Drive; only derived data (metadata,
-captions, ratings, thumbnails) lives in the cloud.
+captions, ratings, thumbnails and a 2048px copy of each album cover) lives in the cloud.
 
 ```
 Your Mac
@@ -14,7 +14,7 @@ Your Mac
 Cloudflare
   ├─ worker/    Hono Worker: ingest + read API
   ├─ D1         photo metadata + FTS5 search index
-  ├─ R2         thumbnails only
+  ├─ R2         thumbnails, album hero images (2048px cover copies), face crops, known gallery backup
   └─ Pages      src/ (React UI) + functions/api (same-origin proxy)
 ```
 
@@ -115,15 +115,15 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
-`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
+`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `heroes/:hash`, `faces/:id/crop`, `people`,
 `people/groups`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
-Thumbnails are cached immutably (content-hash addressed); other routes use
-`no-cache`. The only writes the browser can make are `PUT albums/cover`,
+Thumbnails and album heroes are cached immutably (content-hash addressed); other routes use
+`no-cache`. The only writes the browser can make are `PUT albums/cover`, `PUT heroes/:hash`,
 `PUT albums/shares`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`,
 `people/:id/faces`, `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign` and
-`admin/requests/:id/approve|deny|revoke` (bodies JSON only, DELETE has none), all forwarded with the read token through
+`admin/requests/:id/approve|deny|revoke` (bodies JSON only, except the hero upload, which is `image/jpeg` only; DELETE has none), all forwarded with the read token through
 one shared helper with per-method allowlists.
 
 ### Human review (HITL)
@@ -148,6 +148,12 @@ candidate). It returns 404 if no photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
+- `routes/heroes.ts` - album hero banners, R2 key `hero/<contentHash>.jpg` in the thumbnails bucket. `GET /heroes/:contentHash`
+  has thumbnail visibility (404 if not visible or not made yet; private, immutable). `PUT /heroes/:contentHash` is the album
+  owner's upload (404 not visible, 403 viewer, 400 bad hash or not a JPEG, 413 over 2 MB; conditional put: 201 stored, 200 kept).
+  The Worker does no image work: the owner's browser makes the 2048px JPEG from the original (`src/services/heroImage.ts`) when the
+  album page (`AlbumHero`) finds none. Cost: 1 D1 read and 1 R2 get per view (then browser cached); creation once per cover adds the
+  original access check, 1 D1 read, 1 conditional R2 put and one more GET; no migration.
 - `routes/album-contents.ts` - `GET /albums/contents?name=` returns `{ people, known, species }` for one album the viewer can
   see (404 otherwise, 400 without `name`): per-list tiles with `photoCount` (distinct photos), at most 200 each, sorted by
   count then name; people use only `auto` and `confirmed` faces and carry the viewer's own label or `null` for people they
@@ -250,6 +256,7 @@ candidate). It returns 404 if no photo qualifies.
 
 1. `agent` indexes: files -> hash -> Ollama analysis -> `POST /ingest/*` on the Worker.
 2. Worker stores rows in D1 (with FTS5 text) and thumbnails in R2.
+2b. Album hero (once per cover): owner's browser -> `/api/originals/:id` -> resize in the browser -> `PUT /api/heroes/:hash` -> R2.
 3. Browser -> Pages `/api/*` -> Pages Function adds token -> Worker read route.
 3b. Request access (signed out): browser -> `/enroll` -> `POST /api/enroll` (Turnstile) -> Worker `POST /enroll` -> `access_requests`;
    the admin approves on `/admin/access` -> Worker -> Cloudflare Access API (group edit, session revoke).

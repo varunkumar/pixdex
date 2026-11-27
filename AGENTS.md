@@ -3,7 +3,8 @@
 Browse and search UI for a personal photo collection. A React frontend talks to
 a Cloudflare Worker (D1 + R2); a separate local agent indexes photos with a
 local Ollama model and pushes metadata and thumbnails to the Worker. Originals
-never leave local disk or Google Drive.
+never leave local disk or Google Drive; the one image larger than a thumbnail in
+R2 is a resized copy (2048px long side) of each album cover, for the album hero.
 
 ## Layout
 
@@ -22,6 +23,25 @@ never leave local disk or Google Drive.
   2 / 3 / 4 at 0 / 576px / 992px, phones switch between 1 and 2 columns (localStorage `pixdex.phoneColumns`). Hover-capable devices get an overlay
   (compact: the title with its date on one line and one row of tags, or the AI note; the album name on Search and the person page sits at the top left as plain white text with a shadow, no pill), touch devices one caption line (`@media (hover: none)`); both are always in the DOM. `PhotoGrid` props are `badges` (always visible, top left: the Cover badge), `mark`, a small sparkle before the title in the hover text (`pdx-tile-mark`, labelled "Matched automatically" for an auto-matched face on the person page; touch shows a plain sparkle in the caption line), no loud "Auto" label, `actions` (hover-only on a mouse, top right), `note`,
   `showAlbum` (the old `footer` is gone); a touch screen next to a mouse (`any-pointer: coarse`) also gets the caption line and always-visible actions. Icon-only controls carry their photo or album in the accessible name ("Set as cover: <caption>", "Photo actions for <caption>"). The albums page keeps the original `AlbumCard` (bordered card, letterboxed 180px cover, name, count, date, avatar stack, Share button; grid 1 / 2 / 3 / 4 columns) with `SortIcons`; an experiment with image-first album tiles was reverted. The page size is always exactly the selector's value (12, 24, 48): no rounding to the column count. Photo columns are 1 or 2 (phone), 3 and 4 (never 5, so 12 photos still give 3 per column). `MasonryGrid` balances the columns (`balanceColumns`: greedy deal, then moves and swaps between any two columns while the sum of squared heights falls) and gives every column a width proportional to 1 / its height (`columnGrow`, gap included), so all columns end on the same line with tiles in their exact shape; tiles also grow a hair (`flex-grow` by height, `object-fit: cover`) to absorb the pixel gaps. That only happens when `planWidths` says the grid can end flush: every column is filled and the relative widths stay within 0.6 to 1.6 of a normal column. A short page (fewer photos than columns) keeps fixed columns about one normal column wide (`--pdx-col`, widths clamped 0.8 to 1.25), and extreme shapes fall back to equal columns; in both cases tiles are never stretched, cropped or upscaled to chase a flush edge (`data-flush="false"`, `object-fit: contain`), so the bottom edge is uneven. Empty columns are not rendered. Tile shape comes from the stored `width / height`, which the agent used to record in the raw sensor frame while thumbnails are upright (a phone portrait shot got a landscape tile). `extractExifData` now reports upright dimensions (swapped for EXIF orientation 5 to 8), and for photos indexed before that `PhotoGrid` reads the thumbnail's natural size on load: when its portrait/landscape orientation disagrees with the stored size (near-square photos are skipped) the tile is re-shaped and the shape is remembered in localStorage `pixdex.thumbRatios` (`useThumbRatios`, newest 3000). A one-time reflow per such photo per browser. People has `SortIcons` too. Sort is `SortIcons` (no direction). Frontend only: no Worker CPU, D1 or API change.
+- Album hero cover (`src/components/AlbumHero.tsx`, `src/services/heroImage.ts`, styles `pdx-hero*` in `src/index.css`): when the
+  album summary has a `coverThumbnailUrl`, the album page shows a banner under "All albums" on every tab (340px tall, 220px below
+  576px, radius 8px, cover cropped and centred, name in the heading font and the album's `photoCount` in white bottom left over a
+  gradient). The title then leaves the row below (avatars, Share, "Shared by", sort, columns), and that row shows a count only while
+  a filter is active; without a cover thumbnail (or until the summary loads) the old header stays. The blurred thumbnail shows until
+  the hero loads, and stays, with no error text, when there is none. The image is `/api/heroes/<content hash>` (hash taken from the
+  thumbnail URL). When it is missing (404) and the viewer owns the album, the browser fetches `/api/originals/:coverId`, resizes it
+  to a 2048px long side (never enlarging, EXIF orientation applied), encodes JPEG (quality 0.85, lowered until at most 2 MB) and
+  uploads it with `PUT`. The query `['album-hero', hash]` has `staleTime` and `gcTime` Infinity and `retry: false`, so each cover is
+  tried once per page session (`loadHero` never rejects and does no de-duplication itself). A new cover gets its own hero; an earlier
+  cover reuses the stored one. Worker routes (`worker/src/routes/heroes.ts`, R2 key `hero/<contentHash>.jpg` in the `THUMBNAILS`
+  bucket): `GET /heroes/:contentHash` (thumbnail visibility; 404 if not visible or not made; private immutable one year) and
+  `PUT /heroes/:contentHash` (`guardedWrite`; 404 not visible, 403 viewer, 400 bad hash or not a JPEG, 413 over 2 MB; conditional
+  put, so 201 when stored and 200 when one already exists). No cleanup of old heroes; to replace a bad one delete the R2 object by
+  hand. `dev/mockApi.ts` serves `GET /heroes/<hash>`. Performance (not measured locally, check with `wrangler tail`): a hero view is
+  1 D1 read plus 1 R2 get, then browser cached (a missing hero costs the same, once per page session); creation, once per cover, is
+  the existing original access check (one Drive call for a Drive photo), 1 D1 read and 1 conditional R2 put, plus one extra GET
+  (1 D1 read, 1 R2 get) after creating; 0 D1 rows written, no migration, no image processing in the Worker (at most a 2 MB body is
+  read and passed to R2).
 - Frontend gating (hidden, never disabled): photo review controls and the photo's face-naming controls use
   `photo.canEdit` (the user owns the album); album cover and Share use the album's `role === 'owner'` (the album page reads it from
   its `album-summary` query); rename, delete, matching and covers on a person use that person's `canEdit` (the user created it).
@@ -104,8 +124,9 @@ never leave local disk or Google Drive.
   conflict retry), revoke 3 (2 if not a member, 5 with a retry), deny none; `/me` still reads no D1 (one env var); the browse hot path is unchanged, and strangers now cost nothing because Access stops them
   at the edge. Turnstile, the Access API, the bypass behaviour and the rate-limit binding cannot be measured locally.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
-  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET albums/contents` and `GET me`; also
-  forwards the browser writes: `PUT albums/cover`, `PUT albums/shares`, `PATCH photos/:id`,
+  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET albums/contents`, `GET heroes/:contentHash`
+  (cached immutably like thumbnails) and `GET me`; also forwards the browser writes: `PUT albums/cover`, `PUT albums/shares`,
+  `PUT heroes/:contentHash` (the one binary write: `Content-Type: image/jpeg` only, bytes forwarded), `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`, `people/:id/faces`,
   `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`; admin: `GET admin/requests` and
   `POST admin/requests/:id/approve|deny|revoke`, which the Worker restricts to `ADMIN_EMAIL`). It first verifies the Cloudflare Access
