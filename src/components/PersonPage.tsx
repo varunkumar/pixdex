@@ -53,12 +53,13 @@ const PersonFaceBadge = ({ photoId, personId }: { photoId: string; personId: str
   ) : null;
 };
 
-/** Per photo: a menu to set the person's cover or reject an automatic match. */
+/** Per photo: a menu to set the person's cover, or confirm or reject an automatic match. */
 const PersonFaceActions = ({
   photoId,
   personId,
   coverFaceId,
   label,
+  canConfirm,
   onChanged,
 }: {
   photoId: string;
@@ -66,6 +67,8 @@ const PersonFaceActions = ({
   coverFaceId: string | undefined;
   /** The photo's caption, so each menu button has its own accessible name. */
   label: string;
+  /** The caller owns the photo's album, which confirming requires. */
+  canConfirm: boolean;
   onChanged: () => void;
 }) => {
   const { auto, candidate, isCover } = usePersonFaces(photoId, personId, coverFaceId);
@@ -76,6 +79,14 @@ const PersonFaceActions = ({
     mutationFn: (faceId: string) => workerApiClient.rejectFace(faceId, personId),
     onSuccess: (_r, faceId) => {
       noteRemovedName(queryClient, faceId, personId);
+      onChanged();
+    },
+    onError,
+  });
+  const confirm = useMutation({
+    mutationFn: (faceId: string) => workerApiClient.reviewAutoFaces(personId, { confirm: [faceId], reject: [] }),
+    onSuccess: ({ confirmed }) => {
+      if (confirmed.length === 0) notifications.show({ message: 'This face had changed, nothing was confirmed' });
       onChanged();
     },
     onError,
@@ -94,7 +105,7 @@ const PersonFaceActions = ({
           color="dark"
           size="md"
           aria-label={`Photo actions for ${label}`}
-          loading={reject.isPending || setCover.isPending}
+          loading={reject.isPending || confirm.isPending || setCover.isPending}
         >
           <TbDotsVertical aria-hidden />
         </ActionIcon>
@@ -104,6 +115,9 @@ const PersonFaceActions = ({
           <Menu.Item disabled>Current cover</Menu.Item>
         ) : (
           <Menu.Item onClick={() => setCover.mutate(candidate.id)}>Set as cover</Menu.Item>
+        )}
+        {auto && canConfirm && (
+          <Menu.Item onClick={() => confirm.mutate(auto.id)}>Confirm {auto.personName}</Menu.Item>
         )}
         {auto && (
           <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
@@ -279,6 +293,9 @@ const PersonPage = () => {
               <Button size="xs" variant="light" loading={matching} onClick={() => enqueue(id, { manual: true })}>
                 Re-run matching
               </Button>
+              <Button size="xs" variant="light" component={Link} to={`/people/${id}/review`}>
+                Review auto matches
+              </Button>
             </Group>
           )}
           {actionError && (
@@ -349,6 +366,7 @@ const PersonPage = () => {
                 personId={id}
                 coverFaceId={person?.cover?.id}
                 label={photoCaption(photo)}
+                canConfirm={photo.canEdit}
                 onChanged={refresh}
               />
             ) : null

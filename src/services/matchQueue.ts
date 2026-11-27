@@ -67,6 +67,11 @@ export function refreshAfterRestoring(client: QueryClient) {
   invalidate(client, [...IGNORE_KEYS, ...SEARCH_KEYS]);
 }
 
+/** After auto matches were confirmed or rejected: rejected faces also leave counts and rejoin the unnamed groups. */
+export function refreshAfterReview(client: QueryClient) {
+  invalidate(client, ['photo-faces', 'people', 'album-contents', ...SEARCH_KEYS]);
+}
+
 /** The Worker's limit on `from`. */
 const MAX_FROM = 50;
 

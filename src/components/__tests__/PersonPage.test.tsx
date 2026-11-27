@@ -1,3 +1,4 @@
+import { notifications } from '@mantine/notifications';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
@@ -22,6 +23,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     matchPersonAll: vi.fn(),
     assignFace: vi.fn(),
     rejectFace: vi.fn(),
+    reviewAutoFaces: vi.fn(),
     renamePerson: vi.fn(),
     setPersonCover: vi.fn(),
     deletePerson: vi.fn(),
@@ -52,6 +54,9 @@ const show = () => renderWithProviders(<PersonPage />, { route: '/people/pe1', p
 describe('PersonPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // The notification store is global and shows only a few at once, so earlier tests' messages must not queue later ones.
+    notifications.cleanQueue();
+    notifications.clean();
     vi.mocked(workerApiClient.getMe).mockResolvedValue({ email: 'owner@example.com', admin: false });
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
@@ -129,6 +134,50 @@ describe('PersonPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
     expect(await screen.findByText('Something went wrong, try again')).toBeInTheDocument();
+  });
+
+  it('confirms an auto match from the photo menu', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face('a1', { personId: 'pe1', personName: 'Asha', status: 'auto' }),
+    ]);
+    vi.mocked(workerApiClient.reviewAutoFaces).mockResolvedValue({ confirmed: ['a1'], rejected: [] });
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Confirm Asha' }));
+    await waitFor(() =>
+      expect(workerApiClient.reviewAutoFaces).toHaveBeenCalledWith('pe1', { confirm: ['a1'], reject: [] })
+    );
+    await waitFor(() => expect(workerApiClient.getPeople).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText('This face had changed, nothing was confirmed')).toBeNull();
+  });
+
+  it('says so when the face had changed before it could be confirmed', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      face('a1', { personId: 'pe1', personName: 'Asha', status: 'auto' }),
+    ]);
+    vi.mocked(workerApiClient.reviewAutoFaces).mockResolvedValue({ confirmed: [], rejected: [] });
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Confirm Asha' }));
+    expect(await screen.findByText('This face had changed, nothing was confirmed')).toBeInTheDocument();
+    await waitFor(() => expect(workerApiClient.getPeople).toHaveBeenCalledTimes(2));
+  });
+
+  it.each([
+    ['a confirmed match', 'confirmed' as const, true],
+    ['a photo in an album the caller does not own', 'auto' as const, false],
+  ])('offers no Confirm item for %s', async (_label, status, canEdit) => {
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto({ id: 'p1', canEdit })], total: 1 });
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face('a1', { personId: 'pe1', personName: 'Asha', status })]);
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    await screen.findByRole('menuitem', { name: /cover/i });
+    expect(screen.queryByRole('menuitem', { name: /^Confirm/ })).toBeNull();
+  });
+
+  it('links the owner to the review of auto matches', async () => {
+    show();
+    expect(await screen.findByRole('link', { name: 'Review auto matches' })).toHaveAttribute('href', '/people/pe1/review');
   });
 
   it('Set as cover offers the largest face of the person in the photo and marks the current cover', async () => {
@@ -264,6 +313,7 @@ describe('PersonPage', () => {
     for (const name of ['Rename', 'Delete', 'Review suggestions', 'Re-run matching', 'Set as cover', 'Photo actions']) {
       expect(screen.queryByRole('button', { name: new RegExp(`^${name}`, 'i') })).not.toBeInTheDocument();
     }
+    expect(screen.queryByRole('link', { name: 'Review auto matches' })).toBeNull();
   });
 
   it('shows Unnamed person for a viewer with no label, and lets them set their own name and nothing else', async () => {

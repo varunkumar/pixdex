@@ -92,7 +92,7 @@ best single reference.
 
 Not measured. Choosing references differently is a separate change.
 
-## Cost (to measure before the PR)
+## Cost (estimates; measured numbers are in `docs/development.md` and are higher per page, about 5 x N)
 
 - List: `personRole`, then one statement, about 3 x N rows read, 0 written. Worst case (3,000 faces, 63 pages)
   about 570K rows read for a full review.

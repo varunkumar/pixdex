@@ -382,6 +382,26 @@ slower plan (about 29% more rows), and widening it made the groups page read man
 the old code. Real D1 numbers are unmeasured: after deploy check `wrangler d1 insights pixdex` for rows read and
 written on `faces`.
 
+### Reviewing auto matches performance
+
+Measured locally in the Workers test runtime with 5,000 photos and 25,497 faces (8,500 auto: 3,000 on one person,
+530 on another; 715 confirmed, 5,503 ignored, 10,779 unnamed):
+
+- `GET /people/:id/auto-faces` reads about 5 rows per auto face of that person, because the whole set is sorted by
+  score on every page: a first page is 2,781 rows read at 530 faces and 15,070 at 3,000. 0 written.
+- Paging through all of a person without changing anything: 12 pages and 20,646 rows read at 530; 63 pages and
+  576,731 at 3,000 (about 12% of the free tier's daily 5M). Confirming or rejecting as you go removes faces from the
+  set, so later pages read less. Plus `personRole` per request.
+- `POST .../auto-faces/review`, 48 faces: confirm 432 rows read, 192 written; reject 672 read, 336 written (the
+  rejection rows and the face updates); 48 faces that no longer qualify, 146 read, 0 written.
+- Each review page also loads up to 48 face crops (one Function and Worker request and one R2 get each, cached by the
+  browser for a day).
+- Worker CPU: maps at most 48 rows; no embedding is read.
+- No new index and no changed query, so other plans are unaffected. If a very large person makes the list too costly,
+  the option is a partial index on `(person_id, match_score)` for auto faces, measured against the existing plans.
+
+Real D1 numbers are unmeasured: after deploy check `wrangler d1 insights pixdex` and `wrangler tail`.
+
 ### Security notes (hardening deferred from review)
 
 - JWKS refetch has no negative cache: while the certs endpoint is failing, a forged-`kid` token can trigger a fetch

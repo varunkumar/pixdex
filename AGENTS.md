@@ -132,6 +132,21 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
 - Match page query (`MATCH_CANDIDATES_SQL`, `worker/src/routes/people.ts`): keep the unary `+` on `assign_status` and the
   CROSS JOINs. It must walk `faces` by rowid and stop at `FACE_PAGE_SIZE` (plan pinned in `worker/test/query-plans.test.ts`);
   through the status index every page read and sorted all remaining candidates.
+- Confirming auto matches (person owner only, faces in albums they own; no migration, no new index):
+  `GET /people/:id/auto-faces?cursor=` lists that person's `auto` faces weakest match first (`autoFacesSql`, 48 per page,
+  keyset cursor `<score>|<rowid>`, 400 if malformed; `{ faces, nextCursor }`). `POST /people/:id/auto-faces/review`
+  (`{ confirm?, reject? }`, 1 to 200 ids in total, disjoint; `guardedWrite`) returns `{ confirmed, rejected }`, the ids
+  actually changed. Binding rule: every statement re-checks at write time that the face is still `auto` for this person in
+  an owned album (`REVIEWABLE_SQL`), so a stale page never takes back a moved, rejected, ignored, confirmed or deleted
+  face; do not use `confirmFacesStmts` for this (it is unconditional and clears ignores and rejections). Never add a
+  "confirm all" over faces that were not shown. UI: "Review auto matches" on the person page (`/people/:id/review`,
+  `ReviewAutoFaces.tsx`: all ticked, buttons act on the shown page only and wait for every picture; a failed picture is in
+  neither list; "Skip page"; the page query never refetches under the ticks; "Open photo" opens a new tab), and "Confirm X"
+  beside "Not X" in the photo menu (needs `canEdit` on both the person and the photo). Rejected ids go to
+  `noteRemovedName`. Confirming starts no match run. References are still the 30 confirmed faces newest by scan time, so
+  bulk confirming changes which faces they are. Performance (local D1): the list reads about 5 rows per auto face of the
+  person on every page (first page 2.8K rows at 530 faces, 15K at 3,000; paging through 3,000 without changes 577K); a
+  review of 48 reads 432 to 672 rows and writes 192 to 336; no embeddings read, at most 48 rows mapped in the Worker.
 - Write authorization (worker): every non-ingest write authorizes itself in its handler (`albumRole`, `faceRoles`, `personRole`)
   and is registered with `guardedWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails
   otherwise. `POST /ingest/photo` requires `ownerEmail` (trimmed, lowercased email): it returns 409 for an album owned by another
@@ -173,10 +188,10 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   conflict retry), revoke 3 (2 if not a member, 5 with a retry), deny none; `/me` still reads no D1 (one env var); the browse hot path is unchanged, and strangers now cost nothing because Access stops them
   at the edge. Turnstile, the Access API, the bypass behaviour and the rate-limit binding cannot be measured locally.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
-  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET albums/contents` and `GET me`; also forwards the
+  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET people/:id/auto-faces`, `GET albums/contents` and `GET me`; also forwards the
   browser writes (JSON bodies only): `PUT albums/cover`, `PUT albums/shares`, `PUT albums/framing`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`, `people/:id/faces`,
-  `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign`; admin: `GET admin/requests` and
+  `people/:id/match`, `people/:id/cover`, `people/:id/auto-faces/review`, `faces/:id/assign|reject|unassign`; admin: `GET admin/requests` and
   `POST admin/requests/:id/approve|deny|revoke`, which the Worker restricts to `ADMIN_EMAIL`). It first verifies the Cloudflare Access
   JWT (`functions/_lib/access.ts`) and forwards the verified email as `X-Viewer-Email`; for `GET originals/:id` it first calls the
   Worker `GET /access/photo/:id` (READ_TOKEN, not in the browser allowlist) for every user

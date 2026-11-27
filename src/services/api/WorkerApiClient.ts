@@ -332,6 +332,21 @@ export class WorkerApiClient {
     return this.getJson(`/people/ignored${suffix}`);
   }
 
+  /** A person's auto-matched faces in the caller's albums, weakest match first, a cursor page at a time. */
+  async getAutoFaces(personId: string, cursor?: string): Promise<{ faces: SerializedFace[]; nextCursor: string | null }> {
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    return this.getJson(`/people/${encodeURIComponent(personId)}/auto-faces${suffix}`);
+  }
+
+  /** Confirms and rejects reviewed auto matches; returns the ids actually changed (a changed face is skipped). */
+  async reviewAutoFaces(
+    personId: string,
+    review: { confirm: string[]; reject: string[] }
+  ): Promise<{ confirmed: string[]; rejected: string[] }> {
+    const response = await this.sendJson('POST', `/people/${encodeURIComponent(personId)}/auto-faces/review`, review);
+    return (await response.json()) as { confirmed: string[]; rejected: string[] };
+  }
+
   async matchPerson(personId: string, opts: { apply?: boolean; cursor?: string; from?: string[] } = {}): Promise<MatchResponse> {
     const response = await this.sendJson('POST', `/people/${encodeURIComponent(personId)}/match`, opts);
     return (await response.json()) as MatchResponse;

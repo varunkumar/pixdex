@@ -12,6 +12,7 @@ import LegacyAiRedirect from './components/LegacyAiRedirect';
 import People from './components/People';
 import PersonPage from './components/PersonPage';
 import PhotoDetail from './components/PhotoDetail';
+import ReviewAutoFaces from './components/ReviewAutoFaces';
 import Search from './components/Search';
 import Timeline from './components/Timeline';
 import { theme } from './theme';
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
       { path: '/photos/:id', element: <PhotoDetail /> },
       { path: '/people', element: <People /> },
       { path: '/people/:id', element: <PersonPage /> },
+      { path: '/people/:id/review', element: <ReviewAutoFaces /> },
       { path: '/daily', element: <DailySuggestion /> },
       { path: '/admin/access', element: <AdminAccess /> },
       { path: '/ai-search', element: <LegacyAiRedirect /> },

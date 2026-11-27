@@ -6,7 +6,7 @@ import { knownFilterSql } from '../src/db/known';
 import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
-import { GROUP_CANDIDATES_SQL, MATCH_CANDIDATES_SQL, MATCH_MOVED_SQL, MATCH_UNNAMED_SQL, ignoredFacesSql } from '../src/routes/people';
+import { GROUP_CANDIDATES_SQL, MATCH_CANDIDATES_SQL, MATCH_MOVED_SQL, MATCH_UNNAMED_SQL, ignoredFacesSql, autoFacesSql, CONFIRM_AUTO_SQL, REJECT_AUTO_INSERT_SQL, REJECT_AUTO_SQL } from '../src/routes/people';
 import { IGNORE_FACES_SQL, RESTORE_FACES_SQL } from '../src/routes/faces';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
@@ -109,6 +109,25 @@ describe('ignored faces list', () => {
     expect(p).toMatch(/(SEARCH|SCAN) f USING INDEX idx_faces_ignored/);
     expect(p).not.toMatch(/TEMP B-TREE/);
     expect(p).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
+  });
+});
+
+describe('review of auto matches', () => {
+  it.each([false, true])('lists through the person index, reading other tables by key (after cursor: %s)', async (after) => {
+    const p = await plan(autoFacesSql(after), U.email, U.email, 'p', U.email, ...(after ? [0.5, 1] : []));
+    expect(p).toMatch(/SEARCH f2 USING INDEX idx_faces_person_status_created \(person_id=\? AND assign_status=\?\)/);
+    expect(p).toMatch(/SEARCH f USING INTEGER PRIMARY KEY \(rowid=\?\)/);
+    expect(p).not.toMatch(/SCAN (f|f2|ph|a)\b/);
+  });
+
+  it.each([
+    ['confirm', CONFIRM_AUTO_SQL, ['[]', 'p', U.email]],
+    ['record rejections', REJECT_AUTO_INSERT_SQL, ['p', '[]', 'p', U.email]],
+    ['reject', REJECT_AUTO_SQL, ['[]', 'p', U.email]],
+  ])('%s reads faces by primary key only', async (_label, sql, params) => {
+    const p = await plan(sql, ...params);
+    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX sqlite_autoindex_faces_1 \(id=\?\)/);
+    expect(p).not.toMatch(/SCAN (faces|ph|a)\b/);
   });
 });
 
