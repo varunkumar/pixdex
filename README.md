@@ -400,6 +400,9 @@ best rated or alphabetical.
   "Next: <name>" moves to the person with the most pending, skipping anyone you already finished in this visit.
   Unnamed groups are not counted. The count is refreshed when you next open these pages (at most 5 minutes old after
   a background match).
+- Going back (the browser's Back, or the "← ..." links on the people and review pages) returns to the same list
+  pages and sort. Back also brings back the review grid's page and ticks, opened ignored faces and a person's
+  suggestions; a page reload starts those afresh.
 - **Which faces matching compares against:** up to 30 confirmed faces per person, spread across the years the photos
   were taken, so someone photographed at 5 and at 40 is matched on both. Each year takes turns, giving its largest
   faces first; photos with no date count as one more year. A scanned print counts in the year of its date, usually the

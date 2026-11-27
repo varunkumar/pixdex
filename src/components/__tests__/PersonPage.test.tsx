@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { makePhoto } from '../../test/fixtures';
-import { renderWithProviders } from '../../test/renderWithProviders';
+import { leaveAndGoBack, renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
 import type { SerializedFace } from '../../types/api';
 import { noteRemovedName } from '../../services/matchQueue';
 import PersonPage from '../PersonPage';
@@ -204,6 +204,21 @@ describe('PersonPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     expect(await screen.findByRole('menuitem', { name: 'Current cover' })).toBeDisabled();
     expect(screen.queryByRole('menuitem', { name: 'Set as cover' })).toBeNull();
+  });
+
+  it('keeps the suggestions after Back without looking again', async () => {
+    const { router } = renderWithRouter(
+      [
+        { path: '/people/:id', element: <PersonPage /> },
+        { path: '/elsewhere', element: <p>elsewhere</p> },
+      ],
+      ['/people/pe1']
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Review suggestions' }));
+    expect(await screen.findAllByTestId('suggestion')).toHaveLength(2);
+    await leaveAndGoBack(router);
+    expect(await screen.findAllByTestId('suggestion')).toHaveLength(2);
+    expect(workerApiClient.matchPerson).toHaveBeenCalledTimes(1);
   });
 
   it('Review suggestions shows only the suggestion band', async () => {

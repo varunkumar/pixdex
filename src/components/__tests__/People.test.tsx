@@ -1,7 +1,11 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { workerApiClient } from "../../services/api/WorkerApiClient";
-import { renderWithProviders } from "../../test/renderWithProviders";
+import {
+  leaveAndGoBack,
+  renderWithProviders,
+  renderWithRouter,
+} from "../../test/renderWithProviders";
 import type { FaceGroup, SerializedFace } from "../../types/api";
 import People from "../People";
 
@@ -670,5 +674,62 @@ describe("People: ignoring faces", () => {
     await screen.findByText("Asha");
     await waitFor(() => expect(workerApiClient.getReviewQueue).toHaveBeenCalled());
     expect(screen.queryByRole("link", { name: /to review/ })).toBeNull();
+  });
+
+  const showWithHistory = (entry = "/people") =>
+    renderWithRouter(
+      [
+        { path: "/people", element: <People /> },
+        { path: "/elsewhere", element: <p>elsewhere</p> },
+      ],
+      [entry],
+    );
+  const manyGroups = (prefix: string, n: number) =>
+    Array.from({ length: n }, (_, i) => group(`${prefix}${i}a`));
+
+  it("keeps the unnamed groups page and the opened ignored faces after Back", async () => {
+    vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
+      groups: manyGroups("x", 9),
+      scanned: 9,
+      nextCursor: null,
+    });
+    vi.mocked(workerApiClient.getIgnoredFaces).mockResolvedValue({
+      faces: [],
+      nextCursor: null,
+    });
+    const { router } = showWithHistory();
+    await screen.findByText("Showing 1-6 of 9");
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    await screen.findByText("Showing 7-9 of 9");
+    expect(router.state.location.search).toBe("?groups=2");
+    fireEvent.click(screen.getByRole("button", { name: "Ignored faces" }));
+    await screen.findByText("No ignored faces.");
+    await leaveAndGoBack(router);
+    expect(await screen.findByText("Showing 7-9 of 9")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Ignored faces" }),
+    ).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("loads up to the groups page in the address instead of falling back to the first", async () => {
+    vi.mocked(workerApiClient.getFaceGroups)
+      .mockResolvedValueOnce({
+        groups: manyGroups("x", 6),
+        scanned: 100,
+        nextCursor: "cur1",
+      })
+      .mockResolvedValueOnce({
+        groups: manyGroups("y", 6),
+        scanned: 100,
+        nextCursor: "cur2",
+      })
+      .mockResolvedValueOnce({
+        groups: manyGroups("z", 3),
+        scanned: 20,
+        nextCursor: null,
+      });
+    const { router } = showWithHistory("/people?groups=3");
+    expect(await screen.findByText("Showing 13-15 of 15")).toBeInTheDocument();
+    expect(router.state.location.search).toBe("?groups=3");
   });
 });

@@ -1,9 +1,9 @@
 import { focusManager } from '@tanstack/react-query';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { noteRemovedName } from '../../services/matchQueue';
-import { renderWithProviders } from '../../test/renderWithProviders';
+import { leaveAndGoBack, renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
 import type { SerializedFace } from '../../types/api';
 import ReviewAutoFaces from '../ReviewAutoFaces';
 
@@ -228,6 +228,36 @@ describe('ReviewAutoFaces', () => {
     await screen.findByText('No more auto matches.');
     await waitFor(() => expect(workerApiClient.getReviewQueue).toHaveBeenCalled());
     expect(screen.queryByRole('link', { name: /^Next:/ })).toBeNull();
+  });
+
+  const showWithHistory = () =>
+    renderWithRouter(
+      [
+        { path: '/people/:id/review', element: <ReviewAutoFaces /> },
+        { path: '/elsewhere', element: <p>elsewhere</p> },
+      ],
+      ['/people/pe1/review']
+    );
+
+  it('comes back to the same page with the same ticks after Back', async () => {
+    const { router } = showWithHistory();
+    await screen.findByRole('button', { name: 'Face 3 is Asha' });
+    fireEvent.click(button('Skip page'));
+    await waitFor(() => expect(pictures()).toHaveLength(1));
+    fireEvent.click(tile(1));
+    await leaveAndGoBack(router);
+    await waitFor(() => expect(tile(1)).toHaveAttribute('aria-pressed', 'false'));
+    expect(pictures()).toHaveLength(1);
+    expect(workerApiClient.getAutoFaces).toHaveBeenLastCalledWith('pe1', '0.6|3');
+  });
+
+  it('starts from the weakest match when the review is opened again, not gone back to', async () => {
+    const { router } = showWithHistory();
+    await screen.findByRole('button', { name: 'Face 3 is Asha' });
+    fireEvent.click(button('Skip page'));
+    await waitFor(() => expect(pictures()).toHaveLength(1));
+    await act(() => router.navigate('/people/pe1/review'));
+    await waitFor(() => expect(pictures()).toHaveLength(3));
   });
 
   it('shows a viewer nothing and requests no faces', async () => {

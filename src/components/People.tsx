@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import { TbUsers, TbX } from "react-icons/tb";
 import { Link } from "react-router-dom";
+import { useRememberAddress } from "../hooks/useLastAddress";
 import { useListParams } from "../hooks/useListParams";
 import { useReviewQueue } from "../hooks/useReviewQueue";
 import { workerApiClient } from "../services/api/WorkerApiClient";
@@ -200,14 +201,19 @@ const PEOPLE_PAGE_SIZES = [12, 24, 48] as const;
 const GROUP_PAGE_SIZES = [6, 12, 24] as const;
 
 const People = () => {
+  useRememberAddress();
   const { params, page, size, offset, update } = useListParams(
     12,
     PEOPLE_PAGE_SIZES,
   );
   const sort =
     SORT_OPTIONS.find((o) => o.value === params.get("sort"))?.value ?? "name";
-  const [groupPage, setGroupPage] = useState(1);
-  const [groupSize, setGroupSize] = useState<number>(GROUP_PAGE_SIZES[0]);
+  // In the address, like the people page number, so Back returns to the same groups.
+  const groupPage = Math.max(1, Math.floor(Number(params.get("groups"))) || 1);
+  const requestedGroupSize = Number(params.get("groupSize"));
+  const groupSize =
+    GROUP_PAGE_SIZES.find((s) => s === requestedGroupSize) ??
+    GROUP_PAGE_SIZES[0];
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const { data: people = [], isSuccess: peopleLoaded } = useQuery({
     queryKey: ["people"],
@@ -251,7 +257,11 @@ const People = () => {
     [update],
 
   );
-  const onGroupPage = useCallback((p: number) => setGroupPage(p), []);
+  const onGroupPage = useCallback(
+    (p: number, replace?: boolean) =>
+      update({ groups: p === 1 ? null : p }, { replace, keepScroll: true }),
+    [update],
+  );
 
   // The Worker returns people alphabetically (stable sort keeps that order among equal counts).
   const sortedPeople =
@@ -361,12 +371,19 @@ const People = () => {
             size={groupSize}
             total={groups.length}
             hasMore={hasNextPage}
+            // Still loading up to the requested page: do not fall back to an earlier one yet.
+            settled={!hasNextPage || groups.length >= groupPage * groupSize}
             sizes={GROUP_PAGE_SIZES}
             onPage={onGroupPage}
-            onSize={(s) => {
-              setGroupSize(s);
-              setGroupPage(1);
-            }}
+            onSize={(s) =>
+              update(
+                {
+                  groupSize: s === GROUP_PAGE_SIZES[0] ? null : s,
+                  groups: null,
+                },
+                { keepScroll: true },
+              )
+            }
           />
         </Stack>
       )}

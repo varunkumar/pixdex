@@ -25,7 +25,7 @@ export function useListParams(defaultSize = 12, sizes: readonly number[] = PAGE_
     latest.current = { params, setParams, state };
   });
 
-  const update = useCallback((patch: Patch, opts: { resetPage?: boolean; replace?: boolean } = {}) => {
+  const update = useCallback((patch: Patch, opts: { resetPage?: boolean; replace?: boolean; keepScroll?: boolean } = {}) => {
     const { params, setParams, state } = latest.current;
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(patch)) {
@@ -36,7 +36,7 @@ export function useListParams(defaultSize = 12, sizes: readonly number[] = PAGE_
     if (next.get('page') === '1') next.delete('page');
     if (Number(next.get('size')) === defaultSize) next.delete('size');
     // Keep location.state: pages stash where to go back to (e.g. the albums list page) in it.
-    setParams(next, { replace: opts.replace ?? false, state });
+    setParams(next, { replace: opts.replace ?? false, state, preventScrollReset: opts.keepScroll });
   }, [defaultSize]);
 
   return { params, page, size, offset: (page - 1) * size, update };

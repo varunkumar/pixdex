@@ -1,6 +1,7 @@
 import { Anchor, Button, Card, Group, Stack, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { useLastAddress } from '../hooks/useLastAddress';
 import { useReviewQueue } from '../hooks/useReviewQueue';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { UNNAMED_PERSON } from '../services/peopleKeys';
@@ -10,6 +11,7 @@ const FACE = 56;
 
 /** Everyone with auto matches waiting to be confirmed, most first. */
 const ReviewQueue = () => {
+  const peopleList = useLastAddress('/people');
   const queue = useReviewQueue();
   const people = useQuery({ queryKey: ['people'], queryFn: () => workerApiClient.getPeople() });
   const byId = new Map((people.data ?? []).map((p) => [p.id, p]));
@@ -22,7 +24,7 @@ const ReviewQueue = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to="/people" size="sm">
+      <Anchor component={Link} to={peopleList} size="sm">
         ← Back to People
       </Anchor>
       <Title order={2}>To review</Title>

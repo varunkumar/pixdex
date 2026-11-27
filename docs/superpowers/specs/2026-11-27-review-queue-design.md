@@ -49,6 +49,10 @@ Changes no longer refresh the count at once: they mark it stale, and it is reque
 next opened. Refetching on every naming would have read every pending face each time. Measured: about 5 rows per
 pending face (`docs/development.md`).
 
+Added on request: Back keeps the state of these screens. The unnamed groups page and size moved into the address;
+the review grid's page and ticks, opened "Ignored faces" and a person's suggestions are kept per history entry; the
+in-page back links return to the last shown address of the people list and person page.
+
 ## Not included
 
 A navigation badge, a mixed grid, bulk confirm without looking, and any change to matching or the agent.
