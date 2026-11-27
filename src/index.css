@@ -55,6 +55,35 @@ body {
   object-fit: cover; /* the tile only differs from the photo by a pixel gap: crop, never letterbox */
 }
 
+/* Face grid (person page, Faces tab): equal squares that fill the width. Three across on a phone. */
+.pdx-faces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 6px;
+}
+.pdx-faces > * {
+  min-width: 0; /* a long caption must not widen its column */
+}
+@media (min-width: 36em) {
+  .pdx-faces {
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  }
+}
+@media (min-width: 62em) {
+  .pdx-faces {
+    gap: 8px;
+  }
+}
+.pdx-tile.pdx-face {
+  flex: none; /* a square: a caption line in a taller row must not stretch it */
+  aspect-ratio: 1;
+}
+.pdx-face-cut {
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+}
+
 /* Photo tile: overlay on hover-capable devices, caption line on touch devices. */
 .pdx-tile-item {
   display: flex;
