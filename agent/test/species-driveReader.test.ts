@@ -5,7 +5,7 @@ import { createDriveReader } from '../src/species/driveReader';
 const config = { GOOGLE_OAUTH_CLIENT_ID: 'id', GOOGLE_OAUTH_CLIENT_SECRET: 's', DRIVE_STAGING_MAX_MB: 1 } as any;
 
 const filesClient = (bytes: Buffer, headers: Record<string, string> = {}) => ({
-  get: vi.fn().mockResolvedValue({ data: Readable.from([bytes]), headers }),
+  get: vi.fn().mockResolvedValue({ data: Readable.from([bytes]), headers: new Headers(headers) }),
 });
 
 describe('createDriveReader', () => {
