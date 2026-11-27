@@ -14,7 +14,8 @@ root (frontend), `worker/`, `agent/`. Run `npm install` in each you touch.
 Single test: `npx vitest run path/to/file.test.ts` inside the package.
 
 Dev mock: `PIXDEX_MOCK=1 npm run dev` serves dummy `/api/*` data from `dev/mockApi.ts` (fictional people and known
-personalities, albums, gradient SVG thumbnails) with no `.env`, no secrets and no Worker, D1 or R2 traffic. It is
+personalities, albums, gradient SVG thumbnails that also stand in for originals, cover framing kept in memory) with no
+`.env`, no secrets and no Worker, D1 or R2 traffic. It is
 dev-server only (`vite.config.ts` reads the flag in Node), never imported by `src/`, so `npm run build` does not contain
 it. Use it for browser checks of the omnibox, light and dark.
 
@@ -70,7 +71,22 @@ Notes:
   (replaced by `idx_persons_owner_name_lower`); dropping an index is metadata-only, so no Time Travel bookmark is needed.
 - Migration `0017_person_labels.sql` (the empty `person_labels` table, its unique index and triggers) is additive and auto-applies on
   merge: no backfill, no Time Travel bookmark needed. From then on a non-owner no longer receives the owner's person names.
+- Migration `0021_album_framing.sql` (the nullable `albums.cover_framing` column) is additive and auto-applies on merge. See
+  "After deploying the browser-stored album hero" below.
 - The agent is not deployed; it runs on your Mac.
+
+### After deploying the browser-stored album hero
+
+Header images are no longer kept in R2: each browser stores the cover's original, and the `/heroes` routes are gone.
+
+1. Wait until both the Pages and the Worker deploys have finished. They are independent, so for a short window an old page can
+   show only the blurred thumbnail, or "Reposition" can fail to save.
+2. Delete the `hero/` objects from the `pixdex-thumbnails` bucket by hand (Cloudflare dashboard: R2, `pixdex-thumbnails`, the
+   `hero/` folder). Delete only that prefix: the same bucket holds the thumbnails, face crops and the known gallery backup. A
+   deployment that never made a hero has nothing to delete.
+3. Check an album page as the owner and as a viewer (the banner turns sharp, a reload requests no original, a saved framing
+   shows for both). To measure, watch `cpuTime` on `GET /albums` and `PUT /albums/framing` with
+   `cd worker && npx wrangler tail pixdex-worker --format json` (not measurable locally).
 
 ### Rollout order for album sharing
 
@@ -354,6 +370,8 @@ requests or an `album_shares(email, album)` lookup table are the next steps.
 - The originals access subrequest to the Worker has no explicit timeout.
 - A removed share can still show bytes already cached in the viewer's browser (originals `max-age=3600`, thumbnails
   immutable). Server-side access is revoked immediately.
+- The album hero keeps cover originals in the viewer's IndexedDB with no expiry. A copy stays after access is revoked, until
+  site data is cleared or the browser evicts it; the album page, the only thing that shows it, no longer loads for that user.
 - The Vite dev proxy forwards a client `X-Viewer-Email` when neither `DEV_VIEWER_EMAIL` nor `OWNER_EMAIL` (root `.env`) is set
   (dev only).
 
