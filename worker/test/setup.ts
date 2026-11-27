@@ -2,7 +2,7 @@ import { env } from 'cloudflare:test';
 import { beforeAll, beforeEach } from 'vitest';
 import { clearReferencesCache } from '../src/people/references';
 import { PHOTOS_MIGRATION_STATEMENTS } from '../migrations/index';
-import { ALBUM_OWNER_FIXTURE_SQL } from './helpers';
+import { ALBUM_OWNER_FIXTURE_SQL, REFERENCE_FIXTURE_SQL } from './helpers';
 
 beforeAll(async () => {
   // Execute migrations before tests run
@@ -28,6 +28,11 @@ beforeAll(async () => {
  */
 beforeAll(async () => {
   await env.DB.prepare(ALBUM_OWNER_FIXTURE_SQL).run();
+});
+
+/** Test convenience: a confirmed face inserted directly is one of its person's matching references. */
+beforeAll(async () => {
+  await env.DB.prepare(REFERENCE_FIXTURE_SQL).run();
 });
 
 beforeEach(() => clearReferencesCache());

@@ -3,6 +3,7 @@ import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { embeddingFromBytes } from '../people/embedding';
 import { loadReferences } from '../people/references';
+import { refreshReferences } from '../people/referenceSelection';
 import { FACE_PAGE_SIZE, GROUPS_PAGE_SIZE, MATCHABLE_SQL, bestScore, classify, clusterFaces } from '../people/matching';
 import { userOf, type User } from '../access';
 import { scopeFor } from '../db/visibility';
@@ -138,6 +139,7 @@ export async function createPersonRoute(c: Ctx) {
     if (isUniqueViolation(err)) return c.json({ error: 'A person with this name already exists' }, 409);
     throw err;
   }
+  if (faceIds?.length) await refreshReferences(c.env.DB, { personIds: [id], faceIds });
   return c.json({ id, name }, 201);
 }
 
@@ -220,6 +222,7 @@ export async function deletePersonRoute(c: Ctx) {
       "UPDATE faces SET person_id = NULL, match_score = NULL, assign_status = 'unassigned' WHERE person_id = ?"
     ).bind(id),
     c.env.DB.prepare('DELETE FROM face_rejections WHERE person_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM person_references WHERE person_id = ?').bind(id),
     c.env.DB.prepare('DELETE FROM persons WHERE id = ?').bind(id),
   ]);
   return c.body(null, 204);
@@ -235,6 +238,7 @@ export async function assignFacesRoute(c: Ctx) {
   const facesDenied = await requireFacesOwned(c, faceIds);
   if (facesDenied) return facesDenied;
   await c.env.DB.batch(confirmFacesStmts(c.env.DB, faceIds, id));
+  await refreshReferences(c.env.DB, { personIds: [id], faceIds });
   return c.json({ personId: id, assigned: faceIds.length });
 }
 
@@ -463,12 +467,13 @@ export async function reviewAutoFacesRoute(c: Ctx) {
     const ids = JSON.stringify(reject);
     statements.push(db.prepare(REJECT_AUTO_INSERT_SQL).bind(id, ids, id, owner), db.prepare(REJECT_AUTO_SQL).bind(ids, id, owner));
   }
+  const rejectAt = statements.length - 1;
   const results = await db.batch<{ id: string }>(statements);
   const changed = (index: number) => results[index].results.map((r) => r.id);
-  return c.json({
-    confirmed: confirm.length ? changed(0) : [],
-    rejected: reject.length ? changed(statements.length - 1) : [],
-  });
+  const confirmed = confirm.length ? changed(0) : [];
+  // Only confirming changes confirmed faces: a rejected auto match was never a reference.
+  if (confirmed.length) await refreshReferences(db, { personIds: [id] });
+  return c.json({ confirmed, rejected: reject.length ? changed(rejectAt) : [] });
 }
 
 export async function matchPersonRoute(c: Ctx) {
@@ -483,10 +488,14 @@ export async function matchPersonRoute(c: Ctx) {
   // The second phase only exists for a narrow match.
   if (parsed.data.cursor?.startsWith('m') && !parsed.data.from?.length) return c.json({ error: 'Invalid cursor' }, 400);
 
+  const { from } = parsed.data;
+  // The first page of Re-run matching (applies, checks everything) repairs this person's references first.
+  if (parsed.data.apply && !from && parsed.data.cursor === undefined) {
+    await refreshReferences(c.env.DB, { personIds: [id] });
+  }
   const [refs] = await loadReferences(c.env.DB, { personId: id });
   if (!refs) return c.json(empty);
 
-  const { from } = parsed.data;
   const raw = parsed.data.cursor ?? '0';
   const moved = raw.startsWith('m');
   const cursor = Number(moved ? raw.slice(1) : raw);

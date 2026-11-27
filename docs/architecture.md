@@ -333,7 +333,7 @@ plus `photos.faces_scanned_model`. Re-ingesting a photo replaces only its
 `confirmed` faces are kept. Ingest bodies cannot set `person_id` or `assign_status`.
 
 Matching (`worker/src/people/`): each named person is represented by up to
-`REFERENCES_PER_PERSON` (30) reference embeddings (the newest confirmed faces; people with none are skipped); a
+`REFERENCES_PER_PERSON` (30) reference embeddings (confirmed faces spread across years, below; people with none are skipped); a
 face's score is its best dot product against a person's references. Only faces
 with `det_score >= MIN_DET_SCORE` (0.7) and both sides `>= MIN_FACE_SIDE` (0.05,
 fraction of the image) are matchable. A score `>= AUTO_THRESHOLD` (0.5) attaches
@@ -372,12 +372,21 @@ person. Otherwise `GET /people` picks their biggest confirmed face (box area, th
 There is no foreign key: validity is checked when read, so unassigning the face or deleting it just
 falls back to the default.
 
-"Newest" references means newest by scan time (`faces.created_at`), not by when
-the owner confirmed. `loadReferences` reads them through
-`idx_faces_person_status_created` (migration `0010`), so rows read are bounded
-by people x `REFERENCES_PER_PERSON`. Ingest-time matching uses
-`loadReferencesCached` (per-isolate, 60 s TTL), so a person confirmed in the last
-minute may be missed by that pass; the owner-driven match route is never cached.
+References are stored in `person_references (person_id, face_id)` (migration
+`0023_person_references.sql`, which also fills it). The rule
+(`referenceSelection.ts`): bucket a person's confirmed faces by the photo's year
+(no date is its own bucket), rank each bucket by face box area, then detection
+score, and take turns across buckets until 30. `refreshReferences` runs after
+every write that changes confirmed faces (naming, "Not X", "Remove name", a
+confirming review) and on the first page of Re-run matching: one statement reads
+the choice, then one batch writes only the difference. It is not in the write's
+transaction and never fails the request. `loadReferences` reads the table and
+still requires each face to be confirmed for that person, so a stale row is
+ignored. A photo date changing at re-index is picked up by the next refresh, and
+so is a confirmation made by the previous Worker during a deploy. Deleting a
+person deletes their rows. Ingest-time matching uses `loadReferencesCached`
+(per-isolate, 60 s TTL), so a person confirmed in the last minute may be missed
+by that pass; the owner-driven match route is never cached.
 
 Limits, chosen for the Workers Free plan (CPU time and about 50 D1 queries per
 invocation):

@@ -248,9 +248,28 @@ BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
   'CREATE INDEX IF NOT EXISTS idx_faces_known_shown ON faces (known_id, photo_id, ignored_at) WHERE known_id IS NOT NULL AND ignored_at IS NULL;',
   // Mirrors 0022_album_framing.sql. Owner-edited, so the albums.ts upsert never names it.
   'ALTER TABLE albums ADD COLUMN cover_framing TEXT;',
+  // Mirrors 0023_person_references.sql (its backfill is PERSON_REFERENCES_BACKFILL_SQL).
+  'CREATE TABLE IF NOT EXISTS person_references (person_id TEXT NOT NULL, face_id TEXT NOT NULL, PRIMARY KEY (person_id, face_id)) WITHOUT ROWID;',
+  'CREATE INDEX IF NOT EXISTS idx_person_references_face ON person_references (face_id);',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];
+
+// Mirrors the INSERT in 0023_person_references.sql, exported so a test can run it on seeded rows and compare it with
+// the Worker's own selection.
+export const PERSON_REFERENCES_BACKFILL_SQL = `INSERT OR IGNORE INTO person_references (person_id, face_id)
+SELECT person_id, face_id FROM (
+  SELECT person_id, face_id, ROW_NUMBER() OVER (PARTITION BY person_id ORDER BY turn, year, rid) AS pick FROM (
+    SELECT f.person_id, f.id AS face_id, f.rowid AS rid, COALESCE(substr(ph.date_time, 1, 4), '') AS year,
+      ROW_NUMBER() OVER (
+        PARTITION BY f.person_id, COALESCE(substr(ph.date_time, 1, 4), '')
+        ORDER BY f.bbox_w * f.bbox_h DESC, f.det_score DESC, f.rowid
+      ) AS turn
+    FROM persons p
+    CROSS JOIN faces f ON f.person_id = p.id AND f.assign_status = 'confirmed'
+    LEFT JOIN photos ph ON ph.id = f.photo_id
+  )
+) WHERE pick <= 30`;
 
 // Mirrors 0003_search_text_fields.sql. Exported so a test can run it against seeded rows;
 // it is deliberately not part of PHOTOS_MIGRATION_STATEMENTS (the test DB starts empty).

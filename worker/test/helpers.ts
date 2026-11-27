@@ -19,3 +19,16 @@ export async function withoutAlbumOwnerFixture(): Promise<void> {
 export async function restoreAlbumOwnerFixture(): Promise<void> {
   await env.DB.prepare(ALBUM_OWNER_FIXTURE_SQL).run();
 }
+
+export const REFERENCE_FIXTURE_SQL = `CREATE TRIGGER IF NOT EXISTS test_reference_fixture AFTER INSERT ON faces
+WHEN new.person_id IS NOT NULL AND new.assign_status = 'confirmed'
+BEGIN INSERT OR IGNORE INTO person_references (person_id, face_id) VALUES (new.person_id, new.id); END`;
+
+/** Drops the fixture trigger, so only the Worker's own writes choose references. Call restoreReferenceFixture() after. */
+export async function withoutReferenceFixture(): Promise<void> {
+  await env.DB.prepare('DROP TRIGGER IF EXISTS test_reference_fixture').run();
+}
+
+export async function restoreReferenceFixture(): Promise<void> {
+  await env.DB.prepare(REFERENCE_FIXTURE_SQL).run();
+}
