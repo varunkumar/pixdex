@@ -19,6 +19,8 @@ and controls on the People and photo pages.
 - Ingest and agent bodies never set `ignored_at`. `agent/` is not modified; the running indexer is not touched.
 - `worker/` imports `* as z from 'zod/mini'`. No em dashes in any text.
 
+> Task 1's index list was revised during implementation (additive only, nothing dropped): see the spec.
+
 ## Review Focus
 
 - Ignore a group while background matching has just matched one of its faces: that face is skipped, the rest ignored.

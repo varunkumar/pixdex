@@ -116,7 +116,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `heroes/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
+`people/groups`, `people/ignored`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails and album heroes are cached immutably (content-hash addressed); other routes use
@@ -377,6 +377,16 @@ invocation):
   these limits were tightened. Real Worker CPU has not been measured: before
   relying on these constants, measure on a deployed preview (`wrangler tail` or
   the dashboard) and tune them. This is a to-do for the owner at merge.
+
+### Ignored faces
+
+`faces.ignored_at` (migration `0021_face_ignore.sql`) marks a face the album owner does not care about. Such a face is
+always `unassigned`; it is left out of unnamed groups, matching (at ingest and on demand) and every known-personality
+view, and a re-scan keeps it like a confirmed face. Writes are `POST /faces/ignore` and `/faces/restore` (owner only, up
+to 200 ids, set-based); `GET /people/ignored` pages them for the undo list. Naming an ignored face clears the flag.
+
+Indexes: three partial indexes on `ignored_at` were added and none changed, so queries written before this feature keep
+their plans (see `docs/development.md`).
 
 ### Known personalities (phase 1)
 

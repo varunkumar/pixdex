@@ -39,16 +39,14 @@ Migration `0021_face_ignore.sql` (mirrored in `worker/migrations/index.ts`):
 
 - `ALTER TABLE faces ADD COLUMN ignored_at TEXT;` (NULL means not ignored)
 - `idx_faces_ignored ON faces (ignored_at) WHERE ignored_at IS NOT NULL` (the ignored list)
-- Replace `idx_faces_assign_status` with
-  `idx_faces_open_status ON faces (assign_status) WHERE ignored_at IS NULL`
-- Replace `idx_faces_known_photo` with
-  `idx_faces_known_shown ON faces (known_id, photo_id, ignored_at) WHERE known_id IS NOT NULL AND ignored_at IS NULL`
-  (the trailing column keeps the known list covering)
+- `idx_faces_open_status ON faces (assign_status) WHERE ignored_at IS NULL` (unnamed groups)
+- `idx_faces_known_shown ON faces (known_id, photo_id, ignored_at) WHERE known_id IS NOT NULL AND ignored_at IS NULL`
+  (known list and filter)
 
-The two indexes are replaced, not added beside the old ones, so a face insert writes the same number of rows
-as today. No data is lost. Between the migration and the Worker deploy (seconds), the old known-list and
-known-filter queries have no matching index and scan `faces`. A rolled-back Worker would stay in that state
-until the old index is recreated.
+Revised during implementation, after the owner asked for care over existing performance: the first design replaced
+`idx_faces_assign_status` and `idx_faces_known_photo`. Measurement showed that slowed existing queries, so both stay
+untouched and the migration is purely additive. The new queries pin their index with `INDEXED BY`; other `ignored_at`
+tests use `+ignored_at`. The price is about one more row written per face inserted or changing status.
 
 Invariant: `ignored_at IS NOT NULL` implies `assign_status = 'unassigned'` and `person_id IS NULL`.
 
@@ -91,18 +89,8 @@ Changes to existing paths (`ignored_at IS NULL` unless noted):
 
 CPU: no new loops over embeddings or large payloads; the new routes handle at most 200 ids.
 
-| Request | Statements | Rows read | Rows written |
-|---|---|---|---|
-| ignore / restore | 2 | up to about 4 per face (ownership joins, update), 800 at 200 faces | the face row plus changed index entries, about 4 per face |
-| ignored list | 2 | owns-an-album probe, then about 4 per listed face, plus 1 to 3 per ignored face of other owners walked past | 0 |
-| groups | unchanged | ignored faces cost nothing (not in the partial index) | 0 |
-| match page | unchanged | ignored unassigned faces are still walked in the rowid scan and filtered, as today | unchanged |
-| ingest faces | unchanged | unchanged | unchanged per face |
-| auto-match, known list, known filter | unchanged | unchanged or lower | unchanged |
-
-One-off: the migration builds two indexes, writing about one row per non-ignored and per known-matched face.
-`EXPLAIN QUERY PLAN` tests cover groups, the ignored list, the known queries and the match page. Real D1
-costs are unmeasured locally: check `wrangler d1 insights` and `wrangler tail` after deploy.
+See "Ignored faces performance" in `docs/development.md` for the measured rows read and written per request and the
+query plans. Real D1 costs are unmeasured locally.
 
 ## Tests and docs
 
