@@ -60,7 +60,8 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   browser keeps one record per album in IndexedDB (database `pixdex`, store `heroes`, key: album name; content hash,
   status, image). `ready` for the current cover needs no request; `unavailable` (network error, non-OK status, non-image
   content type, or 30 s without a byte) is retried on every album page visit; `undecodable` (such as HEIC in Chrome) is not
-  retried until the cover changes. A missing record or another cover's means one `GET /api/originals/:coverId`
+  retried until the cover changes. A stored image that fails to show is rewritten as `unavailable`, so the next visit
+  fetches it again. A missing record or another cover's means one `GET /api/originals/:coverId`
   (`cache: 'no-store'`), for owners and viewers. Each IndexedDB operation is bounded at 3 s and a failing, full or cleared
   store only means fetching again. No size cap; storage grows by about one original per album visited, and a stored copy
   outlives revoked access in that browser (the album page, which alone shows it, no longer loads). The owner can reposition

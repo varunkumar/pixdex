@@ -67,7 +67,8 @@ someone views one; viewers' browsers also keep a copy of album cover originals.
 - **Open an album on its cover.** The album page starts with a large banner of the cover photo, with the album name and
   photo count. The first time you open an album, your browser fetches the cover's original and keeps it (one per album, often
   several MB each), so later visits do not download it again. This needs [Originals](#originals-optional) to be set up and
-  reachable; until then a blurred thumbnail is shown and the next visit tries again. A format the browser cannot decode, such as
+  reachable; until then a blurred thumbnail is shown and the next visit tries again (as it does if the stored copy can no
+  longer be shown). A format the browser cannot decode, such as
   HEIC in Chrome, stays blurred in that browser. The owner can **Reposition** the cover: drag or use the arrow keys to move it,
   zoom up to 3x, and save; everyone who can see the album gets that framing, and a new cover starts centred.
 - **See the details.** Camera, lens, focal length, aperture, shutter, ISO and GPS

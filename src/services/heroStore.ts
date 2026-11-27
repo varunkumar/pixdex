@@ -81,3 +81,23 @@ export async function writeHero(record: HeroRecord): Promise<void> {
     // The image is fetched again on the next visit.
   }
 }
+
+/**
+ * Marks this cover's stored copy as unavailable, dropping an image that will not show, so a later visit fetches
+ * it again. Another cover's record is left alone: the check and the write share one transaction.
+ */
+export async function markHeroUnavailable(album: string, contentHash: string): Promise<void> {
+  try {
+    await inStore('readwrite', (store) => {
+      const read = store.get(album);
+      read.onsuccess = () => {
+        if ((read.result as HeroRecord | undefined)?.contentHash !== contentHash) return;
+        const record: HeroRecord = { album, contentHash, status: 'unavailable', updatedAt: Date.now() };
+        store.put(record);
+      };
+      return read;
+    });
+  } catch {
+    // The same copy is tried again on the next visit.
+  }
+}

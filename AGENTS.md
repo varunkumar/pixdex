@@ -31,11 +31,13 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   columns), and that row shows a count only while a filter is active; without a cover thumbnail (or until the summary loads) the old
   header stays. The blurred thumbnail shows until the hero image does, and stays, with no error text, when there is none.
 - Hero image storage (browser only, nothing on Cloudflare): the image is the cover's original file exactly as served (no resizing,
-  re-encoding or size cap; the browser applies EXIF orientation, transparent areas show the banner's background), kept in IndexedDB
+  re-encoding or size cap; the browser applies EXIF orientation, transparent areas show the blurred thumbnail behind), kept in IndexedDB
   database `pixdex`, store `heroes`, key: album name, record `{ album, contentHash, status, image?, updatedAt }` (content hash taken
   from the thumbnail URL), so one record per album and an old cover is overwritten. A record for the current cover with status
   `ready` is shown with no hero request. `unavailable` (network error, any non-OK status, a content type that is not `image/*`, or a
-  download that goes 30 s without a byte) is tried again on every album page visit, with no back-off. `undecodable` (an image this
+  download that goes 30 s without a byte; a refused response's body is cancelled) is tried again on every album page visit, with no
+  back-off. A stored image the banner cannot show is hidden and its record rewritten as `unavailable` without the image
+  (`markHeroUnavailable`, one transaction, another cover's record untouched), so the next visit fetches it again. `undecodable` (an image this
   browser cannot decode, such as HEIC in Chrome) is not tried again until the cover changes. No record, or another cover's:
   `GET /api/originals/:coverId` with `cache: 'no-store'`, for the owner and viewers alike. Each IndexedDB operation is bounded at
   3 s; IndexedDB missing, blocked, full or cleared (browsers may evict it) never shows an error, the image is just fetched again.
@@ -45,7 +47,7 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   user) until site data is cleared or the browser evicts it.
 - Reposition and zoom (owner only, `canEdit`): "Reposition" appears once the sharp image shows. Edit mode: drag (mouse or touch),
   slider or pinch zoom 1x to 3x, arrows move 1% (10% with Shift), `+` and `-` zoom, "Reset" (centre, 1x), "Cancel", "Save"; the title
-  is hidden, a failed save stays in edit mode with the error, and a cover change ends it without saving. Framing is `{ x, y, zoom }`
+  is hidden, a failed save stays in edit mode with the error (a 409 also refreshes `['album-summary', album]`), and a cover change ends it without saving. Framing is `{ x, y, zoom }`
   (x, y 0 to 100), rendered as `object-fit: cover`, `object-position`, `transform-origin` and `scale` (`frameStyle`), the blurred
   thumbnail too. It is saved in `albums.cover_framing` (migration `0022_album_framing.sql`, JSON `{ hash, x, y, zoom }`, NULL for the
   centre at 1x) and applies only while `hash` is the current cover, so a new cover shows centred; going back restores it unless

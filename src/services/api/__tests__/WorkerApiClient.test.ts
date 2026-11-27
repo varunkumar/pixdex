@@ -31,6 +31,14 @@ describe('WorkerApiClient', () => {
     });
   });
 
+  it('setAlbumFraming rejects with the status of a refusal', async () => {
+    fetchMock.mockResolvedValue({ ok: false, type: 'basic', status: 409 });
+    await expect(client.setAlbumFraming('Kanha', 'abc', { x: 20, y: 70, zoom: 1.5 })).rejects.toMatchObject({
+      message: 'Could not save: 409',
+      status: 409,
+    });
+  });
+
   it('decideAccessRequest POSTs a JSON body {} with the JSON content type and returns the request', async () => {
     const request = { id: 7, email: 'a@example.com', status: 'approved' };
     fetchMock.mockResolvedValue({ ok: true, type: 'basic', json: async () => ({ request }) });

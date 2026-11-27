@@ -26,6 +26,8 @@ Framing is saved with the album in D1, not in the browser.
   - `unavailable`: show the blurred thumbnail and try the original again.
   - `undecodable`: show the blurred thumbnail and do not try again.
 - No record, or another cover's record: fetch `/api/originals/:coverId` and overwrite the record with it.
+- A stored image that fails to show (a browser can lose stored files) is hidden, and the album's record for that
+  cover is rewritten as `unavailable`, without the image, so the next visit fetches it again.
 - Every visit to the album page retries an `unavailable` record, including returning to it without reloading.
   There is no back-off. Two mounts at once share one attempt.
 - `unavailable`: network error, any non-OK status (tunnel down, agent off, Drive failure, access error), or a
@@ -37,7 +39,7 @@ Framing is saved with the album in D1, not in the browser.
   next visit. Errors are never shown.
 - A browser may clear the store (Safari can after about a week without visits); the copy is then made again.
 - The file is stored exactly as served: no resizing, re-encoding or size cap. The browser applies EXIF
-  orientation when showing it, and transparent areas show the banner's background. Storage grows by about one
+  orientation when showing it, and transparent areas show the blurred thumbnail behind. Storage grows by about one
   original (often several MB) per album visited.
 
 ## Reposition and zoom
@@ -45,7 +47,8 @@ Framing is saved with the album in D1, not in the browser.
 - Owner only: a "Reposition" button on the banner, shown once the sharp image is showing.
 - Edit mode: drag to move (mouse or touch), slider or pinch to zoom from 1x to 3x, arrow keys move by 1%
   (10% with Shift), `+` and `-` zoom. The title text is hidden and the page does not scroll while dragging on
-  the banner. "Save", "Cancel" and "Reset" (centre, 1x). A failed save keeps edit mode and shows the error.
+  the banner. "Save", "Cancel" and "Reset" (centre, 1x). A failed save keeps edit mode and shows the error. On a
+  409 (the cover changed elsewhere) the album summary is also refreshed, and the new cover ends edit mode.
 - Framing is `{ x, y, zoom }`: x and y are 0 to 100 (focal point), zoom 1 to 3. Rendered with
   `object-fit: cover`, `object-position: x% y%`, `transform-origin: x% y%`, `transform: scale(zoom)`, which
   never leaves a gap and works for both banner shapes. The blurred thumbnail uses the same position.

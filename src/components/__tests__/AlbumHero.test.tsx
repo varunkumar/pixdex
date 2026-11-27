@@ -3,8 +3,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState, type ComponentProps, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { workerApiClient } from '../../services/api/WorkerApiClient';
+import { SaveError, workerApiClient } from '../../services/api/WorkerApiClient';
 import { loadHero } from '../../services/heroImage';
+import { markHeroUnavailable } from '../../services/heroStore';
 import { theme } from '../../theme';
 import AlbumHero from '../AlbumHero';
 
@@ -12,6 +13,7 @@ vi.mock('../../services/heroImage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../services/heroImage')>()),
   loadHero: vi.fn(),
 }));
+vi.mock('../../services/heroStore', () => ({ markHeroUnavailable: vi.fn() }));
 
 const HASH = 'a'.repeat(32);
 const OTHER = 'b'.repeat(32);
@@ -67,6 +69,7 @@ const { createObjectURL: realCreate, revokeObjectURL: realRevoke } = URL;
 
 beforeEach(() => {
   vi.mocked(loadHero).mockReset().mockReturnValue(new Promise(() => {}));
+  vi.mocked(markHeroUnavailable).mockReset().mockResolvedValue();
   let made = 0;
   createObjectURL.mockReset().mockImplementation(() => `blob:hero-${++made}`);
   revokeObjectURL.mockReset();
@@ -171,6 +174,22 @@ describe('AlbumHero', () => {
     update({ photoCount: 129 });
     expect(await screen.findByText('129 photos')).toBeInTheDocument();
     expect(sharp()).not.toBeInTheDocument();
+  });
+
+  it('records a hero that fails to load as unavailable, and asks for it again only on the next visit', async () => {
+    vi.mocked(loadHero).mockResolvedValue(IMAGE);
+    const { show, update } = renderHero();
+    fireEvent.error(await findSharp());
+    expect(markHeroUnavailable).toHaveBeenCalledTimes(1);
+    expect(markHeroUnavailable).toHaveBeenCalledWith('Kanha', HASH);
+    update({ photoCount: 129 });
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+    expect(loadHero).toHaveBeenCalledTimes(1);
+    show(false);
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+    show(true);
+    expect(await findSharp()).toBeInTheDocument();
+    expect(loadHero).toHaveBeenCalledTimes(2);
   });
 
   it("shows a new cover's hero after an earlier one failed to load", async () => {
@@ -415,6 +434,35 @@ describe('AlbumHero reposition', () => {
     click('Cancel');
     click('Reposition');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('refreshes the summary when the cover changed elsewhere, and the new cover ends the edit', async () => {
+    save.mockRejectedValue(new SaveError('Could not save: 409', 409));
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const { update } = await startEditing({}, client);
+    click('Save');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save: 409');
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['album-summary', 'Kanha'] });
+    expect(editing()).toBe(true);
+    // The refreshed summary brings the other cover.
+    update({ canEdit: true, coverPhotoId: 'ph2', coverThumbnailUrl: `/thumbnails/${OTHER}` });
+    expect(editing()).toBe(false);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['the server fails', 'Could not save: 500', 500],
+    ['the network fails', 'Could not save: network error', undefined],
+  ])('does not refresh the summary when %s', async (_name, message, status) => {
+    save.mockRejectedValue(new SaveError(message, status));
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    await startEditing({}, client);
+    click('Save');
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(editing()).toBe(true);
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   it('closes edit mode without saving when the cover changes, also if it changes back', async () => {

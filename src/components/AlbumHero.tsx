@@ -1,9 +1,10 @@
 import { Button, Text, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import { workerApiClient } from '../services/api/WorkerApiClient';
+import { SaveError, workerApiClient } from '../services/api/WorkerApiClient';
 import { DEFAULT_FRAMING, frameStyle, type Framing, type Size } from '../services/framing';
 import { heroHash, loadHero } from '../services/heroImage';
+import { markHeroUnavailable } from '../services/heroStore';
 import type { AlbumSummary } from '../types/api';
 import { FramingSurface, FramingToolbar } from './HeroFraming';
 
@@ -74,6 +75,12 @@ const AlbumHero = ({ name, photoCount, coverPhotoId, coverThumbnailUrl, framing,
       await queryClient.invalidateQueries({ queryKey });
       setDraft((d) => (d?.key === v.key ? null : d));
     },
+    onError: (error, v) => {
+      // The cover changed elsewhere: the new summary shows it, which ends the edit.
+      if (error instanceof SaveError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: ['album-summary', v.album] });
+      }
+    },
   });
 
   return (
@@ -98,7 +105,11 @@ const AlbumHero = ({ name, photoCount, coverPhotoId, coverThumbnailUrl, framing,
               const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
               setLoaded({ image: visible, natural: { w, h } });
             }}
-            onError={() => setFailedImage(visible)}
+            onError={() => {
+              setFailedImage(visible);
+              // A stored copy can become unreadable; this visit does without, the next one fetches again.
+              if (hash) void markHeroUnavailable(name, hash);
+            }}
           />
         )}
         {editing ? (

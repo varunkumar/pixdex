@@ -32,7 +32,12 @@ async function fetchOriginal(photoId: string): Promise<Blob | null> {
     });
     // A sign-in or error page can arrive with status 200.
     const type = response.headers.get('Content-Type');
-    if (!response.ok || !type?.toLowerCase().startsWith('image/') || !response.body) return null;
+    if (!response.ok || !type?.toLowerCase().startsWith('image/')) {
+      // Stops the download. Not waited for, and a failure to cancel changes nothing.
+      void response.body?.cancel().catch(() => {});
+      return null;
+    }
+    if (!response.body) return null;
     // Read in chunks, to know the download is still moving.
     const reader = response.body.getReader();
     const chunks: Uint8Array<ArrayBuffer>[] = [];

@@ -3,7 +3,7 @@
 import { IDBDatabase, IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { heroHash, loadHero } from '../heroImage';
-import { readHero, writeHero, type HeroRecord } from '../heroStore';
+import { markHeroUnavailable, readHero, writeHero, type HeroRecord } from '../heroStore';
 
 const HASH = 'a'.repeat(32);
 const OTHER = 'b'.repeat(32);
@@ -214,6 +214,75 @@ describe('loadHero from the original', () => {
     fetchMock.mockResolvedValueOnce(imageResponse());
 
     await expect(load()).resolves.toBeNull();
+  });
+});
+
+describe('loadHero and a refused response', () => {
+  /** A response whose body only ends by being cancelled. */
+  const openResponse = (status: number, type: string, cancel: () => Promise<void> | void) =>
+    new Response(new ReadableStream({ cancel }), { status, headers: { 'Content-Type': type } });
+
+  it.each([
+    ['a failing status', 502, 'image/jpeg'],
+    ['not an image', 200, 'text/html'],
+  ])('cancels the body of %s', async (_name, status, type) => {
+    const cancel = vi.fn();
+    fetchMock.mockResolvedValueOnce(openResponse(status, type, cancel));
+
+    await expect(load()).resolves.toBeNull();
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    await expect(readHero('Kanha')).resolves.toMatchObject({ status: 'unavailable' });
+  });
+
+  it.each([
+    ['fails', () => Promise.reject(new Error('cannot cancel'))],
+    ['never finishes', () => new Promise<void>(() => {})],
+  ])('still records unavailable when cancelling %s', async (_name, cancel) => {
+    fetchMock.mockResolvedValueOnce(openResponse(502, 'text/plain', cancel));
+
+    await expect(load()).resolves.toBeNull();
+
+    await expect(readHero('Kanha')).resolves.toMatchObject({ status: 'unavailable' });
+  });
+});
+
+describe('markHeroUnavailable', () => {
+  it('drops a stored image that will not show, so the next call fetches it again', async () => {
+    await writeHero(stored({ image: new Blob(['lost'], { type: 'image/jpeg' }) }));
+
+    await markHeroUnavailable('Kanha', HASH);
+
+    const record = await readHero('Kanha');
+    expect(record).toMatchObject({ album: 'Kanha', contentHash: HASH, status: 'unavailable' });
+    expect(record?.image).toBeUndefined();
+    expect(record?.updatedAt).toBeGreaterThan(1);
+    fetchMock.mockResolvedValueOnce(imageResponse());
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
+    expect(urls()).toEqual(['/api/originals/ph1']);
+    await expect(readHero('Kanha')).resolves.toMatchObject({ contentHash: HASH, status: 'ready' });
+  });
+
+  it("leaves another cover's record alone", async () => {
+    await writeHero(stored({ contentHash: OTHER, image: new Blob([BYTES], { type: 'image/jpeg' }) }));
+
+    await markHeroUnavailable('Kanha', HASH);
+
+    const record = await readHero('Kanha');
+    expect(record).toMatchObject({ contentHash: OTHER, status: 'ready', updatedAt: 1 });
+    await expect(bytesOf(record?.image)).resolves.toEqual(BYTES);
+  });
+
+  it('writes nothing when there is no record', async () => {
+    await markHeroUnavailable('Kanha', HASH);
+
+    await expect(readHero('Kanha')).resolves.toBeNull();
+  });
+
+  it('resolves when there is no IndexedDB', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+
+    await expect(markHeroUnavailable('Kanha', HASH)).resolves.toBeUndefined();
   });
 });
 
