@@ -72,7 +72,7 @@ someone views one; viewers' browsers also keep a copy of album cover originals.
   HEIC in Chrome, stays blurred in that browser. The owner can **Reposition** the cover: drag or use the arrow keys to move it,
   zoom up to 3x, and save; everyone who can see the album gets that framing, and a new cover starts centred.
 - **See the details.** Camera, lens, focal length, aperture, shutter, ISO and GPS
-  when the file has them, plus "View Original" for the full-resolution file.
+  when the file has them, plus "View original" for the full-resolution file.
 
 | Search | Albums |
 |---|---|
@@ -388,8 +388,8 @@ best rated or alphabetical.
 - Lower-confidence matches (score 0.4 to 0.5) land in a "Review suggestions" queue
   on the person's page. "Not X" on a face rejects that match permanently. "Remove
   name" (confirmed faces only) just unassigns the face.
-- **Confirming automatic matches** settles them: matching never checks or moves a confirmed face. "Confirm X" is in a
-  photo's menu on the person's page. "Review auto matches" there shows that person's automatic matches as face crops,
+- **Confirming automatic matches** settles them: matching never checks or moves a confirmed face. "Confirm X" is in
+  the menu of an automatically matched photo on the person's page. "Review auto matches" there shows that person's automatic matches as face crops,
   weakest first, 48 at a time, all ticked. Untick the ones that are wrong or unclear, then either "Confirm N" (the
   rest stay automatic) or "Confirm N, mark M as Not X" (the rest are rejected for good). Only the faces on screen are
   ever changed, one that changed after the page loaded is skipped, and one whose picture did not load is left alone.
@@ -400,8 +400,8 @@ best rated or alphabetical.
   "Next: <name>" moves to the person with the most pending, skipping anyone you already finished in this visit.
   Unnamed groups are not counted. The count is refreshed when you next open these pages (at most 5 minutes old after
   a background match).
-- Going back (the browser's Back, or the "← ..." links on the people and review pages) returns to the same list
-  pages and sort. Back also brings back the review grid's page and ticks, opened ignored faces and a person's
+- Going back (the browser's Back, or a "← ..." link, which names where it goes) returns to the same list
+  page and sort on the albums, people and review pages. Back also brings back the review grid's page and ticks, opened ignored faces and a person's
   suggestions; a page reload starts those afresh.
 - **Which faces matching compares against:** up to 30 confirmed faces per person, spread across the years the photos
   were taken, so someone photographed at 5 and at 40 is matched on both. Each year takes turns, giving its largest
@@ -410,7 +410,8 @@ best rated or alphabetical.
   a face; "Re-run matching" also refreshes it (for example after photo dates change). Merging this applies migration
   `0023`, which makes the choice for existing people.
 - A person's cover defaults to their biggest confirmed face. Pick another with
-  "Set as cover"; if that face is later removed, the cover falls back to the default.
+  the "Set as cover" icon on a photo, the same as on albums; if that face is later removed, the cover falls back to
+  the default. The current cover has a blue "Cover" badge.
 - Grouping and matching ignore faces under a detection score of 0.7 or a side
   under 5% of the photo.
 - The browser writes involved are `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label` (a viewer's own private name) and `POST` to
@@ -479,7 +480,7 @@ Worker, database, agent or Pages Function changes are involved; cost notes are i
 ## Originals (optional)
 
 Search results and the daily pick show thumbnails only by default. To enable
-"View Original" (local-disk and Google Drive photos alike: the agent streams
+"View original" (local-disk and Google Drive photos alike: the agent streams
 Drive files with its own stored Google token, so serve-originals needs a prior
 `index-drive` sign-in; the photo page also has an "Open in Google Drive" link
 for the album owner), follow `agent/cloudflared/README.md` once. The

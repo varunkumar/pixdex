@@ -213,6 +213,7 @@ export default function Omnibox(props: OmniboxProps) {
     const color = kindColor(kind);
     return (
       <Pill
+        h={26}
         key={key}
         data-chip={kind}
         withRemoveButton
@@ -324,6 +325,7 @@ function KeywordRow({ terms, onChange, onSearchAgain, handle }: NonNullable<Omni
     <Group gap={6} mt={6} wrap="wrap">
       {terms.map((t, i) => (
         <Pill
+          h={26}
           key={`${t}-${i}`}
           withRemoveButton
           onRemove={() => onChange(terms.filter((_, j) => j !== i))}
@@ -333,6 +335,7 @@ function KeywordRow({ terms, onChange, onSearchAgain, handle }: NonNullable<Omni
         >
           <UnstyledButton
             aria-label={`Edit keyword ${t}`}
+            mih={24}
             fz="inherit"
             c="inherit"
             onClick={() => {

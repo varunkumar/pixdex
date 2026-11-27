@@ -324,7 +324,7 @@ const Search = () => {
               value={pending ?? [from || null, to || null]}
               onChange={setRange}
               clearable
-              clearButtonProps={{ 'aria-label': 'Clear dates' }}
+              clearButtonProps={{ 'aria-label': 'Clear dates', style: { minWidth: 24, minHeight: 24 } }}
             />
             <Group gap="xs">
               {QUICK_CHIPS.map(({ kind, label }) => {

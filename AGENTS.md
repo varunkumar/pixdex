@@ -144,7 +144,7 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   neither list; "Skip page"; the page query never refetches under the ticks; "Open photo" opens a new tab), and "Confirm X"
   beside "Not X" in the photo menu (needs `canEdit` on both the person and the photo). Rejected ids go to
   `noteRemovedName`. Confirming starts no match run.
-  "To review" (`/review`, `ReviewQueue.tsx`; People page link "N matches to review"; "All to review" and "Next: ..." on
+  "To review" (`/review`, `ReviewQueue.tsx`; People page link "N matches to review"; "← To review" and "Next: ..." on
   the review grid) lists the caller's people with `auto` faces in owned albums, from `GET /people/review-queue`
   (`{ people: [{ id, count }] }`, most first, `REVIEW_QUEUE_SQL`; names and covers come from `GET /people`). It reads
   about 5 rows per pending face (2,671 at 530; 14,898 at 3,000; 42,123 at 8,500; local D1), so it is requested only by
@@ -155,7 +155,25 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   number or filter (`useListParams`; People unnamed groups use `groups` and `groupSize`, with `keepScroll`), otherwise
   in `useHistoryState` (per history entry, browser memory: review grid page and ticks, "Ignored faces" open, person
   suggestions). Never plain `useState` for these. In-page back links return to the last shown address of the target
-  (`useRememberAddress` / `useLastAddress`; People and person pages). Performance (local D1): the list reads about 5 rows per auto face of the
+  (`useRememberAddress` / `useLastAddress`; Albums, People and person pages) and use `BackLink`, whose text is the destination
+  ("← All albums", "← All people", the person's name, "← To review"). The Access tab is in the address (`?status=`).
+- UI patterns (use these, do not add a second variant):
+  - Cover: `CoverBadge` (blue `#2563EB`) and `SetCoverButton` on album and person tiles. A photo face row keeps a text button
+    with the same icon. On a person tile the "Photo actions" menu exists only for an auto match ("Confirm X", "Not X").
+  - Destructive confirmation: `InlineConfirm` (delete a person, revoke access). Focus starts on Cancel.
+  - Loading: `PageLoading` with a label. The photo page and Daily pick keep skeletons. Dashboard counts show "-".
+  - Copy: `copyText` (`services/copy.ts`). Labels use sentence case.
+  - Every page calls `usePageTitle` and has exactly one `h1`. Change a heading's `order` and keep its look with `size`.
+  - A text link that is a control has class `pdx-target`. Controls are at least 24px by 24px. The Timeline month rail is the
+    known exception.
+  - Name pagination controls ("Previous page", "Page N"). Lazy-load list images after the first four.
+  - The closed phone drawer is `inert`. `Layout` starts with a skip link.
+- Person page faces: one `GET /people/:id/faces?photos=` per page of photos (1 to 48 ids; query key
+  `['person-faces', personId, photoIds]`, only for a person the user created). Invalidate `person-faces` wherever
+  `photo-faces` is invalidated. The Worker query (`personPhotoFacesSql`) drives from the photo ids on `idx_faces_photo_id`;
+  keep the unary `+` on person and status (plan pinned in `query-plans.test.ts`). No role check: an invisible or unknown
+  person or photo matches nothing. Performance (local D1, 48 photos with 3 faces each): 336 rows read in 1 statement,
+  against 527 rows in 96 statements and 48 requests before. 0 writes. Performance (local D1): the list reads about 5 rows per auto face of the
   person on every page (first page 2.8K rows at 530 faces, 15K at 3,000; paging through 3,000 without changes 577K); a
   review of 48 reads 432 to 672 rows and writes 192 to 336; no embeddings read, at most 48 rows mapped in the Worker.
 - Matching references (migration `0023_person_references.sql`, table `person_references (person_id, face_id)` plus

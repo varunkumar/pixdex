@@ -422,6 +422,19 @@ which the query does not touch):
 
 Real D1 numbers are unmeasured: check `wrangler d1 insights pixdex` after deploy.
 
+### Person page faces performance
+
+Measured in the local Workers test runtime: 48 photos with 3 faces each, one face per photo for the person.
+
+| Read | Requests | D1 statements | Rows read | Rows written |
+|---|---|---|---|---|
+| Before: `GET /photos/:id/faces` for each photo | 48 | 96 | 527 | 0 |
+| Now: `GET /people/:id/faces?photos=` | 1 | 1 | 336 | 0 |
+
+The "before" row does not include the access check in the Pages Function for each request. Real D1 and CPU numbers are
+not measured. After deploy, use `wrangler tail` and `wrangler d1 insights pixdex`. Just after a deploy, a new page can
+reach the old Worker. It then shows "Could not load photo actions" until the Worker is updated.
+
 ### Matching references performance (migration 0023)
 
 Measured locally in the Workers test runtime with 5,000 photos over 19 years and 16 people holding 716 confirmed faces

@@ -36,6 +36,14 @@ describe('Layout', () => {
     expect(screen.getByRole('main')).toHaveFocus();
   });
 
+  it('keeps the closed drawer out of reach of the keyboard and screen readers', () => {
+    renderWithProviders(<Layout />);
+    const drawer = document.querySelector('.mantine-AppShell-navbar')!;
+    expect(drawer).toHaveAttribute('inert');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    expect(drawer).not.toHaveAttribute('inert');
+  });
+
   it('links to every section', () => {
     renderWithProviders(<Layout />);
     const hrefFor = (name: string) =>

@@ -171,7 +171,8 @@ const Layout = () => {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="md">
+      {/* Closed, the drawer is only moved off screen: `inert` keeps its links out of the tab order too. */}
+      <AppShell.Navbar p="md" inert={!opened}>
         {links.map((item) => (
           <DrawerLink key={item.to} {...item} onNavigate={close} />
         ))}

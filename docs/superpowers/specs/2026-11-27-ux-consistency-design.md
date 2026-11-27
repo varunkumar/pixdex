@@ -1,6 +1,6 @@
 # UX consistency, accessibility and person page reads: design
 
-Date: 2026-11-27. Status: approved.
+Date: 2026-11-27. Status: approved and built.
 
 ## Intent
 

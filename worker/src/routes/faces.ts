@@ -105,7 +105,7 @@ export async function personFacesRoute(c: Ctx) {
   return c.json({ faces: results.map(serializeFace) });
 }
 
-const faceIdsBody =z.object({ faceIds: z.array(z.string().check(z.minLength(1))).check(z.minLength(1), z.maxLength(200)) });
+const faceIdsBody = z.object({ faceIds: z.array(z.string().check(z.minLength(1))).check(z.minLength(1), z.maxLength(200)) });
 
 /**
  * Only an unnamed face can be ignored, so a face matched meanwhile is skipped. `+` keeps the primary-key lookups.

@@ -40,8 +40,8 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   (1 or 2 by the phone toggle, `hooks/usePhoneColumns.ts`, localStorage `pixdex.phoneColumns`), then 3, 4 (992px) and 5 (1408px).
   `PhotoTile.tsx` always renders both a hover overlay and a one-line caption; CSS (`@media (hover: none)`, classes `pdx-*` in `index.css`)
   shows the overlay on hover-capable devices and the caption line on touch devices. `PhotoGrid` takes `badges` (always-visible status, top left), `actions` (corner controls, outside the
-  link), `note` (AI results) and `showAlbum` (Search). Owner actions stay gated as before (album owner: "Set as cover" icon or "Cover" badge;
-  person owner: "Photo actions" menu). The albums page keeps the classic `AlbumCard` (cover, name, count, date, avatars, Share) with `SortIcons`. Page sizes are exactly the selector's value. `MasonryGrid` balances the columns and sets each column's width from its height (`columnGrow`), so every column ends on the same line without cropping when the page has enough photos and the widths stay moderate (otherwise tiles keep their own shape and the bottom edge is uneven, never stretched); photo columns are 1 or 2 on a phone, then 3 and 4.
+  link), `note` (AI results) and `showAlbum` (Search). Owner actions stay gated as before. Album and person owners see the same "Set as cover" icon or "Cover"
+  badge. A person owner also sees a "Photo actions" menu on an automatic match. The albums page keeps the classic `AlbumCard` (cover, name, count, date, avatars, Share) with `SortIcons`. Page sizes are exactly the selector's value. `MasonryGrid` balances the columns and sets each column's width from its height (`columnGrow`), so every column ends on the same line without cropping when the page has enough photos and the widths stay moderate (otherwise tiles keep their own shape and the bottom edge is uneven, never stretched); photo columns are 1 or 2 on a phone, then 3 and 4.
   Sort controls are `SortIcons` (icon group from 576px, one menu button below; no direction control, the API has none).
 - AI Search (part of Search: `components/Search.tsx`, `components/AiResults.tsx`, `services/aiSearch/`, `hooks/usePromptApiSupport.ts`): runs
   entirely in the browser and only exists where Chrome's Prompt API (Gemini Nano) is available ("Ask AI", Cmd+Enter and the plain-mode "Add keywords" button, which opens the keyword row without the model,
@@ -72,7 +72,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
 - `hooks/useListParams.ts` - sort/page state kept in the URL so listings are
   linkable and "back" returns to the same sort and page. Its `update` is
   stable and always reads the latest URL, so a memoized `onPage` never drops `sort`. It also carries `location.state` through every
-  update (the album page keeps its "All albums" return link there).
+  update. In-page back links use `BackLink` with `useRememberAddress` / `useLastAddress`.
 - `types/api.ts` - API response types shared by components.
 - Date pickers use `@mantine/dates` and its `dayjs` peer dependency.
 - Tests sit next to code in `__tests__/`; helpers in `src/test/`.
@@ -278,7 +278,7 @@ while the original is unavailable, each album page visit tries again (one access
 3. Browser -> Pages `/api/*` -> Pages Function adds token -> Worker read route.
 3b. Request access (signed out): browser -> `/enroll` -> `POST /api/enroll` (Turnstile) -> Worker `POST /enroll` -> `access_requests`;
    the admin approves on `/admin/access` -> Worker -> Cloudflare Access API (group edit, session revoke).
-4. "View Original": browser -> `/api/originals/:id` -> tunnel -> agent server
+4. "View original": browser -> `/api/originals/:id` -> tunnel -> agent server
    (local files, or Drive files streamed with the agent's Google token via
    `files.get alt=media`, nothing staged on disk). The photo page adds an
    "Open in Google Drive" link (album owner only: `driveFileId` is `canEdit`-gated).
