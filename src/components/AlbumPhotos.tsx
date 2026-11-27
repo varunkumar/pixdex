@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Badge, Button, Group, Stack, Tabs, Text, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -35,6 +36,7 @@ const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: s
 const AlbumPhotos = () => {
   const { name = '' } = useParams();
   const albumsList = useLastAddress('/albums');
+  usePageTitle(name);
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PHOTO_SIZES);
 
   const requestedSort = params.get('sort');
@@ -135,7 +137,7 @@ const AlbumPhotos = () => {
       )}
       <Group justify="space-between" align={heroCover ? 'center' : 'baseline'}>
         <Group gap="sm" align="center">
-          {!heroCover && <Title order={2}>{name}</Title>}
+          {!heroCover && <Title order={1} size="h2">{name}</Title>}
           {isOwner && (summary?.sharedWith?.length ?? 0) > 0 && <AvatarStack emails={summary?.sharedWith ?? []} size="md" />}
           {summary?.role === 'viewer' && (
             <Badge

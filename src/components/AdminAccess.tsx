@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Alert, Button, Card, Group, Stack, Tabs, Text, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,6 +35,7 @@ const AdminAccess = () => {
   const queryClient = useQueryClient();
   const { email: myEmail, admin, loading } = useMe();
   const me = myEmail?.toLowerCase() ?? null;
+  usePageTitle(loading ? undefined : admin ? 'Access requests' : 'Page not found');
   // The tab lives in the address, so Back and a reload keep it; Pending is the plain address.
   const [params, setParams] = useSearchParams();
   const tab = TABS.find((t) => t.status === params.get('status')) ?? TABS[0];
@@ -67,14 +69,19 @@ const AdminAccess = () => {
   });
 
   if (loading) return <PageLoading label="Loading" />;
-  if (!admin) return <Text>Page not found.</Text>;
+  if (!admin)
+    return (
+      <Title order={1} fz="md" fw={400}>
+        Page not found.
+      </Title>
+    );
 
   // One decision at a time: the Worker edits the Access group read-then-write.
   const busy = decide.isPending;
 
   return (
     <Stack gap="md">
-      <Title order={2}>Access requests</Title>
+      <Title order={1} size="h2">Access requests</Title>
       <Tabs value={status} onChange={(v) => v && setStatus(v as Status)}>
         <Tabs.List>
           {TABS.map((t) => (

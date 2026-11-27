@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Anchor, Box, Button, Group, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -303,6 +304,7 @@ const ReviewAutoFaces = () => {
   });
   const person = people.find((p) => p.id === id);
   const name = person?.name ?? UNNAMED_PERSON;
+  usePageTitle(person ? `Review ${name}` : undefined);
 
   return (
     <Stack gap="lg">
@@ -311,12 +313,20 @@ const ReviewAutoFaces = () => {
         {person?.canEdit && <BackLink to="/review">To review</BackLink>}
       </Group>
       {isPending && <PageLoading label="Loading matches" />}
-      {isSuccess && !person && <Text c="dimmed">This person was not found.</Text>}
-      {person && !person.canEdit && <Text c="dimmed">Only the owner of this person can review their matches.</Text>}
+      {isSuccess && !person && (
+        <Title order={1} fz="md" fw={400} c="dimmed">
+          This person was not found.
+        </Title>
+      )}
+      {person && !person.canEdit && (
+        <Title order={1} fz="md" fw={400} c="dimmed">
+          Only the owner of this person can review their matches.
+        </Title>
+      )}
       {person?.canEdit && (
         <>
           <Stack gap={4}>
-            <Title order={2}>Review auto matches: {name}</Title>
+            <Title order={1} size="h2">Review auto matches: {name}</Title>
             <Text size="sm" c="dimmed">
               Weakest matches first. Untick any face that is not {name}. Confirmed faces are never moved by matching.
             </Text>

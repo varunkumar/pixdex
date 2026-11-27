@@ -263,7 +263,7 @@ const PhotoFaces = ({
   return (
     <Card withBorder data-testid="photo-faces">
       <Stack gap="md">
-        <Title order={5}>People</Title>
+        <Title order={2} size="h5">People</Title>
         <Stack gap="md">
           {shown.map((f, i) => (
             <FaceRow

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPromptApiStatus } from '../../services/aiSearch/promptApi';
@@ -25,6 +25,15 @@ describe('Layout', () => {
     renderWithProviders(<Layout />);
     const brand = screen.getAllByRole('link', { name: 'PixdeX' })[0];
     expect(brand).toHaveAttribute('href', '/');
+  });
+
+  it('starts with a skip link that moves focus to the main area without changing the address', () => {
+    renderWithProviders(<Layout />);
+    const skip = screen.getAllByRole('link')[0];
+    expect(skip).toHaveAccessibleName('Skip to main content');
+    // fireEvent returns false when the default (a hash navigation) was prevented.
+    expect(fireEvent.click(skip)).toBe(false);
+    expect(screen.getByRole('main')).toHaveFocus();
   });
 
   it('links to every section', () => {

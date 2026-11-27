@@ -1,4 +1,5 @@
-import { Alert, Button, Card, Chip, Group, Loader, Stack, Switch, Text } from '@mantine/core';
+import { usePageTitle } from '../hooks/usePageTitle';
+import { Alert, Button, Card, Chip, Group, Loader, Stack, Switch, Text, Title, VisuallyHidden } from '@mantine/core';
 import { DatePickerInput, type DatesRangeValue } from '@mantine/dates';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -57,6 +58,7 @@ const Search = () => {
   const { params, page, size, offset, update } = useListParams();
   const [, setParams] = useSearchParams();
   const support = usePromptApiSupport();
+  usePageTitle('Search');
   const state = readOmniboxState(params);
   const ai = state.mode === 'ai';
   const rawQ = state.q;
@@ -274,6 +276,9 @@ const Search = () => {
 
   return (
     <Stack gap="lg">
+      <VisuallyHidden>
+        <Title order={1}>Search</Title>
+      </VisuallyHidden>
       {/* Card clips its content by default; visible so the suggestion panel can hang below it. */}
       <Card withBorder style={{ overflow: 'visible' }} data-testid="search-card">
         <Stack gap="md">

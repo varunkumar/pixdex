@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Anchor, Card, Image, SimpleGrid, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -20,6 +21,7 @@ const Stat = ({ label, value, to }: { label: string; value: number | undefined; 
 );
 
 const Dashboard = () => {
+  usePageTitle('Dashboard');
   const { data: albums } = useQuery({
     queryKey: ['albums-page', 1, 1],
     queryFn: () => workerApiClient.getAlbumsPage({ limit: 1 }),
@@ -33,7 +35,7 @@ const Dashboard = () => {
   return (
     <Stack gap="lg">
       <Card withBorder>
-        <Title order={3} mb="md">
+        <Title order={1} size="h3" mb="md">
           {BRAND}
         </Title>
         <SimpleGrid cols={2}>
@@ -44,7 +46,7 @@ const Dashboard = () => {
 
       {recent && recent.results.length > 0 && (
         <Card withBorder>
-          <Title order={4} mb="md">
+          <Title order={2} size="h4" mb="md">
             Recently indexed
           </Title>
           <SimpleGrid cols={{ base: 2, md: 4, lg: 6 }} spacing="sm">

@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Button, Card, Group, Stack, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -13,6 +14,7 @@ const FACE = 56;
 
 /** Everyone with auto matches waiting to be confirmed, most first. */
 const ReviewQueue = () => {
+  usePageTitle('To review');
   const peopleList = useLastAddress('/people');
   const queue = useReviewQueue();
   const people = useQuery({ queryKey: ['people'], queryFn: () => workerApiClient.getPeople() });
@@ -27,7 +29,7 @@ const ReviewQueue = () => {
   return (
     <Stack gap="lg">
       <BackLink to={peopleList}>All people</BackLink>
-      <Title order={2}>To review</Title>
+      <Title order={1} size="h2">To review</Title>
       {failed && (
         <Group gap="xs">
           <Text size="sm" c="red">

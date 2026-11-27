@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Group, SimpleGrid, Stack, Text, Title } from '@mantine/core';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -22,6 +23,7 @@ const SORT_OPTIONS: { value: AlbumSort; label: string; icon?: IconType; text?: s
 
 const Albums = () => {
   useRememberAddress();
+  usePageTitle('Albums');
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PAGE_SIZES);
 
   const requestedSort = params.get('sort');
@@ -42,7 +44,7 @@ const Albums = () => {
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="center">
-        <Title order={2}>Albums</Title>
+        <Title order={1} size="h2">Albums</Title>
         <SortIcons
           label="Sort albums"
           options={SORT_OPTIONS}

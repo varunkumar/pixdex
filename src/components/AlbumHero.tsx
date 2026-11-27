@@ -1,4 +1,4 @@
-import { Button, Text, Title } from '@mantine/core';
+import { Button, Text, Title, VisuallyHidden } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { SaveError, workerApiClient } from '../services/api/WorkerApiClient';
@@ -113,16 +113,22 @@ const AlbumHero = ({ name, photoCount, coverPhotoId, coverThumbnailUrl, framing,
           />
         )}
         {editing ? (
-          <FramingSurface
-            framing={editing.framing}
-            natural={editing.natural}
-            disabled={save.isPending}
-            onChange={change}
-          />
+          <>
+            {/* The visible title makes way for the picture; the page keeps its heading. */}
+            <VisuallyHidden>
+              <Title order={1}>{name}</Title>
+            </VisuallyHidden>
+            <FramingSurface
+              framing={editing.framing}
+              natural={editing.natural}
+              disabled={save.isPending}
+              onChange={change}
+            />
+          </>
         ) : (
           <>
             <div className="pdx-hero-text">
-              <Title order={2} className="pdx-hero-name">
+              <Title order={1} className="pdx-hero-name">
                 {name}
               </Title>
               <Text>

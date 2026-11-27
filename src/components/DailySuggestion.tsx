@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   Anchor,
   Badge,
@@ -22,6 +23,7 @@ import Lightbox from './Lightbox';
 import PhotoMeta from './PhotoMeta';
 
 const DailySuggestion = () => {
+  usePageTitle('Daily pick');
   const [zoomOpen, setZoomOpen] = useState(false);
   const {
     data: suggestion,
@@ -47,7 +49,7 @@ const DailySuggestion = () => {
 
   return (
     <Card withBorder maw={1100} mx="auto" w="100%">
-      <Title order={3} mb="md">
+      <Title order={1} size="h3" mb="md">
         Today's Instagram pick
       </Title>
       {isLoading ? (
@@ -70,16 +72,16 @@ const DailySuggestion = () => {
           >
             <Image src={thumbnail} alt={alt} radius="md" fit="contain" mah={500} w="100%" />
           </UnstyledButton>
-          {suggestion.photo.shortCaption && <Title order={4}>{suggestion.photo.shortCaption}</Title>}
+          {suggestion.photo.shortCaption && <Title order={2} size="h4">{suggestion.photo.shortCaption}</Title>}
           <PhotoMeta photo={suggestion.photo} />
 
-          <Text fw={700}>Why this photo?</Text>
+          <Title order={2} fz="md">Why this photo?</Title>
           <Text>{suggestion.reason}</Text>
 
-          <Text fw={700}>Suggested caption</Text>
+          <Title order={2} fz="md">Suggested caption</Title>
           <Textarea value={suggestion.suggestedCaption} readOnly rows={4} />
 
-          <Text fw={700}>Suggested hashtags</Text>
+          <Title order={2} fz="md">Suggested hashtags</Title>
           <Group gap="xs">
             {suggestion.suggestedHashtags.map((tag) => (
               <Badge key={tag} variant="light">

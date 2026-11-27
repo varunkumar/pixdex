@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   ActionIcon,
   Box,
@@ -203,6 +204,7 @@ const GROUP_PAGE_SIZES = [6, 12, 24] as const;
 
 const People = () => {
   useRememberAddress();
+  usePageTitle('People');
   const { params, page, size, offset, update } = useListParams(
     12,
     PEOPLE_PAGE_SIZES,
@@ -279,7 +281,9 @@ const People = () => {
 
   return (
     <Stack gap="lg">
-      <Title order={2}>People</Title>
+      <Title order={1} size="h2">
+        People
+      </Title>
       {pending > 0 && (
         <Button component={Link} to="/review" variant="light" w="fit-content">
           {pending} {pending === 1 ? "match" : "matches"} to review
@@ -364,7 +368,9 @@ const People = () => {
 
       {groups.length > 0 && (
         <Stack gap="md">
-          <Title order={3}>Unnamed groups</Title>
+          <Title order={2} size="h3">
+            Unnamed groups
+          </Title>
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
             {shownGroups.map((g) => (
               <GroupCard

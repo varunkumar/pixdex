@@ -284,7 +284,8 @@ describe('AlbumHero reposition', () => {
 
   it('hides the title and shows the controls in edit mode', async () => {
     await startEditing();
-    expect(screen.queryByRole('heading', { name: 'Kanha' })).not.toBeInTheDocument();
+    expect(document.querySelector('.pdx-hero-name')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Kanha' })).toBeInTheDocument(); // kept for screen readers
     expect(screen.queryByText('128 photos')).not.toBeInTheDocument();
     expect(button('Reposition')).not.toBeInTheDocument();
     for (const name of ['Save', 'Cancel', 'Reset']) expect(button(name)).toBeInTheDocument();

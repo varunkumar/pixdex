@@ -40,7 +40,7 @@ const PhotoReview = ({ photo }: { photo: SerializedPhoto }) => {
     <Card withBorder>
       <Stack gap="sm">
         <Group justify="space-between">
-          <Title order={5}>Your review {edited && <Badge ml="xs" variant="light">edited</Badge>}</Title>
+          <Title order={2} size="h5">Your review {edited && <Badge ml="xs" variant="light">edited</Badge>}</Title>
           {!editing && (
             <Button size="xs" variant="light" onClick={startEditing}>
               Edit details

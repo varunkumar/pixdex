@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { ActionIcon, Button, Group, Menu, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -153,6 +154,7 @@ const PersonPage = () => {
     queryFn: () => workerApiClient.getPeople(),
   });
   const person = people.find((p) => p.id === id);
+  usePageTitle(person ? (person.name ?? UNNAMED_PERSON) : undefined);
 
   const {
     data: photoPage,
@@ -233,14 +235,18 @@ const PersonPage = () => {
   return (
     <Stack gap="lg">
       <BackLink to={peopleList}>All people</BackLink>
-      {peopleLoaded && !person && <Text c="dimmed">This person was not found.</Text>}
+      {peopleLoaded && !person && (
+        <Title order={1} fz="md" fw={400} c="dimmed">
+          This person was not found.
+        </Title>
+      )}
       {person && (
         <>
           <Group justify="space-between" align="center">
             <Group gap="md" wrap="nowrap">
               {person.cover && <FaceTile face={{ ...person.cover, personName: null }} size={72} />}
               <Stack gap={0}>
-                <Title order={2} c={person.name === null ? 'dimmed' : undefined}>
+                <Title order={1} size="h2" c={person.name === null ? 'dimmed' : undefined}>
                   {person.name ?? UNNAMED_PERSON}
                 </Title>
                 <Text size="sm" c="dimmed">
@@ -322,7 +328,7 @@ const PersonPage = () => {
 
           {suggestions && (
             <Stack gap="sm">
-              <Title order={4}>Suggestions</Title>
+              <Title order={2} size="h4">Suggestions</Title>
               {suggestions.length === 0 && <Text c="dimmed">No suggestions right now.</Text>}
               <Group gap="md" align="flex-start">
                 {suggestions.map((f) => (
