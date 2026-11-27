@@ -374,6 +374,12 @@ People are listed alphabetically everywhere (the page, the Search filter, the
 naming picker). A person's page sorts their photos by newest first (default),
 best rated or alphabetical.
 
+- **Ignoring faces** you do not care about (strangers, background people): "Ignore group" or the small cross on a
+  face in an unnamed group, or "Ignore" on an unnamed face in a photo's People card. Ignored faces leave the unnamed
+  groups, are never matched to anyone, and no longer show as a known personality (for people you share the album with
+  too). They stay ignored when the photo is re-scanned. Undo under "Ignored faces" at the bottom of the People page,
+  or with "Restore" on the photo. Only the album owner can do this. It applies to those faces only: a new photo of the
+  same person shows up as a new unnamed face. Merging this applies migration `0021` (nothing is ignored by it).
 - Lower-confidence matches (score 0.4 to 0.5) land in a "Review suggestions" queue
   on the person's page. "Not X" on a face rejects that match permanently. "Remove
   name" (confirmed faces only) just unassigns the face.

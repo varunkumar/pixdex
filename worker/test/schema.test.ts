@@ -121,6 +121,23 @@ describe('known people schema', () => {
   });
 });
 
+describe('ignored faces schema', () => {
+  it('faces.ignored_at is nullable, the new indexes exist and the old ones are untouched', async () => {
+    const cols = await env.DB.prepare('PRAGMA table_info(faces)').all<{ name: string; notnull: number }>();
+    expect(cols.results.find((c) => c.name === 'ignored_at')?.notnull).toBe(0);
+    const idx = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'faces'").all<{ name: string }>();
+    const names = idx.results.map((r) => r.name);
+    expect(names).toEqual(expect.arrayContaining(['idx_faces_ignored', 'idx_faces_open_status', 'idx_faces_known_shown', 'idx_faces_assign_status', 'idx_faces_known_photo']));
+  });
+});
+
+describe('album framing schema', () => {
+  it('albums.cover_framing is a nullable TEXT column', async () => {
+    const cols = await env.DB.prepare('PRAGMA table_info(albums)').all<{ name: string; type: string; notnull: number }>();
+    expect(cols.results.find((c) => c.name === 'cover_framing')).toMatchObject({ type: 'TEXT', notnull: 0 });
+  });
+});
+
 describe('access_requests schema', () => {
   it('rejects a non-lowercase access_requests email', async () => {
     await expect(

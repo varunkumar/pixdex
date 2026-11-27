@@ -41,6 +41,9 @@ export interface SearchParams {
   onThisDay?: string;
 }
 
+// The Worker takes at most this many face ids per ignore or restore.
+const FACE_BATCH = 200;
+
 // Safety valve for matchPersonAll: 150 pages of 100 faces.
 const MATCH_ALL_MAX_PAGES = 150;
 
@@ -297,6 +300,26 @@ export class WorkerApiClient {
   async unassignFace(faceId: string): Promise<SerializedFace> {
     const response = await this.sendJson('POST', `/faces/${encodeURIComponent(faceId)}/unassign`);
     return (await response.json()) as SerializedFace;
+  }
+
+  async ignoreFaces(faceIds: string[]): Promise<void> {
+    await this.postFaceBatches('/faces/ignore', faceIds);
+  }
+
+  async restoreFaces(faceIds: string[]): Promise<void> {
+    await this.postFaceBatches('/faces/restore', faceIds);
+  }
+
+  private async postFaceBatches(path: string, faceIds: string[]): Promise<void> {
+    for (let i = 0; i < faceIds.length; i += FACE_BATCH) {
+      await this.sendJson('POST', path, { faceIds: faceIds.slice(i, i + FACE_BATCH) });
+    }
+  }
+
+  /** Ignored faces in the caller's own albums, newest first, a cursor page at a time. */
+  async getIgnoredFaces(cursor?: string): Promise<{ faces: SerializedFace[]; nextCursor: string | null }> {
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    return this.getJson(`/people/ignored${suffix}`);
   }
 
   async matchPerson(personId: string, opts: { apply?: boolean; cursor?: string } = {}): Promise<MatchResponse> {

@@ -5,7 +5,7 @@ import { scopeFor } from '../db/visibility';
 
 /** CROSS JOIN pins faces as the outer table: without it the planner scans photos and probes faces by photo_id. Grouped aggregate of known-person matches; append a scopeFor(user, 'p.album') clause and GROUP BY. Exported for the query-plan test. */
 export const KNOWN_COUNTS_SQL = `SELECT f.known_id AS id, COUNT(DISTINCT f.photo_id) AS photo_count
-  FROM faces f CROSS JOIN photos p ON p.id = f.photo_id WHERE f.known_id IS NOT NULL`;
+  FROM faces f INDEXED BY idx_faces_known_shown CROSS JOIN photos p ON p.id = f.photo_id WHERE f.known_id IS NOT NULL AND f.ignored_at IS NULL`;
 
 interface NameRow {
   id: string;
@@ -16,9 +16,9 @@ interface NameRow {
 /**
  * Known personalities that appear in photos the caller can see, with the number of distinct visible photos each.
  * Names are global reference data, but a person is listed only when a visible photo has a matched face, so a
- * viewer never learns names from albums they cannot see. A face counts whether or not it also has a person_id.
+ * viewer never learns names from albums they cannot see. A face counts whether or not it also has a person_id; an ignored face never counts.
  *
- * D1 (2 statements per request, no OFFSET, no N+1): one grouped aggregate that walks idx_faces_known_photo
+ * D1 (2 statements per request, no OFFSET, no N+1): one grouped aggregate that walks idx_faces_known_shown
  * (every known-matched face, about one row read each, bounded by matches rather than all faces) with one
  * photos primary-key lookup per matched face and the visible-albums list materialised once; then one
  * known_people lookup by primary key via json_each over the (at most a few hundred) matched ids. Writes: 0.

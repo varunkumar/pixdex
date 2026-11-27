@@ -49,7 +49,7 @@ Framing is saved with the album in D1, not in the browser.
 - Framing is `{ x, y, zoom }`: x and y are 0 to 100 (focal point), zoom 1 to 3. Rendered with
   `object-fit: cover`, `object-position: x% y%`, `transform-origin: x% y%`, `transform: scale(zoom)`, which
   never leaves a gap and works for both banner shapes. The blurred thumbnail uses the same position.
-- Storage: migration `0021` adds nullable `albums.cover_framing` (JSON `{ hash, x, y, zoom }`). It is an
+- Storage: migration `0022` adds nullable `albums.cover_framing` (JSON `{ hash, x, y, zoom }`). It is an
   owner-edited column like `shared_with`; triggers do not touch it. It is lost if the album empties and its row
   is removed.
 - It applies only while `hash` equals the album's current cover, so a new cover shows centred at 1x. Going back to

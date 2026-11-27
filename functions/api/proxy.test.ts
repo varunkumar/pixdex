@@ -200,6 +200,34 @@ describe('Pages Function identity', () => {
     );
   });
 
+  describe('ignored faces', () => {
+    it('forwards GET people/ignored with the verified email and cursor', async () => {
+      const res = await get('/api/people/ignored?cursor=t%7C1', 'Friend@example.com');
+      expect(res.status).toBe(200);
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe('https://worker.example.dev/people/ignored?cursor=t%7C1');
+      expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
+    });
+
+    it.each(['ignore', 'restore'])('forwards POST faces/%s', async (action) => {
+      const res = await onRequestPost({
+        request: new Request(`https://pixdex.example.dev/api/faces/${action}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
+          },
+          body: '{"faceIds":["f1"]}',
+        }),
+        env,
+      });
+      expect(res.status).toBe(200);
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe(`https://worker.example.dev/faces/${action}`);
+      expect(init.method).toBe('POST');
+    });
+  });
+
   describe('admin access requests', () => {
     async function adminPost(path: string, email: string | null) {
       const headers: Record<string, string> = { 'content-type': 'application/json', 'X-Viewer-Email': 'owner@example.com' };

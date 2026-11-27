@@ -17,7 +17,7 @@
 - `unavailable` (network error, non-OK status, non-`image/*` content type) is retried on every album page visit, with no back-off; `undecodable` is not retried until the cover changes.
 - Errors from fetching or storing are never shown. Storage failure still shows the fetched image.
 - Framing `{ x, y, zoom }`: x, y 0 to 100, zoom 1 to 3; rendered with `object-position`, `transform-origin` and `scale`. Arrow keys 1% (10% with Shift), `+`/`-` zoom, buttons "Reposition", "Save", "Cancel", "Reset". Owner only.
-- Migration `0021` is additive: nullable `albums.cover_framing` JSON `{ hash, x, y, zoom }`, applied only while `hash` is the current cover.
+- Migration `0022` is additive: nullable `albums.cover_framing` JSON `{ hash, x, y, zoom }`, applied only while `hash` is the current cover.
 - Performance: stored hero makes no request; `GET /albums` one more column; save is one primary-key read and one row written.
 - Worker zod is `zod/mini`. No em dashes. Do not bypass the pre-commit hook.
 - Commit messages end with `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
@@ -35,7 +35,7 @@
 ### Task 1: Save and return framing (Worker and proxy)
 
 **Files:**
-- Create: `worker/migrations/0021_album_framing.sql`, `worker/src/db/framing.ts`, `worker/src/routes/framing.ts`, `worker/test/framing.test.ts`
+- Create: `worker/migrations/0022_album_framing.sql`, `worker/src/db/framing.ts`, `worker/src/routes/framing.ts`, `worker/test/framing.test.ts`
 - Modify: `worker/migrations/index.ts`, `worker/src/index.ts`, `worker/src/routes/photos.ts` (`getAlbumsRoute`), `functions/api/[[path]].ts`, `functions/api/proxy.test.ts`
 
 **Interfaces:**

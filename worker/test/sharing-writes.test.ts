@@ -73,10 +73,12 @@ describe('people and face writes need ownership', () => {
     ['POST', '/faces/f2/assign', { personId: 'p1' }],
     ['POST', '/faces/f2/reject', { personId: 'p1' }],
     ['POST', '/faces/f1/unassign', {}],
+    ['POST', '/faces/ignore', { faceIds: ['f2'] }],
+    ['POST', '/faces/restore', { faceIds: ['f2'] }],
   ];
   const snapshot = async () => JSON.stringify([
     (await env.DB.prepare('SELECT id, name, owner_email, cover_face_id FROM persons ORDER BY id').all()).results,
-    (await env.DB.prepare('SELECT id, person_id, assign_status FROM faces ORDER BY id').all()).results,
+    (await env.DB.prepare('SELECT id, person_id, assign_status, ignored_at FROM faces ORDER BY id').all()).results,
     (await env.DB.prepare('SELECT * FROM face_rejections').all()).results,
   ]);
 

@@ -10,6 +10,8 @@ export interface FaceRow {
   assign_status: 'unassigned' | 'auto' | 'confirmed';
   match_score: number | null;
   crop_key: string | null;
+  /** When the album owner ignored the face; absent from reads that never return ignored faces. */
+  ignored_at?: string | null;
 }
 
 export interface SerializedFace {
@@ -24,6 +26,7 @@ export interface SerializedFace {
   personName: string | null;
   status: 'unassigned' | 'auto' | 'confirmed';
   matchScore: number | null;
+  ignored: boolean;
 }
 
 /**
@@ -39,7 +42,7 @@ export const nameBinds = (user: { email: string }): [string, string] => [user.em
 
 /** Shared SELECT for face reads. Never selects the embedding. Callers must bind nameBinds(user) first. */
 export const FACE_SELECT = `SELECT f.id, f.photo_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,
-  f.det_score, f.person_id, f.assign_status, f.match_score, f.crop_key,
+  f.det_score, f.person_id, f.assign_status, f.match_score, f.crop_key, f.ignored_at,
   ${PERSON_NAME_SQL} AS person_name, ph.content_hash AS content_hash
   FROM faces f
   JOIN photos ph ON ph.id = f.photo_id
@@ -57,6 +60,7 @@ export function serializeFace(row: FaceRow & { person_name: string | null; conte
     personName: row.person_name,
     status: row.assign_status,
     matchScore: row.match_score,
+    ignored: row.ignored_at != null,
   };
 }
 
@@ -64,7 +68,7 @@ export type FaceWithJoins = FaceRow & { person_name: string | null; content_hash
 
 /**
  * Set-based statement that confirms every given face for a person (clears the
- * match score) and one that drops that person's rejections of those faces.
+ * match score and any ignore: naming a face explicitly wins) and one that drops that person's rejections of those faces.
  * Two statements regardless of how many faces, to stay inside D1's per-invocation query limit.
  */
 export const confirmFacesStmts = (db: D1Database, faceIds: string[], personId: string): D1PreparedStatement[] => {
@@ -72,7 +76,7 @@ export const confirmFacesStmts = (db: D1Database, faceIds: string[], personId: s
   return [
     db
       .prepare(
-        "UPDATE faces SET person_id = ?, assign_status = 'confirmed', match_score = NULL WHERE id IN (SELECT value FROM json_each(?))"
+        "UPDATE faces SET person_id = ?, assign_status = 'confirmed', match_score = NULL, ignored_at = NULL WHERE id IN (SELECT value FROM json_each(?))"
       )
       .bind(personId, ids),
     db

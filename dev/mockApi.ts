@@ -14,6 +14,7 @@ import type {
   AccessRequest,
   KnownPersonSummary,
   PersonSummary,
+  SerializedFace,
   SerializedPhoto,
 } from '../src/types/api.ts';
 import type { Framing } from '../src/services/framing.ts';
@@ -63,6 +64,24 @@ const REQUESTS: AccessRequest[] = [
   { id: 5, email: 'spam.demo@example.com', note: 'buy now', status: 'denied', createdAt: '2026-11-07T11:00:00Z', decidedAt: '2026-11-07T12:00:00Z' },
   { id: 6, email: 'old.demo@example.com', note: null, status: 'revoked', createdAt: '2026-10-01T11:00:00Z', decidedAt: '2026-11-01T12:00:00Z' },
 ];
+
+/** Dummy unnamed faces (three groups); ignoring and restoring flips them until the dev server restarts. */
+const FACE_GROUPS = [4, 2, 1];
+const FACES: SerializedFace[] = FACE_GROUPS.flatMap((size, g) =>
+  Array.from({ length: size }, (_, i) => ({
+    id: `mock-face-${g}-${i}`,
+    photoId: `mock-face-photo-${g}-${i}`,
+    thumbnailUrl: `/thumbnails/mock-face-${g}-${i}`,
+    cropUrl: null,
+    bbox: { x: 0.25, y: 0.15, w: 0.5, h: 0.6 },
+    detScore: 0.99,
+    personId: null,
+    personName: null,
+    status: 'unassigned' as const,
+    matchScore: null,
+    ignored: false,
+  })),
+);
 
 const NEXT_STATUS = { approve: 'approved', deny: 'denied', revoke: 'revoked' } as const;
 
@@ -366,8 +385,23 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     return sendJson(res, 200, { request: found });
   }
   if (method === 'PUT' && path === '/albums/framing') return putFraming(req, res);
+  const flip = /^\/faces\/(ignore|restore)$/.exec(path);
+  if (method === 'POST' && flip) {
+    let raw = '';
+    req.on('data', (chunk) => (raw += chunk));
+    req.on('end', () => {
+      const ids = new Set((JSON.parse(raw || '{}') as { faceIds?: string[] }).faceIds ?? []);
+      const ignored = flip[1] === 'ignore';
+      const changed = FACES.filter((f) => ids.has(f.id) && f.ignored !== ignored);
+      for (const f of changed) f.ignored = ignored;
+      sendJson(res, 200, ignored ? { ignored: changed.length } : { restored: changed.length });
+    });
+    return true;
+  }
   if (method !== 'GET')
-    return sendJson(res, 405, { error: 'The dev mock is read-only apart from admin decisions and cover framing' });
+    return sendJson(res, 405, {
+      error: 'The dev mock is read-only apart from admin decisions, cover framing and ignoring faces',
+    });
   if (path === '/me') return sendJson(res, 200, { email: EMAIL, admin: true });
   if (path === '/admin/requests') {
     const wanted = url.searchParams.get('status');
@@ -377,7 +411,13 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   }
   if (path === '/people') return sendJson(res, 200, { people: OWN });
   if (path === '/people/known') return sendJson(res, 200, { known: KNOWN });
-  if (path === '/people/groups') return sendJson(res, 200, { groups: [], scanned: 0, nextCursor: null });
+  if (path === '/people/groups') {
+    const groups = FACE_GROUPS.map((_, g) => ({ faces: FACES.filter((f) => !f.ignored && f.id.startsWith(`mock-face-${g}-`)) })).filter(
+      (g) => g.faces.length > 0,
+    );
+    return sendJson(res, 200, { groups, scanned: groups.reduce((n, g) => n + g.faces.length, 0), nextCursor: null });
+  }
+  if (path === '/people/ignored') return sendJson(res, 200, { faces: FACES.filter((f) => f.ignored), nextCursor: null });
   if (path === '/albums' && !url.searchParams.has('limit')) return sendJson(res, 200, { albums: ALBUMS });
   if (path === '/albums') {
     const albums = ALBUMS.map((name, i) => {
@@ -455,7 +495,12 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     const found = LIBRARY.find((m) => m.photo.id === decodeURIComponent(photo[1]));
     if (found) return sendJson(res, 200, found.photo);
   }
-  if (/^\/photos\/[^/]+\/faces$/.test(path)) return sendJson(res, 200, { faces: [] });
+  const photoFaces = /^\/photos\/([^/]+)\/faces$/.exec(path);
+  if (photoFaces) {
+    // Every library photo shows the first two dummy faces, so the photo page controls can be tried.
+    const own = FACES.filter((f) => f.photoId === decodeURIComponent(photoFaces[1]));
+    return sendJson(res, 200, { faces: own.length ? own : FACES.slice(0, 2) });
+  }
   // Anything else is a clear 404 from the mock, never a fall-through to the real proxy.
   return sendJson(res, 404, { error: `Not mocked: ${path}` });
 }

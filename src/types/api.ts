@@ -153,6 +153,8 @@ export interface SerializedFace {
   personName: string | null;
   status: 'unassigned' | 'auto' | 'confirmed';
   matchScore: number | null;
+  /** Ignored by the album owner: left out of unnamed groups and matching. */
+  ignored?: boolean;
 }
 
 export interface PersonSummary {

@@ -39,10 +39,11 @@ export const PEOPLE_COUNTS_SQL = (scopeSql: string) => `SELECT f.person_id AS id
 
 export const KNOWN_COUNTS_ALBUM_SQL = (scopeSql: string) => `SELECT f.known_id AS id, k.name AS name, COUNT(DISTINCT f.photo_id) AS photo_count
   FROM photos ph CROSS JOIN faces f ON f.photo_id = ph.id JOIN known_people k ON k.id = f.known_id
-  WHERE ph.album = ?${scopeSql} AND f.known_id IS NOT NULL
+  WHERE ph.album = ?${scopeSql} AND f.known_id IS NOT NULL AND +f.ignored_at IS NULL
   GROUP BY f.known_id ORDER BY photo_count DESC, k.name COLLATE NOCASE, f.person_id LIMIT ${MAX_TILES}`;
 
 /**
+ * Ignored faces are filtered with `+` so the partial known-face index cannot take over these photo-driven plans.
  * One cover face per key (person_id or known_id): a window function over the album's faces, no per-tile query.
  * The inner query selects only keys and ranking columns; the person name (a person_labels probe for people the caller
  * does not own) is computed once per kept cover in the outer SELECT, not per face row. Binds: email x2, album, scope.
@@ -67,7 +68,7 @@ export const PEOPLE_COVERS_SQL = (scopeSql: string) =>
     true
   );
 export const KNOWN_COVERS_SQL = (scopeSql: string) =>
-  coversSql('known_id', 'f.known_id IS NOT NULL', 'f.known_score DESC, f.det_score DESC, f.id', scopeSql, false);
+  coversSql('known_id', 'f.known_id IS NOT NULL AND +f.ignored_at IS NULL', 'f.known_score DESC, f.det_score DESC, f.id', scopeSql, false);
 
 /** Species grouped by scientific name; the bare columns (common, pid, h) come from the row holding MAX(score). */
 export const SPECIES_SQL = (scopeSql: string) => `SELECT sci AS scientific, com AS common, pid, h, COUNT(DISTINCT pid) AS photo_count, MAX(score) AS best FROM (

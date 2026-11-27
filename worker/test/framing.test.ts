@@ -2,7 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseFraming } from '../src/db/framing';
 // @ts-expect-error Vite raw import, resolved by the test runner
-import migration0021 from '../migrations/0021_album_framing.sql?raw';
+import migration0022 from '../migrations/0022_album_framing.sql?raw';
 import { PHOTOS_MIGRATION_STATEMENTS } from '../migrations/index';
 import { OWNER_TEST_EMAIL, readHeaders } from './helpers';
 
@@ -174,10 +174,10 @@ describe('parseFraming', () => {
   });
 });
 
-describe('migration 0021', () => {
+describe('migration 0022', () => {
   it('has the same statement in the SQL file and the test statements', () => {
     const stmt = 'ALTER TABLE albums ADD COLUMN cover_framing TEXT;';
-    expect(migration0021 as string).toContain(stmt);
+    expect(migration0022 as string).toContain(stmt);
     expect(PHOTOS_MIGRATION_STATEMENTS).toContain(stmt);
   });
 });

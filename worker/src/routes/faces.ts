@@ -4,6 +4,7 @@ import type { Env } from '../types';
 import { userOf } from '../access';
 import { photoAccess } from '../db/visibility';
 import { denial, faceRoles, personRole } from '../db/people';
+import { requireFacesOwned } from './people';
 import { FACE_SELECT, confirmFacesStmts, nameBinds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -67,6 +68,37 @@ export async function unassignFaceRoute(c: Ctx) {
   ).bind(id).run();
   return c.json(serializeFace((await loadFace(c, id))!));
 }
+
+const faceIdsBody = z.object({ faceIds: z.array(z.string().check(z.minLength(1))).check(z.minLength(1), z.maxLength(200)) });
+
+/**
+ * Only an unnamed face can be ignored, so a face matched meanwhile is skipped. `+` keeps the primary-key lookups.
+ * RETURNING counts the faces changed (meta.changes would also count index writes). Binds: time, JSON ids.
+ */
+export const IGNORE_FACES_SQL = `UPDATE faces SET ignored_at = ? WHERE id IN (SELECT value FROM json_each(?))
+  AND +assign_status = 'unassigned' AND +ignored_at IS NULL RETURNING id`;
+/** Binds: JSON ids. */
+export const RESTORE_FACES_SQL = 'UPDATE faces SET ignored_at = NULL WHERE id IN (SELECT value FROM json_each(?)) AND +ignored_at IS NOT NULL RETURNING id';
+
+/**
+ * Shared body of ignore and restore: every face must be in an album the caller owns, else nothing changes.
+ * D1: 1 statement for all roles plus 1 set-based UPDATE (primary-key lookups); only changed rows are written.
+ */
+async function setIgnored(c: Ctx, ignored: boolean): Promise<Response> {
+  const parsed = faceIdsBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
+  const faceIds = [...new Set(parsed.data.faceIds)];
+  const denied = await requireFacesOwned(c, faceIds);
+  if (denied) return denied;
+  const stmt = ignored
+    ? c.env.DB.prepare(IGNORE_FACES_SQL).bind(new Date().toISOString(), JSON.stringify(faceIds))
+    : c.env.DB.prepare(RESTORE_FACES_SQL).bind(JSON.stringify(faceIds));
+  const { results } = await stmt.all<{ id: string }>();
+  return c.json(ignored ? { ignored: results.length } : { restored: results.length });
+}
+
+export const ignoreFacesRoute = (c: Ctx) => setIgnored(c, true);
+export const restoreFacesRoute = (c: Ctx) => setIgnored(c, false);
 
 export async function photoFacesRoute(c: Ctx) {
   const id = c.req.param('id') as string;

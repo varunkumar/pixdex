@@ -128,7 +128,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
+`people/groups`, `people/ignored`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails are cached immutably (content-hash addressed); originals and face crops are cached
@@ -163,7 +163,7 @@ candidate). It returns 404 if no photo qualifies.
 - `routes/framing.ts` - `PUT /albums/framing` `{ album, contentHash, x, y, zoom }` saves how the album cover sits in
   the banner. Guarded write, owner only (404 not visible, 403 viewer), 400 invalid or out of range (x and y 0 to 100,
   zoom 1 to 3), 409 if `contentHash` is not the current cover (checked in the `UPDATE` itself). Stored in
-  `albums.cover_framing` (migration `0021_album_framing.sql`, additive, nullable JSON `{ hash, x, y, zoom }`; the centre
+  `albums.cover_framing` (migration `0022_album_framing.sql`, additive, nullable JSON `{ hash, x, y, zoom }`; the centre
   at 1x is NULL), an owner-edited column the triggers do not touch; it is lost if the album empties and its row is
   removed. The paged `GET /albums` returns `coverFraming: { x, y, zoom } | null` to owners and viewers, only while
   `hash` equals the current cover (`db/framing.ts`), so a new cover shows centred and going back restores the old framing
@@ -392,6 +392,16 @@ invocation):
   these limits were tightened. Real Worker CPU has not been measured: before
   relying on these constants, measure on a deployed preview (`wrangler tail` or
   the dashboard) and tune them. This is a to-do for the owner at merge.
+
+### Ignored faces
+
+`faces.ignored_at` (migration `0021_face_ignore.sql`) marks a face the album owner does not care about. Such a face is
+always `unassigned`; it is left out of unnamed groups, matching (at ingest and on demand) and every known-personality
+view, and a re-scan keeps it like a confirmed face. Writes are `POST /faces/ignore` and `/faces/restore` (owner only, up
+to 200 ids, set-based); `GET /people/ignored` pages them for the undo list. Naming an ignored face clears the flag.
+
+Indexes: three partial indexes on `ignored_at` were added and none changed, so queries written before this feature keep
+their plans (see `docs/development.md`).
 
 ### Known personalities (phase 1)
 

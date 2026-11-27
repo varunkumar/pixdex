@@ -71,7 +71,7 @@ Notes:
   (replaced by `idx_persons_owner_name_lower`); dropping an index is metadata-only, so no Time Travel bookmark is needed.
 - Migration `0017_person_labels.sql` (the empty `person_labels` table, its unique index and triggers) is additive and auto-applies on
   merge: no backfill, no Time Travel bookmark needed. From then on a non-owner no longer receives the owner's person names.
-- Migration `0021_album_framing.sql` (the nullable `albums.cover_framing` column) is additive and auto-applies on merge. See
+- Migration `0022_album_framing.sql` (the nullable `albums.cover_framing` column) is additive and auto-applies on merge. See
   "After deploying the browser-stored album hero" below.
 - The agent is not deployed; it runs on your Mac.
 
@@ -303,7 +303,7 @@ names, and the `limit=1` count) and `npx wrangler d1 insights DB`. The only adde
 
 `EXPLAIN QUERY PLAN` of the count shape (album plus people, known and dates, against the test D1): no combination scans `photos` or
 `faces`. `photos` uses `idx_photos_album_cover` (album and `date_time` range), people use `idx_faces_person_status_created`, known
-uses the covering `idx_faces_known_photo`; temp b-trees appear for the people `GROUP BY` and `count(DISTINCT)` and for the row
+uses the covering `idx_faces_known_shown` (it was `idx_faces_known_photo` before ignored faces); temp b-trees appear for the people `GROUP BY` and `count(DISTINCT)` and for the row
 query's `ORDER BY`. The existing `scopeFor` visibility subquery scans `albums` plus `json_each(shared_with)` (albums is small).
 `onThisDay` (`substr(date_time)`) is not indexable, so only `idx_photos_album` applies and cost follows the album's size. The
 `COUNT(*)` that fills `total` covers every matching row, so `limit=1` does not make the count cheaper. The test D1 has no `ANALYZE`
@@ -360,6 +360,27 @@ There are no fast paths: every read is scoped for every user, the owner included
 
 If rows read on search or timeline rise noticeably after other users exist, a different search ordering for scoped
 requests or an `album_shares(email, album)` lookup table are the next steps.
+
+### Ignored faces performance (migration 0021)
+
+Measured locally in the Workers test runtime with 4,000 photos and 16,000 faces, each request run on the previous code,
+on the new code, and on the previous code over the new schema, with and without `ANALYZE`:
+
+- Rows read are identical to before on every face route while nothing is ignored, including the previous code on the new
+  schema (the deploy window, or a rolled-back Worker).
+- With 40% of unassigned faces ignored, the known list, filter and album views read fewer rows; a match page reads about
+  4 to 8% more (it walks past ignored faces by rowid).
+- Rows written rise, because the new partial indexes are maintained: about one more per face inserted or changing
+  status, two with a known match. In the test, a five-face re-scan went from 53 to 66 rows written, confirming 10 faces
+  from 40 to 51, and 50 known-match updates from 100 to 150.
+- `POST /faces/ignore` and `/restore`: 2 statements, primary-key lookups only. `GET /people/ignored`: the owns-an-album
+  probe plus one walk of `idx_faces_ignored`, no sort. Worker CPU: no new work over embeddings.
+- The migration builds the indexes once (about one row written per face, plus one per known match).
+
+Why the migration is additive: replacing `idx_faces_assign_status` with a partial index moved the people cover query to a
+slower plan (about 29% more rows), and widening it made the groups page read many times more rows with statistics or on
+the old code. Real D1 numbers are unmeasured: after deploy check `wrangler d1 insights pixdex` for rows read and
+written on `faces`.
 
 ### Security notes (hardening deferred from review)
 
