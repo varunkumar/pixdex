@@ -81,7 +81,7 @@ Changes to existing paths (`ignored_at IS NULL` unless noted):
   ("Ignore face N of M"). No confirm dialog, because it is reversible. Ignored faces are removed from the
   cached groups without refetching every group page.
 - Bottom of the People page: "Ignored faces", closed by default (no request until opened), a grid with
-  "Restore" per face, "Restore all shown", and "Load more".
+  "Restore" per face, "Restore all shown" (sent in batches of 200), and "Load more".
 - Photo page, owner only: "Ignore" on an unnamed face; an ignored face shows "Ignored" and "Restore" only.
   An auto match is first removed with "Not X". Viewers see no change.
 - Invalidate: ignored list, photo faces, known people, album contents, search keys.
