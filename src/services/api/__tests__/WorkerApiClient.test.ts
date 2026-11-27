@@ -21,6 +21,16 @@ describe('WorkerApiClient', () => {
     });
   });
 
+  it('setAlbumFraming PUTs the cover hash and the framing', async () => {
+    fetchMock.mockResolvedValue({ ok: true, type: 'basic' });
+    await client.setAlbumFraming('Kanha', 'abc', { x: 20, y: 70, zoom: 1.5 });
+    expect(fetchMock).toHaveBeenCalledWith('/api/albums/framing', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"album":"Kanha","contentHash":"abc","x":20,"y":70,"zoom":1.5}',
+    });
+  });
+
   it('decideAccessRequest POSTs a JSON body {} with the JSON content type and returns the request', async () => {
     const request = { id: 7, email: 'a@example.com', status: 'approved' };
     fetchMock.mockResolvedValue({ ok: true, type: 'basic', json: async () => ({ request }) });

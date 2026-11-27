@@ -16,6 +16,7 @@ import type {
   PersonSummary,
   SerializedPhoto,
 } from '../src/types/api.ts';
+import type { Framing } from '../src/services/framing.ts';
 
 /** Dummy photo shapes (portrait, square, 4:3, 3:2, panorama) so the masonry grid has something to lay out. */
 const MOCK_SIZES: [number, number][] = [
@@ -64,6 +65,9 @@ const REQUESTS: AccessRequest[] = [
 ];
 
 const NEXT_STATUS = { approve: 'approved', deny: 'denied', revoke: 'revoked' } as const;
+
+/** Saved cover framing per album, kept until the dev server restarts. */
+const FRAMINGS = new Map<string, Framing & { hash: string }>();
 
 /** Dummy species, keyed by scientific name (what `species=` filters on). */
 const SPECIES = [
@@ -302,6 +306,45 @@ function thumbnailSvg(id: string, longSide?: number): string {
   );
 }
 
+/** The newest dated photo is the album's cover (undated last), so the card date matches the album name. */
+function coverOf(album: string): SerializedPhoto | undefined {
+  return LIBRARY.filter((m) => m.photo.album === album)
+    .map((m) => m.photo)
+    .sort((x, y) => (y.dateTime ?? '').localeCompare(x.dateTime ?? ''))[0];
+}
+
+// One shared-with-you album, to show the viewer state.
+const viewerOnly = (album: string) => ALBUMS.indexOf(album) === 2;
+
+/** PUT /albums/framing, answering like the Worker (200, 400, 403, 404, 409). */
+function putFraming(req: IncomingMessage, res: ServerResponse): true {
+  let raw = '';
+  req.on('data', (chunk) => (raw += chunk));
+  req.on('end', () => {
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(raw) ?? {};
+    } catch {
+      body = {};
+    }
+    const { album, contentHash, x, y, zoom } = body;
+    const within = (v: unknown, min: number, max: number): v is number => typeof v === 'number' && v >= min && v <= max;
+    const named = typeof album === 'string' && typeof contentHash === 'string';
+    if (!named || !within(x, 0, 100) || !within(y, 0, 100) || !within(zoom, 1, 3))
+      return sendJson(res, 400, { error: 'Invalid framing' });
+    const cover = coverOf(album);
+    if (!cover) return sendJson(res, 404, { error: 'Not found' });
+    if (viewerOnly(album)) return sendJson(res, 403, { error: 'Forbidden' });
+    if (cover.thumbnailUrl !== `/thumbnails/${contentHash}`)
+      return sendJson(res, 409, { error: 'The album cover has changed' });
+    const coverFraming = x === 50 && y === 50 && zoom === 1 ? null : { x, y, zoom };
+    if (coverFraming) FRAMINGS.set(album, { hash: contentHash, ...coverFraming });
+    else FRAMINGS.delete(album);
+    return sendJson(res, 200, { album, coverFraming });
+  });
+  return true;
+}
+
 function sendJson(res: ServerResponse, status: number, body: unknown): true {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json');
@@ -324,7 +367,9 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     found.decidedAt = new Date().toISOString();
     return sendJson(res, 200, { request: found });
   }
-  if (method !== 'GET') return sendJson(res, 405, { error: 'The dev mock is read-only apart from admin decisions' });
+  if (method === 'PUT' && path === '/albums/framing') return putFraming(req, res);
+  if (method !== 'GET')
+    return sendJson(res, 405, { error: 'The dev mock is read-only apart from admin decisions and cover framing' });
   if (path === '/me') return sendJson(res, 200, { email: EMAIL, admin: true });
   if (path === '/admin/requests') {
     const wanted = url.searchParams.get('status');
@@ -338,18 +383,18 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   if (path === '/albums' && !url.searchParams.has('limit')) return sendJson(res, 200, { albums: ALBUMS });
   if (path === '/albums') {
     const albums = ALBUMS.map((name, i) => {
-      // The cover is the newest dated photo (undated last), so the card date matches the album name.
-      const photos = LIBRARY.filter((m) => m.photo.album === name)
-        .map((m) => m.photo)
-        .sort((x, y) => (y.dateTime ?? '').localeCompare(x.dateTime ?? ''));
+      const cover = coverOf(name)!;
+      const saved = FRAMINGS.get(name);
       return {
         name,
-        photoCount: photos.length,
-        coverPhotoId: photos[0].id,
-        coverThumbnailUrl: photos[0].thumbnailUrl ?? null,
-        latestDate: photos[0].dateTime,
+        photoCount: LIBRARY.filter((m) => m.photo.album === name).length,
+        coverPhotoId: cover.id,
+        coverThumbnailUrl: cover.thumbnailUrl ?? null,
+        coverFraming:
+          saved && cover.thumbnailUrl === `/thumbnails/${saved.hash}` ? { x: saved.x, y: saved.y, zoom: saved.zoom } : null,
+        latestDate: cover.dateTime,
         // One shared-out album (avatar stack with +N) and one shared-with-you album, to show both states.
-        ...(i === 2
+        ...(viewerOnly(name)
           ? { role: 'viewer' as const, ownerEmail: 'priya.nair@example.com' }
           : {
               role: 'owner' as const,
