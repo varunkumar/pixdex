@@ -274,7 +274,7 @@ describe('PersonPage', () => {
       .mockReturnValue(new Promise(() => {}));
     show();
     await screen.findByRole('button', { name: /^set as cover/i });
-    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
     await waitFor(() => expect(workerApiClient.getPersonFaces).toHaveBeenLastCalledWith('pe1', ['p2']));
     expect(screen.queryByRole('button', { name: /^set as cover/i })).toBeNull();
   });
@@ -394,7 +394,7 @@ describe('PersonPage', () => {
     show();
     expect(await screen.findByText('Showing 1-24 of 30')).toBeInTheDocument();
     expect(screen.queryByText('Show more photos')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
     await waitFor(() =>
       expect(workerApiClient.searchPage).toHaveBeenCalledWith(
         expect.objectContaining({ people: ['pe1'], limit: 24, offset: 24 })

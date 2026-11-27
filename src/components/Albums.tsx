@@ -12,6 +12,9 @@ import ListPagination from './ListPagination';
 import PageLoading from './PageLoading';
 import SortIcons from './SortIcons';
 
+/** The first row at the widest grid. */
+const EAGER_COVERS = 4;
+
 const ALBUM_PAGE_SIZES = [12, 24, 48] as const;
 
 const SORT_OPTIONS: { value: AlbumSort; label: string; icon?: IconType; text?: string }[] = [
@@ -59,8 +62,8 @@ const Albums = () => {
 
       {data && data.albums.length > 0 && (
         <SimpleGrid cols={{ base: 1, xs: 2, md: 3, lg: 4 }} spacing="md">
-          {data.albums.map((album) => (
-            <AlbumCard key={album.name} album={album} />
+          {data.albums.map((album, i) => (
+            <AlbumCard key={album.name} album={album} eager={i < EAGER_COVERS} />
           ))}
         </SimpleGrid>
       )}

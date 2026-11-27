@@ -42,6 +42,16 @@ describe('Dashboard', () => {
     expect(screen.queryByText('0')).toBeNull();
   });
 
+  it('loads the first four recent photos at once and the rest as they come into view', async () => {
+    vi.mocked(workerApiClient.searchPage).mockResolvedValue({
+      total: 5,
+      results: ['a', 'b', 'c', 'd', 'e'].map((id) => makePhoto({ id })),
+    });
+    renderWithProviders(<Dashboard />);
+    const images = await screen.findAllByRole('img');
+    expect(images.map((i) => i.getAttribute('loading'))).toEqual([null, null, null, null, 'lazy']);
+  });
+
   it('titles the card PixdeX', async () => {
     renderWithProviders(<Dashboard />);
     expect(await screen.findByRole('heading', { name: 'PixdeX' })).toBeInTheDocument();

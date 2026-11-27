@@ -14,6 +14,8 @@ interface Props {
   onSize: (size: number) => void;
 }
 
+const CONTROL_LABELS = { first: 'First page', previous: 'Previous page', next: 'Next page', last: 'Last page' };
+
 const ListPagination = ({ page, size, total, sizes, settled = true, hasMore = false, onPage, onSize }: Props) => {
   const pages = Math.max(1, Math.ceil((total + (hasMore ? 1 : 0)) / size));
 
@@ -34,7 +36,13 @@ const ListPagination = ({ page, size, total, sizes, settled = true, hasMore = fa
       <Text size="sm" c="dimmed">
         {range}
       </Text>
-      <Pagination total={pages} value={current} onChange={(p) => onPage(p)} />
+      <Pagination
+        total={pages}
+        value={current}
+        onChange={(p) => onPage(p)}
+        getItemProps={(p) => ({ 'aria-label': `Page ${p}` })}
+        getControlProps={(control) => ({ 'aria-label': CONTROL_LABELS[control] })}
+      />
       <Select
         aria-label="Results per page"
         data={sizes.map(String)}

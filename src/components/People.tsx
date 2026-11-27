@@ -104,7 +104,7 @@ const GroupCard = ({
               <Box key={f.id} pos="relative">
                 <FaceTile face={f} size={64} />
                 <ActionIcon
-                  size="xs"
+                  size={24}
                   radius="xl"
                   variant="default"
                   pos="absolute"

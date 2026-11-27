@@ -19,14 +19,21 @@ describe('ListPagination', () => {
   it('reports page changes', () => {
     const onPage = vi.fn();
     renderWithProviders(<ListPagination {...base} onPage={onPage} />);
-    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
     expect(onPage).toHaveBeenCalledWith(2);
+  });
+
+  it('names every control for screen readers', () => {
+    renderWithProviders(<ListPagination {...base} page={2} />);
+    for (const name of ['Previous page', 'Next page', 'Page 2']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
   });
 
   it('renders nothing for an empty result', () => {
     renderWithProviders(<ListPagination {...base} total={0} />);
     expect(screen.queryByText(/showing/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '1' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Page 1' })).not.toBeInTheDocument();
   });
 
   it('replaces the URL with the last page when page is out of range', () => {

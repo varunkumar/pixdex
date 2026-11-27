@@ -8,7 +8,8 @@ import type { AlbumSummary } from '../types/api';
 import ShareAlbumModal from './ShareAlbumModal';
 import { AvatarStack, UserAvatar } from './UserAvatar';
 
-const AlbumCard = ({ album }: { album: AlbumSummary }) => {
+/** `eager` covers (the first row) load at once; the rest wait until they come near the viewport. */
+const AlbumCard = ({ album, eager = false }: { album: AlbumSummary; eager?: boolean }) => {
   const [sharing, setSharing] = useState(false);
   const isOwner = album.role === 'owner';
   const shared = isOwner && (album.sharedWith?.length ?? 0) > 0;
@@ -23,7 +24,14 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
       >
         <Card.Section>
           {cover ? (
-            <Image src={cover} alt={album.name} h={180} fit="contain" bg="var(--mantine-color-default-hover)" />
+            <Image
+              src={cover}
+              alt={album.name}
+              h={180}
+              fit="contain"
+              bg="var(--mantine-color-default-hover)"
+              loading={eager ? undefined : 'lazy'}
+            />
           ) : (
             <Center h={180} bg="var(--mantine-color-default-hover)">
               <Box c="dimmed" fz={40} lh={1}>
@@ -67,7 +75,7 @@ const AlbumCard = ({ album }: { album: AlbumSummary }) => {
       </Link>
       {isOwner && (
         <>
-          <Button variant="subtle" size="compact-xs" mx="md" mb="md" w="fit-content" onClick={() => setSharing(true)}>
+          <Button variant="subtle" size="compact-sm" mx="md" mb="md" w="fit-content" onClick={() => setSharing(true)}>
             Share
           </Button>
           {sharing && (

@@ -202,7 +202,7 @@ const PhotoDetail = () => {
               {date && <Field label="Taken">{date}</Field>}
               {photo.album && albumHref && (
                 <Field label="Album">
-                  <Anchor component={Link} to={albumHref}>
+                  <Anchor component={Link} to={albumHref} className="pdx-target">
                     {photo.album}
                   </Anchor>
                 </Field>
@@ -212,7 +212,7 @@ const PhotoDetail = () => {
               {exposure.length > 0 && <Field label="Exposure">{exposure.join(' · ')}</Field>}
               {gps && (
                 <Field label="Location">
-                  <Anchor href={gps} target="_blank" rel="noopener noreferrer">
+                  <Anchor href={gps} target="_blank" rel="noopener noreferrer" className="pdx-target">
                     View on map
                   </Anchor>
                 </Field>
@@ -229,12 +229,12 @@ const PhotoDetail = () => {
             </SimpleGrid>
 
             {originalUrl && (
-              <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer" size="sm">
+              <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer" size="sm" className="pdx-target">
                 View original
               </Anchor>
             )}
             {driveUrl && (
-              <Anchor href={driveUrl} target="_blank" rel="noopener noreferrer" size="sm">
+              <Anchor href={driveUrl} target="_blank" rel="noopener noreferrer" size="sm" className="pdx-target">
                 Open in Google Drive
               </Anchor>
             )}

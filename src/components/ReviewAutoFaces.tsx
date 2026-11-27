@@ -79,6 +79,7 @@ const ReviewTile = ({
       to={`/photos/${face.photoId}`}
       target="_blank"
       size="xs"
+      className="pdx-target"
       aria-label={`Open the photo of face ${number}`}
     >
       Open photo

@@ -333,7 +333,7 @@ describe("People", () => {
     expect(screen.getByText("Showing 1-6 of 6+")).toBeInTheDocument();
     expect(workerApiClient.getFaceGroups).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Page 2" }));
     await waitFor(() =>
       expect(workerApiClient.getFaceGroups).toHaveBeenLastCalledWith("cur1"),
     );
@@ -366,7 +366,7 @@ describe("People", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Person 13/ })).toBeNull();
     expect(screen.getByText("Showing 1-12 of 14")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Page 2" }));
     expect(
       await screen.findByRole("link", { name: /Person 13/ }),
     ).toBeInTheDocument();
@@ -393,7 +393,7 @@ describe("People", () => {
     await screen.findByRole("link", { name: /Person 00/ });
     fireEvent.click(screen.getByRole("button", { name: "Most faces" }));
     await screen.findByRole("link", { name: /Person 13/ });
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Page 2" }));
     // Page 2 of "most faces" holds the two smallest, and the select still says so.
     expect(
       await screen.findByRole("link", { name: /Person 00/ }),
@@ -705,7 +705,7 @@ describe("People: ignoring faces", () => {
     });
     const { router } = showWithHistory();
     await screen.findByText("Showing 1-6 of 9");
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Page 2" }));
     await screen.findByText("Showing 7-9 of 9");
     expect(router.state.location.search).toBe("?groups=2");
     fireEvent.click(screen.getByRole("button", { name: "Ignored faces" }));

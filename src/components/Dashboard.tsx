@@ -7,6 +7,8 @@ import { shortDescription } from '../services/text';
 import { BRAND } from '../theme';
 
 const RECENT_COUNT = 12;
+/** Photos that load at once; the rest wait until they come near the viewport. */
+const EAGER_PHOTOS = 4;
 
 /** `value` is undefined until it has loaded: a dash, never a false zero. */
 const Stat = ({ label, value, to }: { label: string; value: number | undefined; to: string }) => (
@@ -50,7 +52,7 @@ const Dashboard = () => {
             Recently indexed
           </Title>
           <SimpleGrid cols={{ base: 2, md: 4, lg: 6 }} spacing="sm">
-            {recent.results.map((photo) => (
+            {recent.results.map((photo, i) => (
               <Anchor key={photo.id} component={Link} to={`/photos/${photo.id}`} underline="never" c="inherit">
                 <Image
                   src={workerApiClient.thumbnailUrl(photo)}
@@ -59,6 +61,7 @@ const Dashboard = () => {
                   fit="contain"
                   h={120}
                   bg="var(--mantine-color-default-hover)"
+                  loading={i < EAGER_PHOTOS ? undefined : 'lazy'}
                 />
                 {photo.album && (
                   <Text size="xs" lineClamp={1} mt={4}>
