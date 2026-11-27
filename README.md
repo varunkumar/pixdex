@@ -369,7 +369,9 @@ For local development, set `DEV_VIEWER_EMAIL` in `.env` to preview the app as a 
 The People page (`/people`) lists named people and groups of similar unnamed
 faces. Name a group or add it to an existing person, and the app then looks for
 that person's other faces; once someone is named, new faces are matched to them
-automatically at ingest. The "People" card on each photo's page names or corrects
+automatically at ingest. That search covers unnamed faces only, plus, when you moved a face from one person to another
+("Not X" or "Remove name", then the new name), the first person's automatic matches. "Re-run matching" on a person's page
+also checks everyone's automatic matches (it takes longer). Confirmed faces are never changed by matching. The "People" card on each photo's page names or corrects
 its faces, and "Show people on photo" draws numbered boxes over the photo.
 People are listed alphabetically everywhere (the page, the Search filter, the
 naming picker). A person's page sorts their photos by newest first (default),

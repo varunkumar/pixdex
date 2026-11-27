@@ -24,7 +24,7 @@ import { Link } from "react-router-dom";
 import { useListParams } from "../hooks/useListParams";
 import { workerApiClient } from "../services/api/WorkerApiClient";
 import {
-  matchQueueFor,
+  matchAfterNaming,
   refreshAfterIgnoring,
   refreshAfterNaming,
 } from "../services/matchQueue";
@@ -62,7 +62,7 @@ const GroupCard = ({
   // The faces are saved: close the group at once and look for more matches in the background.
   const finish = (personId: string) => {
     refreshAfterNaming(queryClient, faceIds);
-    matchQueueFor(queryClient).enqueue(personId);
+    matchAfterNaming(queryClient, personId, faceIds);
     onDone(faceIds[0]);
   };
 

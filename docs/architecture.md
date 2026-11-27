@@ -344,7 +344,18 @@ group or face is named, and can be re-run from the person's page
 (`src/services/matchQueue.ts`, one per query client; progress card
 `components/MatchStatus.tsx` in the layout): the save returns at once, people are
 matched one at a time (a person already waiting is not queued twice), page
-changes do not stop it, and closing the tab does (the browser asks first). Unnamed faces are grouped by centroid clustering
+changes do not stop it, and closing the tab does (the browser asks first).
+
+A match request without `from` checks every candidate (unnamed faces and other
+people's auto faces): that is Re-run matching and Review suggestions. The
+automatic run after naming sends `from` (at most 50 ids): the people the named
+faces were just removed from ("Not X" or "Remove name", remembered in the browser
+until the face is named; a page reload forgets it), usually none. The Worker then
+works in two phases so each set is walked once: the unnamed faces
+(`MATCH_UNNAMED_SQL`, cursor `<rowid>`), then, if `from` is not empty, those
+people's auto faces (`MATCH_MOVED_SQL`, cursor `m<rowid>`, first one `m0`).
+
+Unnamed faces are grouped by centroid clustering
 (`clusterFaces`) for the People page.
 
 `POST /ingest/faces` answers with `faceIds` (the id each posted face was stored under; a kept confirmed face keeps

@@ -6,7 +6,7 @@ import { knownFilterSql } from '../src/db/known';
 import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
-import { GROUP_CANDIDATES_SQL, MATCH_CANDIDATES_SQL, ignoredFacesSql } from '../src/routes/people';
+import { GROUP_CANDIDATES_SQL, MATCH_CANDIDATES_SQL, MATCH_MOVED_SQL, MATCH_UNNAMED_SQL, ignoredFacesSql } from '../src/routes/people';
 import { IGNORE_FACES_SQL, RESTORE_FACES_SQL } from '../src/routes/faces';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
@@ -85,6 +85,21 @@ describe('match candidates page', () => {
     expect(p).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
     // One key lookup either way: by primary key or by the owner index with the name.
     expect(p).toMatch(/SEARCH a USING (PRIMARY KEY \(name=\?\)|COVERING INDEX idx_albums_owner_email \(owner_email=\? AND name=\?\))/);
+  });
+});
+
+describe('narrow match candidates pages', () => {
+  it('seeks the not-ignored index for unnamed faces, in rowid order', async () => {
+    const p = await plan(MATCH_UNNAMED_SQL, 0, U.email, 'p');
+    expect(p).toMatch(/SEARCH f USING INDEX idx_faces_open_status \(assign_status=\? AND rowid>\?\)/);
+    expect(p).not.toMatch(/TEMP B-TREE|SCAN f\b|idx_faces_assign_status/);
+  });
+
+  it('reads the previous people\'s auto faces through a covering index, never walking all faces', async () => {
+    const p = await plan(MATCH_MOVED_SQL, 0, U.email, 'p', '["q"]');
+    expect(p).toMatch(/SEARCH p USING COVERING INDEX idx_faces_person_status_created \(person_id=\? AND assign_status=\?/);
+    expect(p).toMatch(/SEARCH f USING INTEGER PRIMARY KEY \(rowid=\?\)/);
+    expect(p).not.toMatch(/SCAN f\b|idx_faces_assign_status/);
   });
 });
 

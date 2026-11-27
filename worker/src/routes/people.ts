@@ -238,7 +238,12 @@ export async function assignFacesRoute(c: Ctx) {
   return c.json({ personId: id, assigned: faceIds.length });
 }
 
-const matchBody = z.object({ apply: z.optional(z.boolean()), cursor: z.optional(z.string().check(z.regex(/^\d+$/))) });
+const matchBody = z.object({
+  apply: z.optional(z.boolean()),
+  // A rowid; `m<rowid>` is the second phase of a narrow match.
+  cursor: z.optional(z.string().check(z.regex(/^m?\d+$/))),
+  from: z.optional(z.array(z.string().check(z.minLength(1))).check(z.maxLength(50))),
+});
 const cursorParam = z.string().check(z.regex(/^\d+$/));
 
 interface CandidateRow {
@@ -308,6 +313,34 @@ export const MATCH_CANDIDATES_SQL = `SELECT f.rowid AS rid, f.id, f.embedding, f
     AND NOT EXISTS (SELECT 1 FROM face_rejections r WHERE r.face_id = f.id AND r.person_id = ?)
   ORDER BY f.rowid LIMIT ${FACE_PAGE_SIZE}`;
 
+const narrowMatchSql = (source: string, where: string) => `SELECT f.rowid AS rid, f.id, f.embedding, f.assign_status, f.match_score FROM ${source}
+  CROSS JOIN photos ph ON ph.id = f.photo_id CROSS JOIN albums a ON a.name = ph.album
+  WHERE ${where} AND ${MATCHABLE_SQL} AND f.rowid > ?1 AND a.owner_email = ?2
+    AND NOT EXISTS (SELECT 1 FROM face_rejections r WHERE r.face_id = f.id AND r.person_id = ?3)
+  ORDER BY f.rowid LIMIT ${FACE_PAGE_SIZE}`;
+
+/*
+ * The narrow match (`from` given) runs in two phases, so each walks its own faces once.
+ * Binds: ?1 cursor rowid, ?2 owner email, ?3 person id.
+ */
+
+/** Phase 1: unassigned faces that are not ignored, through their index (already in rowid order). */
+export const MATCH_UNNAMED_SQL = narrowMatchSql(
+  'faces f INDEXED BY idx_faces_open_status',
+  "f.assign_status = 'unassigned' AND f.ignored_at IS NULL"
+);
+
+/**
+ * Phase 2: the auto faces of the people in ?4 (a JSON array; a face was just moved away from them). A covering walk of
+ * each person's auto faces gives the rowids, then faces are read in that order up to the page size.
+ */
+export const MATCH_MOVED_SQL = narrowMatchSql(
+  'faces f',
+  `f.rowid IN (SELECT p.rowid FROM faces p INDEXED BY idx_faces_person_status_created
+     WHERE p.person_id IN (SELECT value FROM json_each(?4)) AND p.person_id != ?3 AND p.assign_status = 'auto' AND p.rowid > ?1)
+   AND +f.ignored_at IS NULL`
+);
+
 export const IGNORED_PAGE_SIZE = 60;
 
 /**
@@ -352,12 +385,23 @@ export async function matchPersonRoute(c: Ctx) {
   const owner = userOf(c).email;
 
   const empty = { auto: [], suggestions: [], scanned: 0, nextCursor: null };
+  // The second phase only exists for a narrow match.
+  if (parsed.data.cursor?.startsWith('m') && !parsed.data.from?.length) return c.json({ error: 'Invalid cursor' }, 400);
+
   const [refs] = await loadReferences(c.env.DB, { personId: id });
   if (!refs) return c.json(empty);
 
-  const { results } = await c.env.DB.prepare(MATCH_CANDIDATES_SQL)
-    .bind(Number(parsed.data.cursor ?? '0'), owner, id, id)
-    .all<CandidateRow & { assign_status: string; match_score: number | null }>();
+  const { from } = parsed.data;
+  const raw = parsed.data.cursor ?? '0';
+  const moved = raw.startsWith('m');
+  const cursor = Number(moved ? raw.slice(1) : raw);
+  const db = c.env.DB;
+  const page = !from
+    ? db.prepare(MATCH_CANDIDATES_SQL).bind(cursor, owner, id, id)
+    : moved
+      ? db.prepare(MATCH_MOVED_SQL).bind(cursor, owner, id, JSON.stringify(from))
+      : db.prepare(MATCH_UNNAMED_SQL).bind(cursor, owner, id);
+  const { results } = await page.all<CandidateRow & { assign_status: string; match_score: number | null }>();
 
   const auto: { id: string; score: number }[] = [];
   const suggestions: { id: string; score: number }[] = [];
@@ -395,6 +439,11 @@ export async function matchPersonRoute(c: Ctx) {
     auto: present(auto),
     suggestions: present(suggestions),
     scanned: results.length,
-    nextCursor: results.length === FACE_PAGE_SIZE ? String(results[results.length - 1].rid) : null,
+    nextCursor:
+      results.length === FACE_PAGE_SIZE
+        ? `${moved ? 'm' : ''}${results[results.length - 1].rid}`
+        : !moved && from?.length
+          ? 'm0'
+          : null,
   });
 }

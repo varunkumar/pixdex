@@ -119,6 +119,102 @@ describe('people groups and matching', () => {
     expect(theirs.scanned).toBe(2);
   });
 
+  describe('narrow matching (`from`)', () => {
+    const match = async (id: string, body: object) => (await (await call('POST', `/people/${id}/match`, body)).json()) as any;
+    const setAuto = async (faceId: string, personId: string, score: number) =>
+      env.DB.prepare("UPDATE faces SET assign_status = 'auto', person_id = ?, match_score = ? WHERE id = ?")
+        .bind(personId, score, faceId)
+        .run();
+
+    /** Priya is the target; Ann and Bob each have one auto face that looks like Priya; one unnamed face does too. */
+    async function setup() {
+      const priya = await refPerson();
+      await ingest([
+        { x: 0.1, v: vec(0.9, 1) },
+        { x: 0.2, v: vec(0.9, 3) },
+        { x: 0.3, v: vec(0.9, 4) },
+        { x: 0.4, v: vec(0.9, 5) },
+      ]);
+      const ann = await person('Ann');
+      const bob = await person('Bob');
+      await setAuto(await idAt(0.2), ann, 0.55);
+      await setAuto(await idAt(0.3), bob, 0.55);
+      await env.DB.prepare("UPDATE faces SET ignored_at = '2026-01-01' WHERE id = ?").bind(await idAt(0.4)).run();
+      return { priya, ann, bob };
+    }
+
+    it('checks unnamed faces only when `from` is empty', async () => {
+      const { priya } = await setup();
+      const body = await match(priya, { apply: true, from: [] });
+      expect(body.scanned).toBe(1);
+      expect(body.auto.map((f: any) => f.id)).toEqual([await idAt(0.1)]);
+      expect((await row(await idAt(0.2))).person_id).not.toBe(priya);
+    });
+
+    it('also checks the auto faces of the people in `from`, and nobody else', async () => {
+      const { priya, ann, bob } = await setup();
+      const first = await match(priya, { apply: true, from: [ann] });
+      expect(first).toMatchObject({ scanned: 1, nextCursor: 'm0' });
+      const second = await match(priya, { apply: true, from: [ann], cursor: first.nextCursor });
+      expect(second).toMatchObject({ scanned: 1, nextCursor: null });
+      expect((await row(await idAt(0.1))).person_id).toBe(priya);
+      expect((await row(await idAt(0.2))).person_id).toBe(priya);
+      expect((await row(await idAt(0.3))).person_id).toBe(bob);
+    });
+
+    it('leaves confirmed faces of a `from` person and auto faces with a higher score alone', async () => {
+      const { priya, ann } = await setup();
+      await env.DB.prepare('UPDATE faces SET match_score = 0.99 WHERE id = ?').bind(await idAt(0.2)).run();
+      await setAuto(await idAt(0.3), ann, 0.55);
+      await env.DB.prepare("UPDATE faces SET assign_status = 'confirmed', match_score = NULL WHERE id = ?").bind(await idAt(0.3)).run();
+      await match(priya, { apply: true, from: [ann], cursor: 'm0' });
+      expect((await row(await idAt(0.2))).person_id).toBe(ann);
+      expect((await row(await idAt(0.3))).person_id).toBe(ann);
+    });
+
+    it('still checks every auto face without `from`', async () => {
+      const { priya } = await setup();
+      const body = await match(priya, { apply: true });
+      expect(body.scanned).toBe(3);
+    });
+
+    it('pages the unnamed faces, then the `from` faces', async () => {
+      const priya = await refPerson();
+      const ann = await person('Ann');
+      const stmts = [];
+      for (let i = 0; i < 230; i++) {
+        const auto = i % 3 === 0;
+        stmts.push(
+          env.DB.prepare(
+            `INSERT INTO faces (id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, embedding, embedding_model, created_at, assign_status, person_id, match_score)
+             VALUES (?, ?, 0.1, 0.1, 0.2, 0.2, 0.9, ?, 'buffalo_l', '2026-01-01', ?, ?, ?)`
+          ).bind(`n${i}`, PHOTO, embeddingToBytes(vec(0, 9)).buffer, auto ? 'auto' : 'unassigned', auto ? ann : null, auto ? 0.6 : null)
+        );
+      }
+      await env.DB.batch(stmts);
+      const seen: number[] = [];
+      let cursor: string | null = null;
+      do {
+        const body: any = await match(priya, { from: [ann], ...(cursor ? { cursor } : {}) });
+        seen.push(body.scanned);
+        cursor = body.nextCursor;
+      } while (cursor);
+      // 153 unnamed, then Ann's 77 auto faces.
+      expect(seen).toEqual([100, 53, 77]);
+    });
+
+    it('rejects a second-phase cursor without `from`', async () => {
+      const priya = await refPerson();
+      expect((await call('POST', `/people/${priya}/match`, { cursor: 'm0' })).status).toBe(400);
+      expect((await call('POST', `/people/${priya}/match`, { cursor: 'm0', from: [] })).status).toBe(400);
+    });
+
+    it.each([[['x'.repeat(1)].concat(Array(50).fill('y'))], ['ann'], [[1]]])('rejects a bad `from` (%#)', async (from) => {
+      const priya = await refPerson();
+      expect((await call('POST', `/people/${priya}/match`, { from })).status).toBe(400);
+    });
+  });
+
   it('groups pages with a cursor', async () => {
     const stmts = [];
     for (let i = 0; i < 51; i++) {

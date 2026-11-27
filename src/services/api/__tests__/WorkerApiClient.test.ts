@@ -279,6 +279,15 @@ describe('WorkerApiClient', () => {
       expect(onPage).toHaveBeenNthCalledWith(2, 340, 3);
     });
 
+    it('matchPersonAll sends `from` with every page', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok({ auto: [], suggestions: [], scanned: 0, nextCursor: 'm0' }))
+        .mockResolvedValueOnce(ok({ auto: [face], suggestions: [], scanned: 1, nextCursor: null }));
+      await client.matchPersonAll('n1', undefined, ['n2']);
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ apply: true, from: ['n2'] });
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ apply: true, from: ['n2'], cursor: 'm0' });
+    });
+
     it('matchPersonAll stops after 150 pages and reports it was truncated', async () => {
       fetchMock.mockResolvedValue(ok({ auto: [], suggestions: [], scanned: 1, nextCursor: 'more' }));
       await expect(client.matchPersonAll('n1')).resolves.toEqual({ matched: 0, truncated: true });

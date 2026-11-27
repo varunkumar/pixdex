@@ -3,7 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
-import { matchQueueFor, refreshAfterIgnoring, refreshAfterNaming, refreshAfterRestoring } from '../services/matchQueue';
+import {
+  matchAfterNaming,
+  noteRemovedName,
+  refreshAfterIgnoring,
+  refreshAfterNaming,
+  refreshAfterRestoring,
+} from '../services/matchQueue';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
@@ -52,10 +58,16 @@ const FaceRow = ({
   });
   const reject = useMutation({
     mutationFn: (personId: string) => workerApiClient.rejectFace(face.id, personId),
-    onSuccess: onChanged,
+    onSuccess: (_r, personId) => {
+      noteRemovedName(queryClient, face.id, personId);
+      onChanged();
+    },
   });
   const unassign = useMutation({
-    mutationFn: () => workerApiClient.unassignFace(face.id),
+    mutationFn: async (personId: string) => {
+      await workerApiClient.unassignFace(face.id);
+      noteRemovedName(queryClient, face.id, personId);
+    },
     onSuccess: onChanged,
   });
 
@@ -137,7 +149,7 @@ const FaceRow = ({
             )}
             {/* Soft: an auto face is already corrected with "Not X"; Remove name is for confirmed faces. */}
             {face.status === 'confirmed' && (
-              <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate()}>
+              <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate(face.personId as string)}>
                 Remove name
               </Button>
             )}
@@ -238,7 +250,7 @@ const PhotoFaces = ({
   // After naming a face, look for the person's other unnamed faces in the background.
   const onNamed = (personId: string, faceId: string) => {
     refreshAfterNaming(queryClient, [faceId]);
-    matchQueueFor(queryClient).enqueue(personId);
+    matchAfterNaming(queryClient, personId, [faceId]);
   };
 
   if (faces.length === 0) return null;

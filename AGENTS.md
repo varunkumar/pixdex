@@ -119,6 +119,16 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   in a component. One person runs at a time, a person already waiting is not queued twice, progress is `MatchStatus` in `Layout`
   (with a `beforeunload` warning). After a save, `refreshAfterNaming` drops the named faces from the cached groups (no group
   refetch) and refreshes the other lists; a finished run refreshes everything only if it matched something or failed.
+- What a match run checks: `POST /people/:id/match` without `from` checks unnamed faces and other people's auto faces
+  (Re-run matching, Review suggestions). With `from` (at most 50 person ids, usually empty) it checks unnamed faces, then
+  the auto faces of those people, in two phases (`MATCH_UNNAMED_SQL`, then `MATCH_MOVED_SQL` with cursor `m<rowid>`). The
+  automatic run after naming always sends `from`: callers use `matchAfterNaming` and record "Not X" / "Remove name" with
+  `noteRemovedName` (both in `matchQueue.ts`; browser memory only). Do not merge the two phases into one query: it re-walked
+  every unnamed face on every page (measured 70K rows read for a correction against about 16K). Measured on a local D1 with
+  715 confirmed, 8,461 auto, 5,503 ignored and 10,779 unnamed non-matchable faces across 16 people: full run 80 requests and
+  about 41K rows read; naming an unnamed face 1 request, about 11K; a correction from a person with 529 auto faces 7 requests,
+  about 16K. 0 extra writes, no migration, same 100-face CPU cap per request. The phase 2 reads grow with the previous
+  person's auto faces (each page walks their index entries), and phase 1 still walks unnamed faces too small to match.
 - Match page query (`MATCH_CANDIDATES_SQL`, `worker/src/routes/people.ts`): keep the unary `+` on `assign_status` and the
   CROSS JOINs. It must walk `faces` by rowid and stop at `FACE_PAGE_SIZE` (plan pinned in `worker/test/query-plans.test.ts`);
   through the status index every page read and sorted all remaining candidates.

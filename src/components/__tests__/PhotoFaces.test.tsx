@@ -203,8 +203,27 @@ describe('PhotoFaces', () => {
     show();
     fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
     fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
-    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function)));
+    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function), []));
     expect(await screen.findByText('Matched 4 more faces')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['Not Asha', 'auto' as const],
+    ['Remove name', 'confirmed' as const],
+  ])('after "%s", naming the face also checks the previous person', async (button, status) => {
+    vi.mocked(workerApiClient.getPhotoFaces)
+      .mockResolvedValueOnce([face({ personId: 'pe1', personName: 'Asha', status })])
+      .mockResolvedValue([face()]);
+    vi.mocked(workerApiClient.rejectFace).mockResolvedValue(face());
+    vi.mocked(workerApiClient.unassignFace).mockResolvedValue(face());
+    vi.mocked(workerApiClient.assignFace).mockResolvedValue(face({ personId: 'pe2', status: 'confirmed' }));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: button }));
+    fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
+    await waitFor(() =>
+      expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function), ['pe1'])
+    );
   });
 
   it('closes the new person form while matching is still running', async () => {
@@ -226,7 +245,7 @@ describe('PhotoFaces', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New person' }));
     fireEvent.change(screen.getByLabelText('Person name'), { target: { value: 'Meera' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
-    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe9', expect.any(Function)));
+    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe9', expect.any(Function), []));
     await waitFor(() => expect(screen.queryByLabelText('Person name')).toBeNull());
     expect(screen.queryByText('Could not save the name')).toBeNull();
     expect(await screen.findByText('Named, but could not look for more matches')).toBeInTheDocument();
