@@ -3,6 +3,8 @@
 import { readHero, writeHero, type HeroRecord } from './heroStore';
 
 const THUMBNAIL_PREFIX = '/thumbnails/';
+// A download may take any time, as long as it never goes this long without a byte.
+const IDLE_TIMEOUT_MS = 30_000;
 
 /** The cover photo's content hash, taken from its thumbnail URL. */
 export function heroHash(coverThumbnailUrl: string | null | undefined): string | null {
@@ -10,16 +12,40 @@ export function heroHash(coverThumbnailUrl: string | null | undefined): string |
   return coverThumbnailUrl.slice(THUMBNAIL_PREFIX.length) || null;
 }
 
-/** The original file as served, or null when it cannot be had now (offline, tunnel or agent down, no access). */
+/**
+ * The original file as served, or null when it cannot be had now (offline, tunnel or agent down, no access,
+ * or a stalled request).
+ */
 async function fetchOriginal(photoId: string): Promise<Blob | null> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const restartTimer = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+  };
   try {
-    const response = await fetch(`/api/originals/${encodeURIComponent(photoId)}`);
+    restartTimer();
+    // Past the HTTP cache: a 200 that is not the image would otherwise be served again to every retry.
+    const response = await fetch(`/api/originals/${encodeURIComponent(photoId)}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
     // A sign-in or error page can arrive with status 200.
-    const type = response.headers.get('Content-Type')?.toLowerCase();
-    if (!response.ok || !type?.startsWith('image/')) return null;
-    return await response.blob();
+    const type = response.headers.get('Content-Type');
+    if (!response.ok || !type?.toLowerCase().startsWith('image/') || !response.body) return null;
+    // Read in chunks, to know the download is still moving.
+    const reader = response.body.getReader();
+    const chunks: Uint8Array<ArrayBuffer>[] = [];
+    for (;;) {
+      restartTimer();
+      const { done, value } = await reader.read();
+      if (done) return new Blob(chunks, { type });
+      chunks.push(value);
+    }
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

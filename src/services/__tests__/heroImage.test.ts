@@ -1,6 +1,6 @@
 // @vitest-environment node
 // Node's Blob survives the structured clone fake-indexeddb makes; jsdom's does not. Image decoding is stubbed.
-import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
+import { IDBDatabase, IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { heroHash, loadHero } from '../heroImage';
 import { readHero, writeHero, type HeroRecord } from '../heroStore';
@@ -128,6 +128,14 @@ describe('loadHero from the original', () => {
     expect(urls()).toEqual(['/api/originals/a%20b']);
   });
 
+  it('asks past the HTTP cache, so a retry reaches the network', async () => {
+    fetchMock.mockResolvedValueOnce(imageResponse('text/html'));
+
+    await load();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/originals/ph1', expect.objectContaining({ cache: 'no-store' }));
+  });
+
   it('decodes through an object URL and revokes it', async () => {
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:check');
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
@@ -155,9 +163,8 @@ describe('loadHero from the original', () => {
     [
       'the body cannot be read',
       () => {
-        const response = imageResponse();
-        vi.spyOn(response, 'blob').mockRejectedValue(new TypeError('connection reset'));
-        fetchMock.mockResolvedValueOnce(response);
+        const body = new ReadableStream({ start: (controller) => controller.error(new TypeError('connection reset')) });
+        fetchMock.mockResolvedValueOnce(new Response(body, { status: 200, headers: { 'Content-Type': 'image/jpeg' } }));
       },
     ],
   ])('records unavailable and returns null when %s', async (_name, arrange) => {
@@ -236,6 +243,150 @@ describe('loadHero calls at the same time', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await expect(load()).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('loadHero when something never settles', () => {
+  beforeEach(() => {
+    // Only the timeouts are faked: fake-indexeddb runs on setImmediate.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Lets pending work run, without moving the clock, until the condition holds. */
+  const until = async (done: () => boolean) => {
+    for (let turn = 0; turn < 200 && !done(); turn++) await new Promise((resolve) => setImmediate(resolve));
+    expect(done()).toBe(true);
+  };
+
+  /** Starts a load and tracks whether it has settled. */
+  const start = () => {
+    const state = { settled: false, promise: load() };
+    void state.promise.then(() => (state.settled = true));
+    return state;
+  };
+
+  /** A body the test feeds by hand; like a real one, it fails when the request is aborted. */
+  const handFedResponse = () => {
+    let body!: ReadableStreamDefaultController<Uint8Array>;
+    fetchMock.mockImplementationOnce(async (_url, init) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          body = controller;
+          init?.signal?.addEventListener('abort', () => controller.error(init.signal?.reason));
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'Content-Type': 'image/jpeg' } });
+    });
+    return { push: (bytes: Uint8Array) => body.enqueue(bytes), end: () => body.close() };
+  };
+
+  const fetchesAgain = async () => {
+    fetchMock.mockResolvedValueOnce(imageResponse());
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  };
+
+  it('gives up on a request with no answer after 30 seconds, and a later call fetches again', async () => {
+    // Like real fetch: settles only by being aborted.
+    fetchMock.mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        })
+    );
+    const first = start();
+    await until(() => fetchMock.mock.calls.length === 1);
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(first.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(first.promise).resolves.toBeNull();
+    await expect(readHero('Kanha')).resolves.toMatchObject({ status: 'unavailable' });
+    await fetchesAgain();
+  });
+
+  it('gives up on a body that stalls for 30 seconds, and a later call fetches again', async () => {
+    const response = handFedResponse();
+    const first = start();
+    await until(() => fetchMock.mock.calls.length === 1);
+    await vi.advanceTimersByTimeAsync(20_000);
+    response.push(BYTES.slice(0, 3));
+    // Let the chunk be read before the clock moves on.
+    await new Promise((resolve) => setImmediate(resolve));
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(first.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(first.promise).resolves.toBeNull();
+    const record = await readHero('Kanha');
+    expect(record).toMatchObject({ status: 'unavailable' });
+    expect(record?.image).toBeUndefined();
+    await fetchesAgain();
+  });
+
+  it('lets a slow download finish while bytes keep arriving', async () => {
+    const response = handFedResponse();
+    const first = start();
+    await until(() => fetchMock.mock.calls.length === 1);
+
+    for (let at = 0; at < BYTES.length; at += 2) {
+      await vi.advanceTimersByTimeAsync(25_000);
+      response.push(BYTES.slice(at, at + 2));
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(first.settled).toBe(false);
+    response.end();
+
+    const blob = await first.promise;
+    expect(blob?.type).toBe('image/jpeg');
+    await expect(bytesOf(blob)).resolves.toEqual(BYTES);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('still fetches and returns the image when the store never opens, again on a later call', async () => {
+    const open = vi.spyOn(indexedDB, 'open').mockImplementation(() => ({}) as IDBOpenDBRequest);
+    fetchMock.mockImplementation(async () => imageResponse());
+
+    for (const call of [1, 2]) {
+      const attempt = start();
+      // The read gives up, then the write does.
+      await vi.advanceTimersByTimeAsync(3_000);
+      await until(() => open.mock.calls.length === call * 2);
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      await expect(bytesOf(await attempt.promise)).resolves.toEqual(BYTES);
+      expect(fetchMock).toHaveBeenCalledTimes(call);
+    }
+  });
+
+  it('returns the downloaded image when the write never finishes, and a later call fetches again', async () => {
+    const transaction = IDBDatabase.prototype.transaction;
+    const put = vi.fn(() => ({}));
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(function (this: IDBDatabase, ...args) {
+      if (args[1] !== 'readwrite') return transaction.apply(this, args);
+      return { objectStore: () => ({ put }) } as never;
+    });
+    fetchMock.mockImplementation(async () => imageResponse());
+    const first = start();
+    await until(() => put.mock.calls.length === 1);
+
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(first.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(bytesOf(await first.promise)).resolves.toEqual(BYTES);
+    const second = start();
+    await until(() => put.mock.calls.length === 2);
+    await vi.advanceTimersByTimeAsync(3_000);
+    await second.promise;
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

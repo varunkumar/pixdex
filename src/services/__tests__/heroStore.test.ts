@@ -1,6 +1,6 @@
 // @vitest-environment node
 // Node's Blob survives the structured clone fake-indexeddb makes; jsdom's does not.
-import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
+import { IDBDatabase, IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readHero, writeHero, type HeroRecord } from '../heroStore';
 
@@ -104,4 +104,94 @@ describe('heroStore', () => {
     expect(spy).toHaveBeenCalled();
     await expect(readHero('Kanha')).resolves.toBeNull();
   });
+});
+
+describe('heroStore when IndexedDB never answers', () => {
+  beforeEach(() => {
+    // Only the timeouts are faked: fake-indexeddb runs on setImmediate.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** An open request the test settles by hand, or never. */
+  const pendingOpen = () => {
+    const close = vi.fn();
+    const request = { result: { close } } as unknown as IDBOpenDBRequest;
+    vi.spyOn(indexedDB, 'open').mockReturnValue(request);
+    return { request, close };
+  };
+
+  const track = (promise: Promise<unknown>) => {
+    const state = { settled: false, promise };
+    void promise.then(() => (state.settled = true));
+    return state;
+  };
+
+  const operations: [string, () => Promise<unknown>, null | undefined][] = [
+    ['read', () => readHero('Kanha'), null],
+    ['write', () => writeHero(record()), undefined],
+  ];
+
+  it.each(operations)('gives up on a %s whose open never settles after 3 seconds', async (_name, operation, outcome) => {
+    pendingOpen();
+    const state = track(operation());
+
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(state.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(state.promise).resolves.toBe(outcome);
+  });
+
+  it('closes a connection that opens after the time is up', async () => {
+    const { request, close } = pendingOpen();
+    const read = readHero('Kanha');
+    await vi.advanceTimersByTimeAsync(3_000);
+    await expect(read).resolves.toBeNull();
+
+    request.onsuccess?.(new Event('success'));
+
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up at once when the open is blocked, and closes the connection if it opens later', async () => {
+    const { request, close } = pendingOpen();
+    const read = readHero('Kanha');
+
+    request.onblocked?.(new Event('blocked') as IDBVersionChangeEvent);
+    await expect(read).resolves.toBeNull();
+    request.onsuccess?.(new Event('success'));
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(operations)(
+    'gives up on a %s whose request never settles, and closes the connection',
+    async (_name, operation, outcome) => {
+      const never = vi.fn(() => ({}));
+      const transaction = IDBDatabase.prototype.transaction;
+      vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(function (this: IDBDatabase, ...args) {
+        // The upgrade that creates the store on first open is left alone.
+        if ((args[1] as string) === 'versionchange') return transaction.apply(this, args);
+        return { objectStore: () => ({ get: never, put: never }) } as never;
+      });
+      const close = vi.spyOn(IDBDatabase.prototype, 'close');
+      const state = track(operation());
+      for (let turn = 0; turn < 200 && never.mock.calls.length === 0; turn++) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      expect(never).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(state.settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+
+      await expect(state.promise).resolves.toBe(outcome);
+      expect(close).toHaveBeenCalledTimes(1);
+    }
+  );
 });

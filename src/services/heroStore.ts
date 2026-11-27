@@ -12,31 +12,56 @@ export type HeroRecord = {
 
 const DATABASE = 'pixdex';
 const STORE = 'heroes';
+// IndexedDB can leave a request unanswered; the page must not wait on it.
+const TIMEOUT_MS = 3000;
 
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    // Throws, rejecting the promise, when IndexedDB is missing or blocked.
-    const request = indexedDB.open(DATABASE, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: 'album' });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+/**
+ * Opens the store, runs one request in its own transaction and resolves with its result once the transaction
+ * commits. Rejects on failure, a blocked open or no outcome within the time limit.
+ */
+function inStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let database: IDBDatabase | undefined;
+    let settled = false;
+    /** True for the first outcome only. Closing lets a transaction still running finish first. */
+    const settle = () => {
+      if (settled) return false;
+      settled = true;
+      clearTimeout(timer);
+      database?.close();
+      return true;
+    };
+    const fail = (error: unknown) => {
+      if (settle()) reject(error);
+    };
+    const timer = setTimeout(() => fail(new Error('IndexedDB timed out')), TIMEOUT_MS);
+
+    try {
+      // Throws when IndexedDB is missing or blocked.
+      const open = indexedDB.open(DATABASE, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore(STORE, { keyPath: 'album' });
+      open.onerror = () => fail(open.error);
+      open.onblocked = () => fail(new Error('IndexedDB is blocked'));
+      open.onsuccess = () => {
+        // Too late: nobody is waiting for this connection.
+        if (settled) return open.result.close();
+        database = open.result;
+        try {
+          const transaction = database.transaction(STORE, mode);
+          // A full disk shows up here, as an abort, after the request itself has succeeded.
+          transaction.onabort = () => fail(transaction.error);
+          const request = run(transaction.objectStore(STORE));
+          transaction.oncomplete = () => {
+            if (settle()) resolve(request.result);
+          };
+        } catch (error) {
+          fail(error);
+        }
+      };
+    } catch (error) {
+      fail(error);
+    }
   });
-}
-
-/** Runs one request in its own transaction and resolves with its result once the transaction commits. */
-async function inStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  const database = await openDatabase();
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const transaction = database.transaction(STORE, mode);
-      // A full disk shows up here, as an abort, after the request itself has succeeded.
-      transaction.onabort = () => reject(transaction.error);
-      const request = run(transaction.objectStore(STORE));
-      transaction.oncomplete = () => resolve(request.result);
-    });
-  } finally {
-    database.close();
-  }
 }
 
 /** The album's record, or null when there is none or the store cannot be read. */
