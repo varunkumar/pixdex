@@ -153,10 +153,12 @@ describe('automatic matching at ingest', () => {
     expect(await ingest([])).toMatchObject({ stored: 0, kept: 0, matched: 0, skipped: 0 });
   });
 
-  it('only the newest 30 confirmed faces per person are used', async () => {
+  it('only stored reference faces are used', async () => {
     await env.DB.prepare('DELETE FROM faces').run();
-    await addConfirmed('p1', vec(1, 2), '2020-01-01'); // oldest, the only close one
-    for (let i = 0; i < 30; i++) await addConfirmed('p1', vec(0, 5), `2026-02-${String(i + 1).padStart(2, '0')}`);
+    await env.DB.prepare('DELETE FROM person_references').run();
+    await addConfirmed('p1', vec(1, 2), '2020-01-01'); // the only close one
+    await env.DB.prepare('DELETE FROM person_references').run(); // ...which is not a reference
+    await addConfirmed('p1', vec(0, 5), '2026-02-01');
     const r = await ingest([{ x: 0.1, v: vec(0.9) }]);
     expect(r.matched).toBe(0);
     expect((await rowAt(0.1)).assign_status).toBe('unassigned');

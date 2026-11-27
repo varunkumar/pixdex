@@ -1,21 +1,25 @@
 import { embeddingFromBytes } from './embedding';
-import { REFERENCES_PER_PERSON } from './matching';
 
 export interface PersonReferences {
   personId: string;
   vectors: Float32Array[];
 }
 
+export const referencesSql = (where: string) => `SELECT p.id AS person_id, f.embedding
+  FROM persons p
+  CROSS JOIN person_references r ON r.person_id = p.id
+  CROSS JOIN faces f ON f.id = r.face_id AND +f.person_id = r.person_id AND +f.assign_status = 'confirmed'
+  ${where}
+  ORDER BY p.id, r.face_id`;
+
 /**
- * For each person (or one, via `opts.personId`; or one owner's, via `opts.owner`, an index search on idx_persons_owner_name_lower), the REFERENCES_PER_PERSON
- * newest confirmed faces' vectors. "Newest" means newest by scan time
- * (faces.created_at), not by when the owner confirmed the face. People with no
- * confirmed faces are omitted.
+ * The vectors of each person's stored reference faces (or one person's, via `opts.personId`; or one owner's, via
+ * `opts.owner`, an index search on idx_persons_owner_name_lower). Which faces those are is decided when confirmed
+ * faces change (referenceSelection.ts). A row whose face is no longer confirmed for the person is ignored. People
+ * with no references are omitted.
  *
- * Rows read are bounded by people x REFERENCES_PER_PERSON: the per-person
- * subquery walks idx_faces_person_status_created (person_id, assign_status,
- * created_at) backwards and stops after the limit; CROSS JOIN pins persons as
- * the outer loop so faces are only fetched by rowid for the chosen ones.
+ * Rows read are bounded by people x REFERENCES_PER_PERSON: CROSS JOIN pins persons, then their rows by primary key,
+ * then each face by id. The unary `+` keeps SQLite off the person index for the face.
  */
 export async function loadReferences(db: D1Database, opts: { personId?: string; owner?: string } = {}): Promise<PersonReferences[]> {
   const conds: string[] = [];
@@ -29,18 +33,7 @@ export async function loadReferences(db: D1Database, opts: { personId?: string; 
     binds.push(opts.owner);
   }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-  const stmt = db.prepare(
-    `SELECT p.id AS person_id, f.embedding
-     FROM persons p
-     CROSS JOIN faces f ON f.rowid IN (
-       SELECT f2.rowid FROM faces f2
-       WHERE f2.person_id = p.id AND f2.assign_status = 'confirmed'
-       ORDER BY f2.created_at DESC, f2.rowid DESC
-       LIMIT ${REFERENCES_PER_PERSON}
-     )
-     ${where}
-     ORDER BY p.id, f.created_at DESC, f.rowid DESC`
-  );
+  const stmt = db.prepare(referencesSql(where));
   const { results } = await (binds.length ? stmt.bind(...binds) : stmt).all<{
     person_id: string;
     embedding: ArrayBuffer;

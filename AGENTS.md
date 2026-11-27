@@ -143,10 +143,22 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   `ReviewAutoFaces.tsx`: all ticked, buttons act on the shown page only and wait for every picture; a failed picture is in
   neither list; "Skip page"; the page query never refetches under the ticks; "Open photo" opens a new tab), and "Confirm X"
   beside "Not X" in the photo menu (needs `canEdit` on both the person and the photo). Rejected ids go to
-  `noteRemovedName`. Confirming starts no match run. References are still the 30 confirmed faces newest by scan time, so
-  bulk confirming changes which faces they are. Performance (local D1): the list reads about 5 rows per auto face of the
+  `noteRemovedName`. Confirming starts no match run. Performance (local D1): the list reads about 5 rows per auto face of the
   person on every page (first page 2.8K rows at 530 faces, 15K at 3,000; paging through 3,000 without changes 577K); a
   review of 48 reads 432 to 672 rows and writes 192 to 336; no embeddings read, at most 48 rows mapped in the Worker.
+- Matching references (migration `0023_person_references.sql`, table `person_references (person_id, face_id)` plus
+  `idx_person_references_face`): up to 30 confirmed faces per person, chosen by `worker/src/people/referenceSelection.ts`
+  (bucket by photo year, undated is a bucket; rank by box area, then `det_score`, then rowid; take turns across buckets).
+  The migration's backfill repeats the rule: change both together (`PERSON_REFERENCES_BACKFILL_SQL`, compared by a test).
+  Binding rule: every new write that changes confirmed faces calls `refreshReferences` after it commits, with the persons
+  that gained a face and the face ids that may have left one; deleting a person deletes their rows. It never throws, is
+  also run by the first page of Re-run matching (`apply`, no `from`, no cursor), and `loadReferences` ignores rows whose
+  face is no longer confirmed for the person. Never choose references at load time. Tests: a fixture trigger
+  (`REFERENCE_FIXTURE_SQL`) makes directly inserted confirmed faces references. Performance (local D1): loading reads
+  about 3 rows per reference (1,099 for 356 references across 16 people), CPU unchanged (at most 30 embeddings per
+  person); a refresh reads about 8 rows per confirmed face of the affected people (954 at 116, 4,266 at 530, 24,026 at
+  3,000), about 7 when nobody is affected, and writes only changed rows (3 to 60); migration backfill of 716 confirmed
+  faces 6,012 read, 712 written. Matching quality before and after is unmeasured.
 - Write authorization (worker): every non-ingest write authorizes itself in its handler (`albumRole`, `faceRoles`, `personRole`)
   and is registered with `guardedWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails
   otherwise. `POST /ingest/photo` requires `ownerEmail` (trimmed, lowercased email): it returns 409 for an album owned by another

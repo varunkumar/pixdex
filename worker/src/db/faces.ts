@@ -69,7 +69,8 @@ export type FaceWithJoins = FaceRow & { person_name: string | null; content_hash
 /**
  * Set-based statement that confirms every given face for a person (clears the
  * match score and any ignore: naming a face explicitly wins) and one that drops that person's rejections of those faces.
- * Two statements regardless of how many faces, to stay inside D1's per-invocation query limit.
+ * Two statements regardless of how many faces, to stay inside D1's per-invocation query limit. Callers then call
+ * refreshReferences with the person and the faces.
  */
 export const confirmFacesStmts = (db: D1Database, faceIds: string[], personId: string): D1PreparedStatement[] => {
   const ids = JSON.stringify(faceIds);

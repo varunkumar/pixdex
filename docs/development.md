@@ -402,6 +402,22 @@ Measured locally in the Workers test runtime with 5,000 photos and 25,497 faces 
 
 Real D1 numbers are unmeasured: after deploy check `wrangler d1 insights pixdex` and `wrangler tail`.
 
+### Matching references performance (migration 0023)
+
+Measured locally in the Workers test runtime with 5,000 photos over 19 years and 16 people holding 716 confirmed faces
+(largest 116), plus larger single people:
+
+- Migration backfill: 6,012 rows read, 712 written.
+- Loading references (match page, ingest at most once a minute per owner): 1,099 rows read for 356 references across
+  all 16 people, 62 for one person. At most 30 embeddings per person are decoded, as before.
+- A refresh after a change to confirmed faces: about 8 rows read per confirmed face of the affected people (954 at 116
+  confirmed, 4,266 at 530, 24,026 at 3,000), about 7 when nobody is affected, 0 to 60 rows written, plus about 160 rows
+  read by the two writing statements. 3 more D1 queries on that request.
+- Confirming a 3,000-face person in 63 review pages would add roughly 750,000 rows read in the worst case (about 15%
+  of the free tier's daily 5M), on top of the review itself. For 530 faces, about 25,000.
+
+Real D1 numbers are unmeasured: after deploy check `wrangler d1 insights pixdex`.
+
 ### Security notes (hardening deferred from review)
 
 - JWKS refetch has no negative cache: while the certs endpoint is failing, a forged-`kid` token can trigger a fetch

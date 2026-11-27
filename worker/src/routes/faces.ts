@@ -5,6 +5,7 @@ import { userOf } from '../access';
 import { photoAccess } from '../db/visibility';
 import { denial, faceRoles, personRole } from '../db/people';
 import { requireFacesOwned } from './people';
+import { refreshReferences } from '../people/referenceSelection';
 import { FACE_SELECT, confirmFacesStmts, nameBinds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -39,6 +40,7 @@ export async function assignFaceRoute(c: Ctx) {
   if (denied) return denied;
 
   await c.env.DB.batch(confirmFacesStmts(c.env.DB, [id], personId));
+  await refreshReferences(c.env.DB, { personIds: [personId], faceIds: [id] });
   return c.json(serializeFace((await loadFace(c, id))!));
 }
 
@@ -56,6 +58,7 @@ export async function rejectFaceRoute(c: Ctx) {
       "UPDATE faces SET person_id = NULL, match_score = NULL, assign_status = 'unassigned' WHERE id = ? AND person_id = ?"
     ).bind(id, personId),
   ]);
+  await refreshReferences(c.env.DB, { faceIds: [id] });
   return c.json(serializeFace((await loadFace(c, id))!));
 }
 
@@ -66,6 +69,7 @@ export async function unassignFaceRoute(c: Ctx) {
   await c.env.DB.prepare(
     "UPDATE faces SET person_id = NULL, match_score = NULL, assign_status = 'unassigned' WHERE id = ?"
   ).bind(id).run();
+  await refreshReferences(c.env.DB, { faceIds: [id] });
   return c.json(serializeFace((await loadFace(c, id))!));
 }
 

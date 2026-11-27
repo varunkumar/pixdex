@@ -393,10 +393,14 @@ best rated or alphabetical.
   weakest first, 48 at a time, all ticked. Untick the ones that are wrong or unclear, then either "Confirm N" (the
   rest stay automatic) or "Confirm N, mark M as Not X" (the rest are rejected for good). Only the faces on screen are
   ever changed, one that changed after the page loaded is skipped, and one whose picture did not load is left alone.
-  Only the person's owner can do this, for faces in their own albums. Note that matching compares against the 30
-  confirmed faces scanned most recently, so confirming many faces changes which ones those are: with fewer than 30 it
-  should find more, with 30 or more it can displace faces you named yourself, and a wrong confirm can attract similar
-  wrong faces until you correct it with "Not X" on the photo's page.
+  Only the person's owner can do this, for faces in their own albums. A wrong confirm can attract similar wrong faces
+  if it is used as a reference (below), until you correct it with "Not X" on the photo's page.
+- **Which faces matching compares against:** up to 30 confirmed faces per person, spread across the years the photos
+  were taken, so someone photographed at 5 and at 40 is matched on both. Each year takes turns, giving its largest
+  faces first; photos with no date count as one more year. A scanned print counts in the year of its date, usually the
+  scan, so ages scanned in the same year share that year's turns. The choice updates when you name, confirm or remove
+  a face; "Re-run matching" also refreshes it (for example after photo dates change). Merging this applies migration
+  `0023`, which makes the choice for existing people.
 - A person's cover defaults to their biggest confirmed face. Pick another with
   "Set as cover"; if that face is later removed, the cover falls back to the default.
 - Grouping and matching ignore faces under a detection score of 0.7 or a side

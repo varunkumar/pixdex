@@ -54,7 +54,14 @@ same rule.
 - Confirmations made by the old Worker between the migration and the deploy are picked up the same way.
 - The ingest cache (60 s) is unchanged.
 
-## Cost (estimates, to measure before the PR)
+## Changed while building
+
+The recompute is no longer inside the write's batch. Inside it, the choice ran twice and read about 16 rows per
+confirmed face. It now runs after the write: read once, then write the difference (about 8 rows per face). It never
+fails the request; a failure leaves a stale choice until the next change. Measured numbers are in
+`docs/development.md`.
+
+## Cost (original estimates, too low)
 
 - Matching and ingest: about 3 rows read per reference (table, face, no extra person work), at most 30 per person.
 - Recompute: about 4 rows read per confirmed face of the affected person (about 500 at 116 faces, 12K at
