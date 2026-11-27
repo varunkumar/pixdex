@@ -10,7 +10,6 @@ import {
   Title,
   UnstyledButton,
 } from "@mantine/core";
-import { notifications } from "@mantine/notifications";
 import {
   useInfiniteQuery,
   useMutation,
@@ -22,13 +21,8 @@ import { TbUsers } from "react-icons/tb";
 import { Link } from "react-router-dom";
 import { useListParams } from "../hooks/useListParams";
 import { workerApiClient } from "../services/api/WorkerApiClient";
-import {
-  errorMessage,
-  matchedMessage,
-  SEARCH_KEYS,
-  TRUNCATED_MESSAGE,
-  UNNAMED_PERSON,
-} from "../services/peopleKeys";
+import { matchQueueFor, refreshAfterNaming } from "../services/matchQueue";
+import { errorMessage, UNNAMED_PERSON } from "../services/peopleKeys";
 import type { FaceGroup, PersonSummary } from "../types/api";
 import FaceTile from "./FaceTile";
 import ListPagination from "./ListPagination";
@@ -56,46 +50,25 @@ const GroupCard = ({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [progress, setProgress] = useState<string | null>(null);
   const faceIds = group.faces.map((f) => f.id);
 
-  const finish = async (personId: string) => {
-    try {
-      setProgress("Looking for more matches...");
-      const { matched, truncated } = await workerApiClient.matchPersonAll(
-        personId,
-        (scanned, found) =>
-          setProgress(
-            `Looking for more matches... scanned ${scanned}, matched ${found}`,
-          ),
-      );
-      if (matched > 0) notifications.show({ message: matchedMessage(matched) });
-      if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
-    } catch {
-      // The group is already named; a failed follow-up search must not read as a naming failure.
-      notifications.show({
-        message: "Named, but could not look for more matches",
-      });
-    } finally {
-      setProgress(null);
-      void queryClient.invalidateQueries({ queryKey: ["photo-faces"] });
-      void queryClient.invalidateQueries({ queryKey: ["people"] });
-      for (const key of SEARCH_KEYS)
-        void queryClient.invalidateQueries({ queryKey: [key] });
-      onDone(faceIds[0]);
-    }
+  // The faces are saved: close the group at once and look for more matches in the background.
+  const finish = (personId: string) => {
+    refreshAfterNaming(queryClient, faceIds);
+    matchQueueFor(queryClient).enqueue(personId);
+    onDone(faceIds[0]);
   };
 
   const create = useMutation({
     mutationFn: async (newName: string) => {
       const person = await workerApiClient.createPerson(newName, faceIds);
-      await finish(person.id);
+      finish(person.id);
     },
   });
   const assign = useMutation({
     mutationFn: async (personId: string) => {
       await workerApiClient.assignFaces(personId, faceIds);
-      await finish(personId);
+      finish(personId);
     },
   });
 
@@ -169,11 +142,6 @@ const GroupCard = ({
               />
             )}
           </Stack>
-        )}
-        {progress && (
-          <Text size="xs" c="dimmed" role="status">
-            {progress}
-          </Text>
         )}
         {error && (
           <Text size="xs" c="red">

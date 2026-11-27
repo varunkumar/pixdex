@@ -3,7 +3,7 @@ import type {
   AlbumsPageResponse,
   AlbumsResponse,
   DailyPickResponse,
-  FaceGroup,
+  FaceGroupsResponse,
   KnownPersonSummary,
   AccessRequest,
   AccessRequestsResponse,
@@ -40,7 +40,7 @@ export interface SearchParams {
   onThisDay?: string;
 }
 
-// Safety valve for matchPersonAll: 150 pages of 200 faces.
+// Safety valve for matchPersonAll: 150 pages of 100 faces.
 const MATCH_ALL_MAX_PAGES = 150;
 
 const RELOAD_KEY = 'pixdex:session-reload-at';
@@ -237,7 +237,7 @@ export class WorkerApiClient {
     return (await this.getJson<{ known: KnownPersonSummary[] }>('/people/known')).known;
   }
 
-  async getFaceGroups(cursor?: string): Promise<{ groups: FaceGroup[]; scanned: number; nextCursor: string | null }> {
+  async getFaceGroups(cursor?: string): Promise<FaceGroupsResponse> {
     const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
     return this.getJson(`/people/groups${suffix}`);
   }

@@ -17,6 +17,7 @@ import { MdAdminPanelSettings, MdAlbum, MdDarkMode, MdHome, MdLightMode, MdLogou
 import { Link, Outlet, useMatch } from 'react-router-dom';
 import { useMe } from '../hooks/useMe';
 import { BRAND, HEADER_GRADIENT } from '../theme';
+import MatchStatus from './MatchStatus';
 import { UserAvatar } from './UserAvatar';
 
 interface NavItem {
@@ -178,6 +179,7 @@ const Layout = () => {
         <Container size="xl" py="md">
           <Outlet />
         </Container>
+        <MatchStatus />
       </AppShell.Main>
     </AppShell>
   );

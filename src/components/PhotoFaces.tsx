@@ -1,9 +1,9 @@
 import { Badge, Button, Card, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
-import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
+import { matchQueueFor, refreshAfterNaming } from '../services/matchQueue';
+import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
 import PersonLabelEditor from './PersonLabelEditor';
@@ -26,7 +26,7 @@ const FaceRow = ({
   index: number;
   people: PersonSummary[];
   canManage: boolean;
-  onNamed: (personId: string) => Promise<void>;
+  onNamed: (personId: string, faceId: string) => void;
   onChanged: () => void;
 }) => {
   const [creating, setCreating] = useState(false);
@@ -35,13 +35,13 @@ const FaceRow = ({
   const assign = useMutation({
     mutationFn: async (personId: string) => {
       await workerApiClient.assignFace(face.id, personId);
-      await onNamed(personId);
+      onNamed(personId, face.id);
     },
   });
   const create = useMutation({
     mutationFn: async (newName: string) => {
       const person = await workerApiClient.createPerson(newName, [face.id]);
-      await onNamed(person.id);
+      onNamed(person.id, face.id);
     },
     onSuccess: () => {
       setCreating(false);
@@ -192,18 +192,10 @@ const PhotoFaces = ({ photoId, canEdit }: { photoId: string; canEdit: boolean })
     for (const key of SEARCH_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });
   };
 
-  // After naming a face, attach the person's other unnamed faces automatically.
-  const onNamed = async (personId: string) => {
-    try {
-      const { matched, truncated } = await workerApiClient.matchPersonAll(personId);
-      if (matched > 0) notifications.show({ message: matchedMessage(matched) });
-      if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
-    } catch {
-      // The face is already named; a failed follow-up search must not read as a naming failure.
-      notifications.show({ message: 'Named, but could not look for more matches' });
-    } finally {
-      refresh();
-    }
+  // After naming a face, look for the person's other unnamed faces in the background.
+  const onNamed = (personId: string, faceId: string) => {
+    refreshAfterNaming(queryClient, [faceId]);
+    matchQueueFor(queryClient).enqueue(personId);
   };
 
   if (faces.length === 0) return null;

@@ -193,6 +193,20 @@ describe('PersonPage', () => {
     await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe1', expect.any(Function)));
   });
 
+  it('Re-run matching says when there is nothing new', async () => {
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Re-run matching' }));
+    expect(await screen.findByText('No new matches')).toBeInTheDocument();
+  });
+
+  it('Re-run matching cannot be pressed again while it runs', async () => {
+    vi.mocked(workerApiClient.matchPersonAll).mockReturnValue(new Promise(() => {}));
+    show();
+    const button = await screen.findByRole('button', { name: 'Re-run matching' });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+  });
+
   it('Re-run matching says when it stopped early', async () => {
     vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 2, truncated: true });
     show();

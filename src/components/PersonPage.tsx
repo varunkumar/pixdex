@@ -6,9 +6,10 @@ import type { IconType } from 'react-icons';
 import { TbCalendar, TbDotsVertical, TbSparkles, TbStar } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
+import { useMatchQueue } from '../hooks/useMatchQueue';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { photoCaption } from '../services/text';
-import { errorMessage, matchedMessage, SEARCH_KEYS, TRUNCATED_MESSAGE, UNNAMED_PERSON } from '../services/peopleKeys';
+import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import ColumnsToggle from './ColumnsToggle';
 import FaceTile from './FaceTile';
@@ -119,7 +120,6 @@ const PersonPage = () => {
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SerializedFace[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
 
@@ -166,21 +166,8 @@ const PersonPage = () => {
       navigate('/people');
     },
   });
-  const rematch = useMutation({
-    mutationFn: async () => {
-      setProgress('Looking for matches...');
-      try {
-        const { matched, truncated } = await workerApiClient.matchPersonAll(id, (scanned, found) =>
-          setProgress(`Looking for matches... scanned ${scanned}, matched ${found}`)
-        );
-        notifications.show({ message: matched > 0 ? matchedMessage(matched) : 'No new matches' });
-        if (truncated) notifications.show({ message: TRUNCATED_MESSAGE });
-      } finally {
-        setProgress(null);
-        refresh();
-      }
-    },
-  });
+  const { current, waiting, enqueue } = useMatchQueue();
+  const matching = current?.personId === id || waiting.includes(id);
   const review = useMutation({
     mutationFn: (from: string | null) =>
       from ? workerApiClient.matchPerson(id, { cursor: from }) : workerApiClient.matchPerson(id),
@@ -202,7 +189,7 @@ const PersonPage = () => {
     onSuccess: (_r, faceId) => drop(faceId),
   });
 
-  const actionError = rename.error ?? remove.error ?? rematch.error ?? review.error ?? accept.error ?? decline.error;
+  const actionError = rename.error ?? remove.error ?? review.error ?? accept.error ?? decline.error;
 
   return (
     <Stack gap="lg">
@@ -284,15 +271,10 @@ const PersonPage = () => {
               <Button size="xs" loading={review.isPending && !cursor} onClick={() => review.mutate(null)}>
                 Review suggestions
               </Button>
-              <Button size="xs" variant="light" loading={rematch.isPending} onClick={() => rematch.mutate()}>
+              <Button size="xs" variant="light" loading={matching} onClick={() => enqueue(id, { manual: true })}>
                 Re-run matching
               </Button>
             </Group>
-          )}
-          {progress && (
-            <Text size="sm" c="dimmed" role="status">
-              {progress}
-            </Text>
           )}
           {actionError && (
             <Text size="sm" c="red">

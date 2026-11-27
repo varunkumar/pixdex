@@ -55,6 +55,14 @@ never leave local disk or Google Drive.
   unique per viewer on `lower(name)` among labels only, `idx_person_labels_person` for the delete trigger, lowercase-email triggers, `persons_labels_ad` trigger deletes labels when a
   person is deleted). 404 if the person is not visible, 400 for the owner (they use `PATCH /people/:id`), 409 on a clash.
   A label never changes matching or grants any other access. Search and timeline filter by person id, never by name.
+- Background matching (frontend): naming a face or group, and Re-run matching, only enqueue the person in
+  `matchQueueFor(queryClient)` (`src/services/matchQueue.ts`; the hook `src/hooks/useMatchQueue.ts` is only for components that show its state); never await `matchPersonAll`
+  in a component. One person runs at a time, a person already waiting is not queued twice, progress is `MatchStatus` in `Layout`
+  (with a `beforeunload` warning). After a save, `refreshAfterNaming` drops the named faces from the cached groups (no group
+  refetch) and refreshes the other lists; a finished run refreshes everything only if it matched something or failed.
+- Match page query (`MATCH_CANDIDATES_SQL`, `worker/src/routes/people.ts`): keep the unary `+` on `assign_status` and the
+  CROSS JOINs. It must walk `faces` by rowid and stop at `FACE_PAGE_SIZE` (plan pinned in `worker/test/query-plans.test.ts`);
+  through the status index every page read and sorted all remaining candidates.
 - Write authorization (worker): every non-ingest write authorizes itself in its handler (`albumRole`, `faceRoles`, `personRole`)
   and is registered with `guardedWrite` in `worker/src/index.ts` (`guardedWrites`); `worker/test/sharing-writes.test.ts` fails
   otherwise. `POST /ingest/photo` requires `ownerEmail` (trimmed, lowercased email): it returns 409 for an album owned by another
