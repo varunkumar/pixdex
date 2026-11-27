@@ -15,10 +15,12 @@ import { photoCaption } from '../services/text';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import ColumnsToggle from './ColumnsToggle';
+import CoverBadge from './CoverBadge';
 import FaceTile from './FaceTile';
 import ListPagination from './ListPagination';
 import PersonLabelEditor from './PersonLabelEditor';
 import PhotoGrid from './PhotoGrid';
+import SetCoverButton from './SetCoverButton';
 import SortIcons from './SortIcons';
 
 const PHOTO_PAGE_SIZES = [12, 24, 48] as const;
@@ -29,51 +31,43 @@ const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: s
   { value: 'name', label: 'Alphabetical', text: 'A-Z' },
 ];
 
-/** This person's faces in one photo: the automatic match, and the largest face to offer as the cover. */
-const usePersonFaces = (photoId: string, personId: string, coverFaceId: string | undefined) => {
-  const { data: faces = [] } = useQuery({
-    queryKey: ['photo-faces', photoId],
-    queryFn: () => workerApiClient.getPhotoFaces(photoId),
-  });
-  const mine = faces.filter((f) => f.personId === personId && f.status !== 'unassigned');
+/** This person's automatic match in one photo, and their largest face there (the cover candidate). */
+const facesOn = (faces: SerializedFace[], photoId: string, personId: string) => {
+  const mine = faces.filter((f) => f.photoId === photoId && f.personId === personId && f.status !== 'unassigned');
   const auto = mine.find((f) => f.status === 'auto');
-  // Offer the largest of this person's faces in the photo as the cover candidate.
   const candidate = [...mine].sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)[0];
-  const isCover = coverFaceId != null && mine.some((f) => f.id === coverFaceId);
-  return { auto, candidate, isCover };
+  return { auto, candidate };
 };
 
 /** A small sparkle before the title of a photo whose face match for this person was automatic (not a loud badge). */
-const PersonFaceBadge = ({ photoId, personId }: { photoId: string; personId: string }) => {
-  const { auto } = usePersonFaces(photoId, personId, undefined);
-  return auto ? (
-    <Tooltip label="Matched automatically">
-      <span className="pdx-tile-mark" role="img" aria-label="Matched automatically">
-        <TbSparkles size={13} aria-hidden />
-      </span>
-    </Tooltip>
-  ) : null;
-};
+const AutoMark = () => (
+  <Tooltip label="Matched automatically">
+    <span className="pdx-tile-mark" role="img" aria-label="Matched automatically">
+      <TbSparkles size={13} aria-hidden />
+    </span>
+  </Tooltip>
+);
 
-/** Per photo: a menu to set the person's cover, or confirm or reject an automatic match. */
+/** Per photo: set the person's cover, and for an automatic match a menu to confirm or reject it. */
 const PersonFaceActions = ({
-  photoId,
   personId,
-  coverFaceId,
+  auto,
+  candidate,
+  isCover,
   label,
   canConfirm,
   onChanged,
 }: {
-  photoId: string;
   personId: string;
-  coverFaceId: string | undefined;
-  /** The photo's caption, so each menu button has its own accessible name. */
+  auto: SerializedFace | undefined;
+  candidate: SerializedFace | undefined;
+  isCover: boolean;
+  /** The photo's caption, so each button has its own accessible name. */
   label: string;
   /** The caller owns the photo's album, which confirming requires. */
   canConfirm: boolean;
   onChanged: () => void;
 }) => {
-  const { auto, candidate, isCover } = usePersonFaces(photoId, personId, coverFaceId);
   // The menu closes on click, so a failure is reported as a notification, not inside the dropdown.
   const onError = (error: unknown) => notifications.show({ color: 'red', message: errorMessage(error, false) });
   const queryClient = useQueryClient();
@@ -100,34 +94,32 @@ const PersonFaceActions = ({
   });
   if (!candidate) return null;
   return (
-    <Menu position="bottom-end" withinPortal>
-      <Menu.Target>
-        <ActionIcon
-          variant="filled"
-          color="dark"
-          size="md"
-          aria-label={`Photo actions for ${label}`}
-          loading={reject.isPending || confirm.isPending || setCover.isPending}
-        >
-          <TbDotsVertical aria-hidden />
-        </ActionIcon>
-      </Menu.Target>
-      <Menu.Dropdown>
-        {isCover ? (
-          <Menu.Item disabled>Current cover</Menu.Item>
-        ) : (
-          <Menu.Item onClick={() => setCover.mutate(candidate.id)}>Set as cover</Menu.Item>
-        )}
-        {auto && canConfirm && (
-          <Menu.Item onClick={() => confirm.mutate(auto.id)}>Confirm {auto.personName}</Menu.Item>
-        )}
-        {auto && (
-          <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
-            Not {auto.personName}
-          </Menu.Item>
-        )}
-      </Menu.Dropdown>
-    </Menu>
+    <>
+      {!isCover && (
+        <SetCoverButton label={label} loading={setCover.isPending} onClick={() => setCover.mutate(candidate.id)} />
+      )}
+      {auto && (
+        <Menu position="bottom-end" withinPortal>
+          <Menu.Target>
+            <ActionIcon
+              variant="filled"
+              color="dark"
+              size="md"
+              aria-label={`Photo actions for ${label}`}
+              loading={reject.isPending || confirm.isPending}
+            >
+              <TbDotsVertical aria-hidden />
+            </ActionIcon>
+          </Menu.Target>
+          <Menu.Dropdown>
+            {canConfirm && <Menu.Item onClick={() => confirm.mutate(auto.id)}>Confirm {auto.personName}</Menu.Item>}
+            <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
+              Not {auto.personName}
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      )}
+    </>
   );
 };
 
@@ -170,6 +162,15 @@ const PersonPage = () => {
     placeholderData: keepPreviousData,
   });
   const photos = photoPage?.results;
+  // One request for the whole page of photos. No placeholder: another page's faces must not drive these controls.
+  const photoIds = photos?.map((p) => p.id) ?? [];
+  const faces = useQuery({
+    queryKey: ['person-faces', id, photoIds],
+    queryFn: () => workerApiClient.getPersonFaces(id, photoIds),
+    enabled: person?.canEdit === true && photoIds.length > 0,
+  });
+  const on = (photoId: string) => facesOn(faces.data ?? [], photoId, id);
+  const isCover = (photoId: string) => person?.cover?.photoId === photoId;
   const onPage = useCallback(
     (p: number, replace?: boolean) => update({ page: p }, { replace }),
     [update]
@@ -179,6 +180,7 @@ const PersonPage = () => {
   const refresh = () => {
     markReviewQueueStale(queryClient);
     void queryClient.invalidateQueries({ queryKey: ['photo-faces'] });
+    void queryClient.invalidateQueries({ queryKey: ['person-faces'] });
     void queryClient.invalidateQueries({ queryKey: ['people'] });
     for (const key of SEARCH_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });
   };
@@ -369,17 +371,28 @@ const PersonPage = () => {
           <ColumnsToggle />
         </Group>
       )}
+      {faces.isError && (
+        <Group gap="xs">
+          <Text size="sm" c="red">
+            Could not load photo actions
+          </Text>
+          <Button size="xs" variant="light" onClick={() => void faces.refetch()}>
+            Try again
+          </Button>
+        </Group>
+      )}
       {photos && photos.length > 0 && (
         <PhotoGrid
           photos={photos}
           showAlbum
-          mark={(photo) => (person?.canEdit ? <PersonFaceBadge photoId={photo.id} personId={id} /> : null)}
+          badges={(photo) => (person?.canEdit && isCover(photo.id) ? <CoverBadge /> : null)}
+          mark={(photo) => (person?.canEdit && on(photo.id).auto ? <AutoMark /> : null)}
           actions={(photo) =>
             person?.canEdit ? (
               <PersonFaceActions
-                photoId={photo.id}
                 personId={id}
-                coverFaceId={person?.cover?.id}
+                {...on(photo.id)}
+                isCover={isCover(photo.id)}
                 label={photoCaption(photo)}
                 canConfirm={photo.canEdit}
                 onChanged={refresh}

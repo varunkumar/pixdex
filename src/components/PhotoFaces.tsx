@@ -1,6 +1,7 @@
 import { Anchor, Badge, Button, Card, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { TbPhotoStar } from 'react-icons/tb';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
 import {
@@ -13,6 +14,7 @@ import {
 } from '../services/matchQueue';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
+import CoverBadge from './CoverBadge';
 import FaceTile from './FaceTile';
 import PersonLabelEditor from './PersonLabelEditor';
 
@@ -135,13 +137,12 @@ const FaceRow = ({
               Not {face.personName}
             </Button>
             {isCover ? (
-              <Badge size="sm" variant="light" color="teal">
-                Cover
-              </Badge>
+              <CoverBadge />
             ) : (
               <Button
                 size="xs"
                 variant="light"
+                leftSection={<TbPhotoStar aria-hidden />}
                 disabled={busy}
                 onClick={() => setCover.mutate(face.personId as string)}
               >
@@ -245,6 +246,7 @@ const PhotoFaces = ({
   const refresh = () => {
     markReviewQueueStale(queryClient);
     void queryClient.invalidateQueries({ queryKey: ['photo-faces', photoId] });
+    void queryClient.invalidateQueries({ queryKey: ['person-faces'] });
     void queryClient.invalidateQueries({ queryKey: ['people'] });
     for (const key of SEARCH_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });
   };

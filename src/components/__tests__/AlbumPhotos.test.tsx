@@ -252,6 +252,13 @@ describe('AlbumPhotos', () => {
     await waitFor(() => expect(workerApiClient.setAlbumCover).toHaveBeenCalledWith('Kanha', makePhoto().id));
   });
 
+  it('reports a failed cover change as a notification', async () => {
+    vi.mocked(workerApiClient.setAlbumCover).mockRejectedValue(new Error('Cover exploded'));
+    renderAlbum();
+    fireEvent.click(await screen.findByRole('button', { name: /^set as cover/i }));
+    expect((await screen.findByText('Cover exploded')).closest('.mantine-Notification-root')).not.toBeNull();
+  });
+
   it('marks the current cover photo with a Cover badge instead of a button', async () => {
     vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
       albums: [

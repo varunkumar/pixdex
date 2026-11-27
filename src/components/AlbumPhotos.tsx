@@ -1,8 +1,9 @@
-import { ActionIcon, Anchor, Badge, Button, Group, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
+import { Anchor, Badge, Button, Group, Stack, Tabs, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import type { IconType } from 'react-icons';
-import { TbCalendar, TbPhotoStar, TbStar } from 'react-icons/tb';
+import { TbCalendar, TbStar } from 'react-icons/tb';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
@@ -12,8 +13,10 @@ import AlbumFilterChip from './AlbumFilterChip';
 import AlbumHero from './AlbumHero';
 import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
 import ColumnsToggle from './ColumnsToggle';
+import CoverBadge from './CoverBadge';
 import ListPagination from './ListPagination';
 import PhotoGrid from './PhotoGrid';
+import SetCoverButton from './SetCoverButton';
 import ShareAlbumModal from './ShareAlbumModal';
 import SortIcons from './SortIcons';
 import { AvatarStack, UserAvatar } from './UserAvatar';
@@ -104,6 +107,8 @@ const AlbumPhotos = () => {
       void queryClient.invalidateQueries({ queryKey: ['album-summary', name] });
       void queryClient.invalidateQueries({ queryKey: ['albums-page'] });
     },
+    onError: (e) =>
+      notifications.show({ color: 'red', message: e instanceof Error ? e.message : 'Could not set cover' }),
   });
 
   const onPage = useCallback(
@@ -161,10 +166,6 @@ const AlbumPhotos = () => {
           <ColumnsToggle />
         </Group>
       </Group>
-      {setCover.error && (
-        <Text c="red">{setCover.error instanceof Error ? setCover.error.message : 'Could not set cover'}</Text>
-      )}
-
       {contentsError && <Text c="dimmed">Could not load people and species.</Text>}
       <Tabs value={tab} keepMounted={false} onChange={(v) => update({ tab: v === 'photos' ? null : v })}>
         {(peopleCount > 0 || species.length > 0) && (
@@ -198,26 +199,15 @@ const AlbumPhotos = () => {
               <PhotoGrid
                 photos={data.results}
                 badges={(photo) =>
-                  isOwner && photo.id === coverId ? (
-                    <Badge color="yellow" variant="filled" size="sm">
-                      Cover
-                    </Badge>
-                  ) : null
+                  isOwner && photo.id === coverId ? <CoverBadge /> : null
                 }
                 actions={(photo) =>
                   isOwner && photo.id !== coverId ? (
-                    <Tooltip label="Set as cover">
-                      <ActionIcon
-                        variant="filled"
-                        color="dark"
-                        size="md"
-                        aria-label={`Set as cover: ${photoCaption(photo)}`}
-                        loading={setCover.isPending && setCover.variables === photo.id}
-                        onClick={() => setCover.mutate(photo.id)}
-                      >
-                        <TbPhotoStar aria-hidden />
-                      </ActionIcon>
-                    </Tooltip>
+                    <SetCoverButton
+                      label={photoCaption(photo)}
+                      loading={setCover.isPending && setCover.variables === photo.id}
+                      onClick={() => setCover.mutate(photo.id)}
+                    />
                   ) : null
                 }
               />
