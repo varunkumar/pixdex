@@ -120,9 +120,12 @@ export async function unscannedFacesRoute(c: Context<{ Bindings: Env }>) {
   });
 }
 
+/** The faces a rescan replaces: unassigned and auto ones the owner has not ignored. Each `+` keeps the photo_id index. */
+const REPLACED_SQL = (f = '') => `+${f}assign_status IN ('unassigned', 'auto') AND +${f}ignored_at IS NULL`;
+
 /**
- * Replaces a photo's unassigned and auto faces with a fresh scan. Confirmed
- * faces are owner data: they are kept, and any new face overlapping one
+ * Replaces a photo's unassigned and auto faces with a fresh scan. Confirmed and
+ * ignored faces are owner data: they are kept, and any new face overlapping one
  * (IoU >= 0.5) is dropped as a duplicate.
  */
 export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
@@ -154,26 +157,26 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
     for (const r of found.results) knownIds.add(r.id);
   }
 
-  const confirmed = await c.env.DB.prepare(
-    "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces WHERE photo_id = ? AND +assign_status = 'confirmed'"
+  const preserved = await c.env.DB.prepare(
+    "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces WHERE photo_id = ? AND (+assign_status = 'confirmed' OR +ignored_at IS NOT NULL)"
   )
     .bind(photo.id)
     .all<{ id: string; bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number }>();
-  const confirmedBoxes: (Box & { id: string })[] = confirmed.results.map((r) => ({ id: r.id, x: r.bbox_x, y: r.bbox_y, w: r.bbox_w, h: r.bbox_h }));
+  const preservedBoxes: (Box & { id: string })[] = preserved.results.map((r) => ({ id: r.id, x: r.bbox_x, y: r.bbox_y, w: r.bbox_w, h: r.bbox_h }));
 
   // Rejections are keyed by face id, and a re-scan replaces the unassigned/auto rows with new ids.
   // Carry each rejection over to the new face that overlaps its old box (IoU >= 0.5).
   const rejections = await c.env.DB.prepare(
     `SELECT r.face_id, r.person_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h
      FROM face_rejections r JOIN faces f ON f.id = r.face_id
-     WHERE f.photo_id = ? AND +f.assign_status IN ('unassigned', 'auto')`
+     WHERE f.photo_id = ? AND ${REPLACED_SQL('f.')}`
   )
     .bind(photo.id)
     .all<{ face_id: string; person_id: string; bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number }>();
 
   // Crops of the faces about to be replaced go away with them.
   const stale = await c.env.DB.prepare(
-    "SELECT crop_key FROM faces WHERE photo_id = ? AND +assign_status IN ('unassigned', 'auto') AND crop_key IS NOT NULL"
+    `SELECT crop_key FROM faces WHERE photo_id = ? AND ${REPLACED_SQL()} AND crop_key IS NOT NULL`
   )
     .bind(photo.id)
     .all<{ crop_key: string }>();
@@ -182,18 +185,18 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   const statements = [
     c.env.DB.prepare(
       `DELETE FROM face_rejections WHERE face_id IN
-         (SELECT id FROM faces WHERE photo_id = ? AND +assign_status IN ('unassigned', 'auto'))`
+         (SELECT id FROM faces WHERE photo_id = ? AND ${REPLACED_SQL()})`
     ).bind(photo.id),
-    c.env.DB.prepare("DELETE FROM faces WHERE photo_id = ? AND +assign_status IN ('unassigned', 'auto')").bind(photo.id),
+    c.env.DB.prepare(`DELETE FROM faces WHERE photo_id = ? AND ${REPLACED_SQL()}`).bind(photo.id),
   ];
   let stored = 0;
   let kept = 0;
   const newIds: string[] = [];
-  // Id of the face each posted face ended up as (a kept confirmed face's own id), so the agent can attach crops.
+  // Id of the face each posted face ended up as (a preserved face's own id), so the agent can attach crops.
   const faceIds: (string | null)[] = [];
   const carried: { f: string; p: string }[] = [];
   faces.forEach((f, i) => {
-    const duplicate = confirmedBoxes.find((b) => iou(b, f.bbox) >= 0.5);
+    const duplicate = preservedBoxes.find((b) => iou(b, f.bbox) >= 0.5);
     if (duplicate) {
       kept++;
       faceIds.push(duplicate.id);

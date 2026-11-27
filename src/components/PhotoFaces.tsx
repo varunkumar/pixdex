@@ -2,7 +2,7 @@ import { Badge, Button, Card, Group, Select, Stack, Text, TextInput, Title } fro
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { matchQueueFor, refreshAfterNaming } from '../services/matchQueue';
+import { matchQueueFor, refreshAfterIgnoring, refreshAfterNaming, refreshAfterRestoring } from '../services/matchQueue';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
@@ -31,6 +31,7 @@ const FaceRow = ({
 }) => {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const queryClient = useQueryClient();
 
   const assign = useMutation({
     mutationFn: async (personId: string) => {
@@ -62,10 +63,23 @@ const FaceRow = ({
     onSuccess: onChanged,
   });
 
+  const ignore = useMutation({
+    mutationFn: () => workerApiClient.ignoreFaces([face.id]),
+    onSuccess: () => refreshAfterIgnoring(queryClient, [face.id]),
+  });
+  const restore = useMutation({
+    mutationFn: () => workerApiClient.restoreFaces([face.id]),
+    onSuccess: () => refreshAfterRestoring(queryClient),
+  });
+
   const naming = (assign.error ?? create.error) != null;
-  const error = assign.error ?? create.error ?? reject.error ?? unassign.error ?? setCover.error;
+  const error =
+    assign.error ?? create.error ?? reject.error ?? unassign.error ?? setCover.error ?? ignore.error ?? restore.error;
   const named = face.personId != null && face.status !== 'unassigned';
-  const busy = assign.isPending || create.isPending || reject.isPending || unassign.isPending || setCover.isPending;
+  const busy =
+    assign.isPending || create.isPending || reject.isPending || unassign.isPending || setCover.isPending || ignore.isPending || restore.isPending;
+  // Only the album owner sees (and can undo) that a face is ignored.
+  const ignored = canManage && face.ignored === true;
   const isCover = named && people.find((p) => p.id === face.personId)?.cover?.id === face.id;
 
   return (
@@ -78,7 +92,7 @@ const FaceRow = ({
       </Stack>
       <Stack gap="xs" style={{ flex: 1, minWidth: 0 }}>
         <Text size="sm" fw={500}>
-          {STATUS_LABEL[face.status]}
+          {ignored ? 'Ignored' : STATUS_LABEL[face.status]}
         </Text>
 
         {!canManage ? (
@@ -91,6 +105,10 @@ const FaceRow = ({
               <PersonLabelEditor personId={face.personId as string} name={face.personName} />
             </>
           ) : null
+        ) : ignored ? (
+          <Button size="xs" variant="light" w="fit-content" disabled={busy} onClick={() => restore.mutate()}>
+            Restore
+          </Button>
         ) : named ? (
           <Group gap="xs">
             <Button
@@ -158,6 +176,9 @@ const FaceRow = ({
             />
             <Button size="xs" variant="light" onClick={() => setCreating(true)}>
               New person
+            </Button>
+            <Button size="xs" variant="subtle" color="gray" disabled={busy} onClick={() => ignore.mutate()}>
+              Ignore
             </Button>
           </Group>
         )}

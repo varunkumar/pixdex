@@ -17,13 +17,14 @@ import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail'
 import { getHeroRoute, putHeroRoute } from './routes/heroes';
 import { albumContentsRoute } from './routes/album-contents';
 import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
-import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute } from './routes/faces';
+import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute, ignoreFacesRoute, restoreFacesRoute } from './routes/faces';
 import {
   assignFacesRoute,
   createPersonRoute,
   deletePersonLabelRoute,
   deletePersonRoute,
   groupsRoute,
+  ignoredFacesRoute,
   listPeopleRoute,
   matchPersonRoute,
   putPersonLabelRoute,
@@ -100,6 +101,7 @@ app.get('/people', listPeopleRoute);
 app.get('/people/known', listKnownRoute);
 guardedWrite('POST', '/people', createPersonRoute);
 app.get('/people/groups', groupsRoute);
+app.get('/people/ignored', ignoredFacesRoute);
 guardedWrite('PATCH', '/people/:id', renamePersonRoute);
 guardedWrite('DELETE', '/people/:id', deletePersonRoute);
 guardedWrite('POST', '/people/:id/faces', assignFacesRoute);
@@ -110,6 +112,8 @@ guardedWrite('DELETE', '/people/:id/label', deletePersonLabelRoute);
 
 app.use('/faces/*', requireReadToken);
 app.get('/faces/:id/crop', faceCropRoute);
+guardedWrite('POST', '/faces/ignore', ignoreFacesRoute);
+guardedWrite('POST', '/faces/restore', restoreFacesRoute);
 guardedWrite('POST', '/faces/:id/assign', assignFaceRoute);
 guardedWrite('POST', '/faces/:id/reject', rejectFaceRoute);
 guardedWrite('POST', '/faces/:id/unassign', unassignFaceRoute);

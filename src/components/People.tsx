@@ -1,4 +1,6 @@
 import {
+  ActionIcon,
+  Box,
   Button,
   Card,
   Group,
@@ -17,17 +19,22 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { TbUsers } from "react-icons/tb";
+import { TbUsers, TbX } from "react-icons/tb";
 import { Link } from "react-router-dom";
 import { useListParams } from "../hooks/useListParams";
 import { workerApiClient } from "../services/api/WorkerApiClient";
-import { matchQueueFor, refreshAfterNaming } from "../services/matchQueue";
+import {
+  matchQueueFor,
+  refreshAfterIgnoring,
+  refreshAfterNaming,
+} from "../services/matchQueue";
 import { errorMessage, UNNAMED_PERSON } from "../services/peopleKeys";
 import type { FaceGroup, PersonSummary } from "../types/api";
 import FaceTile from "./FaceTile";
 import ListPagination from "./ListPagination";
 import SortIcons from "./SortIcons";
 import PersonLabelEditor from "./PersonLabelEditor";
+import IgnoredFaces from "./IgnoredFaces";
 
 const GROUP_TILES = 8;
 
@@ -72,8 +79,15 @@ const GroupCard = ({
     },
   });
 
-  const busy = create.isPending || assign.isPending;
-  const error = create.error ?? assign.error;
+  const ignore = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await workerApiClient.ignoreFaces(ids);
+      refreshAfterIgnoring(queryClient, ids);
+    },
+  });
+
+  const busy = create.isPending || assign.isPending || ignore.isPending;
+  const error = create.error ?? assign.error ?? ignore.error;
 
   return (
     <Card withBorder data-testid="face-group">
@@ -82,22 +96,50 @@ const GroupCard = ({
           {[...group.faces]
             .sort((a, b) => b.bbox.w * b.bbox.h - a.bbox.w * a.bbox.h)
             .slice(0, GROUP_TILES)
-            .map((f) => (
-              <FaceTile key={f.id} face={f} size={64} />
+            .map((f, i) => (
+              <Box key={f.id} pos="relative">
+                <FaceTile face={f} size={64} />
+                <ActionIcon
+                  size="xs"
+                  radius="xl"
+                  variant="default"
+                  pos="absolute"
+                  top={-6}
+                  right={-6}
+                  disabled={busy}
+                  title="Ignore this face"
+                  aria-label={`Ignore face ${i + 1} of ${group.faces.length}`}
+                  onClick={() => ignore.mutate([f.id])}
+                >
+                  <TbX />
+                </ActionIcon>
+              </Box>
             ))}
         </Group>
         <Text size="xs" c="dimmed">
           {plural(group.faces.length, "face")}
         </Text>
         {!open ? (
-          <Button
-            size="xs"
-            variant="light"
-            w="fit-content"
-            onClick={() => setOpen(true)}
-          >
-            Name this group
-          </Button>
+          <Group gap="xs">
+            <Button
+              size="xs"
+              variant="light"
+              disabled={busy}
+              onClick={() => setOpen(true)}
+            >
+              Name this group
+            </Button>
+            <Button
+              size="xs"
+              variant="subtle"
+              color="gray"
+              loading={ignore.isPending}
+              disabled={busy}
+              onClick={() => ignore.mutate(faceIds)}
+            >
+              Ignore group
+            </Button>
+          </Group>
         ) : (
           <Stack gap="xs">
             <Group gap="xs" align="flex-end">
@@ -320,6 +362,8 @@ const People = () => {
           />
         </Stack>
       )}
+
+      <IgnoredFaces />
     </Stack>
   );
 };

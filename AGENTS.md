@@ -42,6 +42,23 @@ R2 is a resized copy (2048px long side) of each album cover, for the album hero.
   the existing original access check (one Drive call for a Drive photo), 1 D1 read and 1 conditional R2 put, plus one extra GET
   (1 D1 read, 1 R2 get) after creating; 0 D1 rows written, no migration, no image processing in the Worker (at most a 2 MB body is
   read and passed to R2).
+- Ignored faces (migration `0021_face_ignore.sql`, `faces.ignored_at`, NULL = not ignored). An ignored face is always `unassigned`
+  with no person. Only the album owner ignores or restores: `POST /faces/ignore` and `/faces/restore` (`{ faceIds }`, 1 to 200,
+  `guardedWrite`, all-or-nothing 404/403, set-based; ignore skips faces that are not unassigned; `{ ignored }` / `{ restored }` counts)
+  and `GET /people/ignored?cursor=` (owned albums only, newest first, 60 per page, cursor `<ignored_at>|<rowid>`, 400 if malformed);
+  all three are in the proxy allowlist. Every new face query must skip ignored faces where it would group, match or show a
+  known-personality match: groups, match candidates and apply, auto-match, `knownFilterSql`, `KNOWN_COUNTS_SQL`, album known tiles
+  and covers (shared viewers lose the match too; `known_id` is kept so restore brings it back). Confirming a face clears
+  `ignored_at`. A rescan keeps an ignored face like a confirmed one (overlapping new face dropped, counted in `kept`, crop and
+  rejections stay). Agent and ingest bodies never set it. `SerializedFace.ignored`. UI: "Ignore group" and a cross per face on the
+  People page, `IgnoredFaces.tsx` (closed by default, no request until opened), "Ignore" / "Restore" on the photo's People card
+  (owner only). Not covered: no negative references, so new photos of the same stranger appear as new unnamed faces.
+  **Index rules (measured, do not change casually):** the migration is additive. `idx_faces_assign_status` and
+  `idx_faces_known_photo` stay as they were: replacing the status index was measured to slow existing queries (the people cover
+  query about 29% more rows read; with a widened index the old groups query about 240 times more). The partial indexes
+  `idx_faces_ignored`, `idx_faces_open_status` and `idx_faces_known_shown` are for the new queries only: groups and the known
+  list and filter pin theirs with `INDEXED BY`, and every other `ignored_at` test is written `+ignored_at` so a partial index
+  cannot take over its plan.
 - Frontend gating (hidden, never disabled): photo review controls and the photo's face-naming controls use
   `photo.canEdit` (the user owns the album); album cover and Share use the album's `role === 'owner'` (the album page reads it from
   its `album-summary` query); rename, delete, matching and covers on a person use that person's `canEdit` (the user created it).
@@ -174,7 +191,7 @@ R2 is a resized copy (2048px long side) of each album cover, for the album hero.
   (the UPDATE only writes rows whose `known_id` or `known_score` actually changes, so a rescore writes only the faces that changed and `updated`
   counts changed rows); `POST /ingest/faces/embeddings` at most `limit` (100) rows plus one `max(rowid)`, scanning at most
   5000 rowids, 0 written; `GET /people/known` 2 statements, 0 written, one index row plus one `photos` key lookup per known-matched face
-  (scales with the global count of matched faces); the `known=` filter is one more subquery on `idx_faces_known_photo`. UNMEASURED: the
+  (scales with the global count of matched faces that are not ignored); the `known=` filter is one more subquery on `idx_faces_known_shown`. UNMEASURED: the
   embeddings route CPU and the D1 BLOB decode (D1 may return a number[]; `limit` at most 100 is the knob), and the backfill time, estimated
   at 1 to 3 minutes for about 5K photos: measure both with `wrangler tail` after deploy.
 - Known personalities UI status: the omnibox and the Timeline `PeopleFilter` were checked in a real browser, light and dark, against the dev mock (`PIXDEX_MOCK=1 npm run dev`); the real library has no known matches yet, so real-data behaviour is unchecked.
@@ -258,7 +275,7 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - Owner edits (`user_*` columns) are never written by the agent or ingest
   routes; ranking uses `worker/src/db/rating.ts` (combined score), not
   `aesthetic_score` directly.
-- `faces.person_id` and `faces.assign_status` are owner/Worker decisions: the agent
+- `faces.person_id`, `faces.assign_status` and `faces.ignored_at` are owner/Worker decisions: the agent
   and ingest request bodies never set them (unknown keys are dropped). The Worker's
   own matching only ever writes `auto`; `confirmed` comes from the owner via the
   browser writes. Rejections live in `face_rejections`.
@@ -285,11 +302,11 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
   `faces.known_id`/`known_score`.
 - `GET /people/known` (`worker/src/routes/known.ts`, READ_TOKEN plus `X-Viewer-Email`, in the Pages proxy allowlist) lists known
   personalities with at least one matched face in a photo the viewer can see (`scopeFor`), `photoCount` = distinct visible photos. One
-  grouped aggregate over `idx_faces_known_photo` (faces pinned as outer table with CROSS JOIN) plus one `json_each` name lookup. Its
+  grouped aggregate over `idx_faces_known_shown` (faces pinned as outer table with CROSS JOIN) plus one `json_each` name lookup. Its
   read cost scales with the global count of known-matched faces (index walk, scope filtered after), not with the viewer's photos.
 - `known=<Q1,Q2>` on `/search`, `/timeline` and `/timeline/buckets` (`worker/src/db/known.ts`: `parseKnown`, `knownFilterSql`) is an AND
   filter: the photo needs a face matched to every id (with or without a person). It shares the cap of 5 with `people` (people take slots
-  first, extra known ids are silently dropped, never a 400), ids are bound, and the subquery walks `idx_faces_known_photo`; an unknown id is just zero results.
+  first, extra known ids are silently dropped, never a 400), ids are bound, and the subquery walks `idx_faces_known_shown`; an unknown id is just zero results.
 - Album page People and Species tabs (`src/components/AlbumPhotos.tsx`, tiles `AlbumTiles.tsx`, chip `AlbumFilterChip.tsx`, URL logic `src/services/albumFilter.ts`): tabs Photos, People and Species (the last two only when the album has any); `tab=people|species` (absent is Photos). Picking a tile sets one filter and returns to Photos with the page reset. URL params `people`, `known`, `species`: ONE filter at a time, precedence people, then known, then species, the rest dropped (`parseAlbumFilter`; people and known use the first id, species is one scientific name); a chip above the grid shows and clears it (for a people filter on a person the user created, `canEdit`, the chip also links "View all photos of <name>" to `/people/<id>`; never for known, species, a person the user does not own, or before the contents load). With a filter active and no results the page says "No photos in this album match this filter." ("This album has no photos." only without a filter). Tab content renders inside `Tabs.Panel` (only the active panel is mounted). The filter feeds the existing `GET /search` (`album` plus `people` / `known` / `species`). Species are green (`SPECIES_COLOR` in `chipStyle.ts`, `--pixdex-ink-green` in `index.css`) beside blue own, violet known and teal album. `dev/mockApi.ts` serves `GET /albums/contents` and the `species=` filter.
 - `GET /albums/contents?name=<album>` (`worker/src/routes/album-contents.ts`, READ_TOKEN plus `X-Viewer-Email`, in the Pages proxy allowlist): `{ people: [{id, name, canEdit, photoCount, cover}], known: [{id, name, photoCount, cover}], species: [{scientific, common, photoCount, coverPhotoId, thumbnailUrl}] }`. Each list is capped at 200 (`MAX_TILES`), sorted by `photoCount` descending then name (case-insensitive); `photoCount` is distinct photos in the album. People count only `auto` and `confirmed` faces. Scoped by `scopeFor` (404 for an album the viewer cannot see, 400 for an empty or missing `name`; the name is never trimmed, so a padded album name matches only itself). Name privacy: person names resolve only through `PERSON_NAME_SQL`, so a person the viewer does not own shows the viewer's own label or `null` (the UI shows "Unnamed"), never `persons.name`. Ties in count and name break on the person or known id, so the order is stable. Cover faces come from a window function (one per person or known id, no per-tile query; the inner query keeps only keys and ranking columns and `PERSON_NAME_SQL` runs once per kept cover in the outer SELECT, never per face row); the species cover is the photo with the best score. The viewer's query key is `['album-contents', name]`, `staleTime` 5 minutes, fetched once the photo list has loaded.
 - `species=<scientific name>` on `GET /search` (`worker/src/db/species.ts` `speciesFilterSql`): photos whose `species` JSON lists that scientific name (name always bound, 200 characters at most, blank ignored, the JSON is wrapped in `CASE WHEN json_valid(...) THEN ... ELSE '[]' END` and non-object elements are ignored, so malformed JSON never matches and never errors); it combines with `album` and the other filters by AND, and counts as a filter for the unfiltered-total shortcut.
