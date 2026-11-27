@@ -120,8 +120,8 @@ export async function unscannedFacesRoute(c: Context<{ Bindings: Env }>) {
   });
 }
 
-/** The faces a rescan replaces: unassigned and auto ones the owner has not ignored. `+` keeps the photo_id index. */
-const REPLACED_SQL = (f = '') => `+${f}assign_status IN ('unassigned', 'auto') AND ${f}ignored_at IS NULL`;
+/** The faces a rescan replaces: unassigned and auto ones the owner has not ignored. Each `+` keeps the photo_id index. */
+const REPLACED_SQL = (f = '') => `+${f}assign_status IN ('unassigned', 'auto') AND +${f}ignored_at IS NULL`;
 
 /**
  * Replaces a photo's unassigned and auto faces with a fresh scan. Confirmed and
@@ -158,7 +158,7 @@ export async function ingestFacesRoute(c: Context<{ Bindings: Env }>) {
   }
 
   const preserved = await c.env.DB.prepare(
-    "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces WHERE photo_id = ? AND (+assign_status = 'confirmed' OR ignored_at IS NOT NULL)"
+    "SELECT id, bbox_x, bbox_y, bbox_w, bbox_h FROM faces WHERE photo_id = ? AND (+assign_status = 'confirmed' OR +ignored_at IS NOT NULL)"
   )
     .bind(photo.id)
     .all<{ id: string; bbox_x: number; bbox_y: number; bbox_w: number; bbox_h: number }>();

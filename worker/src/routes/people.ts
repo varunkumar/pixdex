@@ -259,6 +259,17 @@ async function loadFaces(db: D1Database, user: User, ids: string[]): Promise<Map
   return out;
 }
 
+/**
+ * One page of unnamed faces in albums the owner has, in rowid order. Binds: cursor rowid, owner email.
+ * INDEXED BY and the CROSS JOINs pin the walk of the not-ignored index: left to itself the planner can pick
+ * idx_faces_assign_status (which reads every ignored face) or, with table statistics, start from the albums and
+ * sort every candidate.
+ */
+export const GROUP_CANDIDATES_SQL = `SELECT f.rowid AS rid, f.id, f.embedding FROM faces f INDEXED BY idx_faces_open_status
+  CROSS JOIN photos ph ON ph.id = f.photo_id CROSS JOIN albums a ON a.name = ph.album
+  WHERE f.assign_status = 'unassigned' AND f.ignored_at IS NULL AND ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ?
+  ORDER BY f.rowid LIMIT ${GROUPS_PAGE_SIZE}`;
+
 export async function groupsRoute(c: Ctx) {
   // Unassigned faces in albums the caller owns only (nothing for a pure viewer).
   const user = userOf(c);
@@ -271,12 +282,7 @@ export async function groupsRoute(c: Ctx) {
   const owns = await c.env.DB.prepare('SELECT 1 AS x FROM albums WHERE owner_email = ? LIMIT 1').bind(user.email).first();
   if (!owns) return c.json({ groups: [], scanned: 0, nextCursor: null });
 
-  const { results } = await c.env.DB.prepare(
-    `SELECT f.rowid AS rid, f.id, f.embedding FROM faces f
-     JOIN photos ph ON ph.id = f.photo_id JOIN albums a ON a.name = ph.album
-     WHERE f.assign_status = 'unassigned' AND f.ignored_at IS NULL AND ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ?
-     ORDER BY f.rowid LIMIT ${GROUPS_PAGE_SIZE}`
-  )
+  const { results } = await c.env.DB.prepare(GROUP_CANDIDATES_SQL)
     .bind(Number(parsedCursor.data), user.email)
     .all<CandidateRow>();
 
@@ -297,7 +303,7 @@ export async function groupsRoute(c: Ctx) {
  */
 export const MATCH_CANDIDATES_SQL = `SELECT f.rowid AS rid, f.id, f.embedding, f.assign_status, f.match_score FROM faces f
   CROSS JOIN photos ph ON ph.id = f.photo_id CROSS JOIN albums a ON a.name = ph.album
-  WHERE ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ? AND f.ignored_at IS NULL
+  WHERE ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ? AND +f.ignored_at IS NULL
     AND (+f.assign_status = 'unassigned' OR (+f.assign_status = 'auto' AND f.person_id != ?))
     AND NOT EXISTS (SELECT 1 FROM face_rejections r WHERE r.face_id = f.id AND r.person_id = ?)
   ORDER BY f.rowid LIMIT ${FACE_PAGE_SIZE}`;
@@ -371,7 +377,7 @@ export async function matchPersonRoute(c: Ctx) {
         `WITH x AS (SELECT json_extract(value, '$.id') AS id, json_extract(value, '$.score') AS s FROM json_each(?))
          UPDATE faces SET person_id = ?, assign_status = 'auto', match_score = x.s
          FROM x
-         WHERE faces.id = x.id AND faces.assign_status != 'confirmed' AND faces.ignored_at IS NULL
+         WHERE faces.id = x.id AND faces.assign_status != 'confirmed' AND +faces.ignored_at IS NULL
            AND (faces.assign_status = 'unassigned' OR faces.match_score IS NULL OR x.s > faces.match_score)
            AND NOT EXISTS (SELECT 1 FROM face_rejections r WHERE r.face_id = faces.id AND r.person_id = ?)`
       )

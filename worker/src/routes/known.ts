@@ -5,7 +5,7 @@ import { scopeFor } from '../db/visibility';
 
 /** CROSS JOIN pins faces as the outer table: without it the planner scans photos and probes faces by photo_id. Grouped aggregate of known-person matches; append a scopeFor(user, 'p.album') clause and GROUP BY. Exported for the query-plan test. */
 export const KNOWN_COUNTS_SQL = `SELECT f.known_id AS id, COUNT(DISTINCT f.photo_id) AS photo_count
-  FROM faces f CROSS JOIN photos p ON p.id = f.photo_id WHERE f.known_id IS NOT NULL AND f.ignored_at IS NULL`;
+  FROM faces f INDEXED BY idx_faces_known_shown CROSS JOIN photos p ON p.id = f.photo_id WHERE f.known_id IS NOT NULL AND f.ignored_at IS NULL`;
 
 interface NameRow {
   id: string;

@@ -245,9 +245,7 @@ BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
   'ALTER TABLE faces ADD COLUMN ignored_at TEXT;',
   'CREATE INDEX IF NOT EXISTS idx_faces_ignored ON faces (ignored_at) WHERE ignored_at IS NOT NULL;',
   'CREATE INDEX IF NOT EXISTS idx_faces_open_status ON faces (assign_status) WHERE ignored_at IS NULL;',
-  'DROP INDEX IF EXISTS idx_faces_assign_status;',
   'CREATE INDEX IF NOT EXISTS idx_faces_known_shown ON faces (known_id, photo_id, ignored_at) WHERE known_id IS NOT NULL AND ignored_at IS NULL;',
-  'DROP INDEX IF EXISTS idx_faces_known_photo;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];
