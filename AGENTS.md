@@ -52,7 +52,10 @@ R2 is a resized copy (2048px long side) of each album cover, for the album hero.
   `ignored_at`. A rescan keeps an ignored face like a confirmed one (overlapping new face dropped, counted in `kept`, crop and
   rejections stay). Agent and ingest bodies never set it. `SerializedFace.ignored`. UI: "Ignore group" and a cross per face on the
   People page, `IgnoredFaces.tsx` (closed by default, no request until opened), "Ignore" / "Restore" on the photo's People card
-  (owner only). Not covered: no negative references, so new photos of the same stranger appear as new unnamed faces.
+  (owner only). On the photo page the owner has two dimmed links, "Other faces (N)" (unnamed and not matchable) and
+  "Ignored faces (N)"; those faces are numbered after the others and their boxes show only while their section is open
+  (`splitFaces`, `src/services/faces.ts`, which mirrors `MIN_DET_SCORE` and `MIN_FACE_SIDE` from `worker/src/people/matching.ts`:
+  change both together; viewers see every face). Not covered: no negative references, so new photos of the same stranger appear as new unnamed faces.
   **Index rules (measured, do not change casually):** the migration is additive. `idx_faces_assign_status` and
   `idx_faces_known_photo` stay as they were: replacing the status index was measured to slow existing queries (the people cover
   query about 29% more rows read; with a widened index the old groups query about 240 times more). The partial indexes
