@@ -85,6 +85,31 @@ const FACES: SerializedFace[] = FACE_GROUPS.flatMap((size, g) =>
 
 const NEXT_STATUS = { approve: 'approved', deny: 'denied', revoke: 'revoked' } as const;
 
+/** Auto matches already confirmed or rejected, kept until the dev server restarts. */
+const REVIEWED = new Set<string>();
+const AUTO_PAGE = 48;
+
+/** One dummy auto match per photo of the person (up to 60), weakest first, cut from the photo's thumbnail. */
+function autoFacesOf(personId: string): SerializedFace[] {
+  const person = OWN.find((p) => p.id === personId);
+  return LIBRARY.filter((m) => m.people.includes(personId))
+    .flatMap((m) => [0, 1].map((n) => ({ m, n })))
+    .slice(0, 60)
+    .map(({ m, n }, i) => ({
+      id: `auto-${personId}-${m.photo.id}-${n}`,
+      photoId: m.photo.id,
+      thumbnailUrl: `/thumbnails/${m.photo.id}`,
+      cropUrl: null,
+      bbox: { x: 0.2 + n * 0.3, y: 0.2, w: 0.3, h: 0.45 },
+      detScore: 0.99,
+      personId,
+      personName: person?.name ?? null,
+      status: 'auto' as const,
+      matchScore: 0.5 + i / 200,
+      ignored: false,
+    }));
+}
+
 /** Saved cover framing per album, kept until the dev server restarts. */
 const FRAMINGS = new Map<string, Framing & { hash: string }>();
 
@@ -398,10 +423,31 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     });
     return true;
   }
+  if (method === 'POST' && /^\/people\/[^/]+\/auto-faces\/review$/.test(path)) {
+    let raw = '';
+    req.on('data', (chunk) => (raw += chunk));
+    req.on('end', () => {
+      const { confirm = [], reject = [] } = JSON.parse(raw || '{}') as { confirm?: string[]; reject?: string[] };
+      const take = (ids: string[]) => ids.filter((id) => !REVIEWED.has(id) && REVIEWED.add(id));
+      sendJson(res, 200, { confirmed: take(confirm), rejected: take(reject) });
+    });
+    return true;
+  }
   if (method !== 'GET')
     return sendJson(res, 405, {
-      error: 'The dev mock is read-only apart from admin decisions, cover framing and ignoring faces',
+      error: 'The dev mock is read-only apart from admin decisions, cover framing, ignoring faces and face review',
     });
+  const auto = /^\/people\/([^/]+)\/auto-faces$/.exec(path);
+  if (auto) {
+    // Same keyset as the Worker, with the face id standing in for the rowid.
+    const [score, after] = (url.searchParams.get('cursor') ?? '-1|').split('|');
+    const rest = autoFacesOf(decodeURIComponent(auto[1])).filter(
+      (f) => !REVIEWED.has(f.id) && (f.matchScore! > Number(score) || (f.matchScore === Number(score) && f.id > after)),
+    );
+    const faces = rest.slice(0, AUTO_PAGE);
+    const last = faces[faces.length - 1];
+    return sendJson(res, 200, { faces, nextCursor: faces.length === AUTO_PAGE ? `${last.matchScore}|${last.id}` : null });
+  }
   if (path === '/me') return sendJson(res, 200, { email: EMAIL, admin: true });
   if (path === '/admin/requests') {
     const wanted = url.searchParams.get('status');

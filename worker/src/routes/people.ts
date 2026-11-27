@@ -376,6 +376,101 @@ export async function ignoredFacesRoute(c: Ctx) {
   });
 }
 
+export const AUTO_PAGE_SIZE = 48;
+
+/** The sort key of the review list; an auto face always has a score, the fallback keeps the keyset total. */
+const AUTO_SCORE = 'COALESCE(f2.match_score, -1)';
+
+/**
+ * One page of a person's auto faces in albums the owner has, weakest match first. Binds: caller email x2, person id,
+ * owner email, then (when `after`) the cursor's score and rowid. The inner query walks the person's auto faces on
+ * idx_faces_person_status_created and sorts only (score, rowid); names and details are read for the kept rows.
+ */
+export const autoFacesSql = (after: boolean) => `${FACE_SELECT.replace('SELECT f.id,', 'SELECT k.score AS score, k.rid AS rid, f.id,')
+  .replace(
+    'FROM faces f',
+    `FROM (SELECT f2.rowid AS rid, ${AUTO_SCORE} AS score FROM faces f2 INDEXED BY idx_faces_person_status_created
+    CROSS JOIN photos ph ON ph.id = f2.photo_id CROSS JOIN albums a ON a.name = ph.album
+    WHERE f2.person_id = ? AND f2.assign_status = 'auto' AND a.owner_email = ?${after ? ` AND (${AUTO_SCORE}, f2.rowid) > (?, ?)` : ''}
+    ORDER BY score, rid LIMIT ${AUTO_PAGE_SIZE}) k CROSS JOIN faces f ON f.rowid = k.rid`
+  )}
+  ORDER BY k.score, k.rid`;
+
+/** `<score>|<rowid>` of the last face of the previous page. */
+const autoCursor = z.string().check(z.regex(/^-?\d+(\.\d+)?(e-?\d+)?\|\d+$/));
+
+/**
+ * D1: personRole, then one statement that reads every auto face of the person (with a photo and an album key
+ * lookup each) and returns at most AUTO_PAGE_SIZE rows; 0 writes.
+ */
+export async function autoFacesRoute(c: Ctx) {
+  const id = c.req.param('id') as string;
+  const raw = c.req.query('cursor');
+  if (raw !== undefined && !autoCursor.safeParse(raw).success) return c.json({ error: 'Invalid cursor' }, 400);
+  const denied = await requirePersonOwner(c, id);
+  if (denied) return denied;
+  const user = userOf(c);
+  const after = raw === undefined ? [] : raw.split('|').map(Number);
+  const { results } = await c.env.DB.prepare(autoFacesSql(raw !== undefined))
+    .bind(...nameBinds(user), id, user.email, ...after)
+    .all<FaceWithJoins & { score: number; rid: number }>();
+  const last = results[results.length - 1];
+  return c.json({
+    faces: results.map(serializeFace),
+    nextCursor: results.length === AUTO_PAGE_SIZE ? `${last.score}|${last.rid}` : null,
+  });
+}
+
+/**
+ * The faces a review may change, checked at write time: still this person's auto match, in an album the owner has.
+ * `+` keeps the primary-key lookups. Binds: JSON ids, person id, owner email.
+ */
+const REVIEWABLE_SQL = `faces.id IN (SELECT value FROM json_each(?)) AND +faces.person_id = ? AND +faces.assign_status = 'auto'
+  AND EXISTS (SELECT 1 FROM photos ph JOIN albums a ON a.name = ph.album WHERE ph.id = faces.photo_id AND a.owner_email = ?)`;
+
+export const CONFIRM_AUTO_SQL = `UPDATE faces SET assign_status = 'confirmed', match_score = NULL WHERE ${REVIEWABLE_SQL} RETURNING id`;
+/** Binds the person id first (the rejection's column), then REVIEWABLE_SQL's. Runs before REJECT_AUTO_SQL. */
+export const REJECT_AUTO_INSERT_SQL = `INSERT OR IGNORE INTO face_rejections (face_id, person_id)
+  SELECT faces.id, ? FROM faces WHERE ${REVIEWABLE_SQL}`;
+export const REJECT_AUTO_SQL = `UPDATE faces SET person_id = NULL, match_score = NULL, assign_status = 'unassigned'
+  WHERE ${REVIEWABLE_SQL} RETURNING id`;
+
+const reviewIds = z.optional(z.array(z.string().check(z.minLength(1))).check(z.maxLength(200)));
+const reviewBody = z.object({ confirm: reviewIds, reject: reviewIds });
+
+/**
+ * Confirms and rejects the faces the owner reviewed. A face that changed since it was shown is skipped, never taken
+ * back. D1: personRole, then one batch of at most 3 set-based statements over primary-key lookups.
+ */
+export async function reviewAutoFacesRoute(c: Ctx) {
+  const parsed = reviewBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
+  const confirm = [...new Set(parsed.data.confirm ?? [])];
+  const reject = [...new Set(parsed.data.reject ?? [])];
+  const total = confirm.length + reject.length;
+  if (total < 1 || total > 200) return c.json({ error: 'Give 1 to 200 face ids' }, 400);
+  const confirming = new Set(confirm);
+  if (reject.some((faceId) => confirming.has(faceId))) return c.json({ error: 'A face cannot be both confirmed and rejected' }, 400);
+
+  const id = c.req.param('id') as string;
+  const denied = await requirePersonOwner(c, id);
+  if (denied) return denied;
+  const owner = userOf(c).email;
+  const db = c.env.DB;
+  const statements: D1PreparedStatement[] = [];
+  if (confirm.length) statements.push(db.prepare(CONFIRM_AUTO_SQL).bind(JSON.stringify(confirm), id, owner));
+  if (reject.length) {
+    const ids = JSON.stringify(reject);
+    statements.push(db.prepare(REJECT_AUTO_INSERT_SQL).bind(id, ids, id, owner), db.prepare(REJECT_AUTO_SQL).bind(ids, id, owner));
+  }
+  const results = await db.batch<{ id: string }>(statements);
+  const changed = (index: number) => results[index].results.map((r) => r.id);
+  return c.json({
+    confirmed: confirm.length ? changed(0) : [],
+    rejected: reject.length ? changed(statements.length - 1) : [],
+  });
+}
+
 export async function matchPersonRoute(c: Ctx) {
   const parsed = matchBody.safeParse((await c.req.json().catch(() => ({}))) ?? {});
   if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);

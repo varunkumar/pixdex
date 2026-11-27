@@ -129,13 +129,13 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/ignored`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
+`people/groups`, `people/ignored`, `people/:id/auto-faces`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails are cached immutably (content-hash addressed); originals and face crops are cached
 privately for a while, other routes use `no-cache`. The only writes the browser can make are `PUT albums/cover`,
 `PUT albums/shares`, `PUT albums/framing`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`,
-and `POST` to `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign` and
+and `POST` to `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover`, `people/:id/auto-faces/review`, `faces/:id/assign|reject|unassign` and
 `admin/requests/:id/approve|deny|revoke` (bodies JSON only; DELETE has none), all forwarded with the read token through
 one shared helper with per-method allowlists.
 
@@ -404,6 +404,14 @@ invocation):
   these limits were tightened. Real Worker CPU has not been measured: before
   relying on these constants, measure on a deployed preview (`wrangler tail` or
   the dashboard) and tune them. This is a to-do for the owner at merge.
+
+### Reviewing auto matches
+
+`GET /people/:id/auto-faces` pages a person's `auto` faces in albums the caller owns, weakest match first (keyset on
+score and rowid, 48 per page). `POST /people/:id/auto-faces/review` (`{ confirm, reject }`, 1 to 200 ids in total)
+changes only faces that are, at write time, still that person's auto match in an owned album, and returns the ids it
+changed; anything else is skipped. Unlike `confirmFacesStmts` (naming a face), it never clears an ignore or a
+rejection. Both are for the person's owner. No migration and no new index (see `docs/development.md` for cost).
 
 ### Ignored faces
 

@@ -388,12 +388,21 @@ best rated or alphabetical.
 - Lower-confidence matches (score 0.4 to 0.5) land in a "Review suggestions" queue
   on the person's page. "Not X" on a face rejects that match permanently. "Remove
   name" (confirmed faces only) just unassigns the face.
+- **Confirming automatic matches** settles them: matching never checks or moves a confirmed face. "Confirm X" is in a
+  photo's menu on the person's page. "Review auto matches" there shows that person's automatic matches as face crops,
+  weakest first, 48 at a time, all ticked. Untick the ones that are wrong or unclear, then either "Confirm N" (the
+  rest stay automatic) or "Confirm N, mark M as Not X" (the rest are rejected for good). Only the faces on screen are
+  ever changed, one that changed after the page loaded is skipped, and one whose picture did not load is left alone.
+  Only the person's owner can do this, for faces in their own albums. Note that matching compares against the 30
+  confirmed faces scanned most recently, so confirming many faces changes which ones those are: with fewer than 30 it
+  should find more, with 30 or more it can displace faces you named yourself, and a wrong confirm can attract similar
+  wrong faces until you correct it with "Not X" on the photo's page.
 - A person's cover defaults to their biggest confirmed face. Pick another with
   "Set as cover"; if that face is later removed, the cover falls back to the default.
 - Grouping and matching ignore faces under a detection score of 0.7 or a side
   under 5% of the photo.
 - The browser writes involved are `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label` (a viewer's own private name) and `POST` to
-  `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover` and
+  `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover`, `people/:id/auto-faces/review` and
   `faces/:id/assign|reject|unassign`, all through the Pages proxy.
 
 ### Known people list (agent)

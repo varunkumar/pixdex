@@ -70,6 +70,7 @@ describe('people and face writes need ownership', () => {
     ['POST', '/people/p1/faces', { faceIds: ['f2'] }],
     ['POST', '/people/p1/match', {}],
     ['POST', '/people/p1/cover', { faceId: 'f1' }],
+    ['POST', '/people/p1/auto-faces/review', { confirm: ['f2'] }],
     ['POST', '/faces/f2/assign', { personId: 'p1' }],
     ['POST', '/faces/f2/reject', { personId: 'p1' }],
     ['POST', '/faces/f1/unassign', {}],

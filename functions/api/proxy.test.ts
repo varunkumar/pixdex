@@ -228,6 +228,34 @@ describe('Pages Function identity', () => {
     });
   });
 
+  describe('review of auto matches', () => {
+    it('forwards GET people/:id/auto-faces with the verified email and cursor', async () => {
+      const res = await get('/api/people/p1/auto-faces?cursor=0.5%7C3', 'Friend@example.com');
+      expect(res.status).toBe(200);
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe('https://worker.example.dev/people/p1/auto-faces?cursor=0.5%7C3');
+      expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
+    });
+
+    it('forwards POST people/:id/auto-faces/review', async () => {
+      const res = await onRequestPost({
+        request: new Request('https://pixdex.example.dev/api/people/p1/auto-faces/review', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
+          },
+          body: '{"confirm":["f1"]}',
+        }),
+        env,
+      });
+      expect(res.status).toBe(200);
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe('https://worker.example.dev/people/p1/auto-faces/review');
+      expect(init.method).toBe('POST');
+    });
+  });
+
   describe('admin access requests', () => {
     async function adminPost(path: string, email: string | null) {
       const headers: Record<string, string> = { 'content-type': 'application/json', 'X-Viewer-Email': 'owner@example.com' };
