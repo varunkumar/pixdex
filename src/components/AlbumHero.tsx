@@ -1,5 +1,6 @@
 import { Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { heroHash, loadHero } from '../services/heroImage';
 
@@ -24,13 +25,23 @@ const AlbumHero = ({ name, photoCount, coverPhotoId, coverThumbnailUrl, canCreat
     gcTime: Infinity,
     retry: false,
   });
+  // A hero that will not load is hidden; remembered by URL, so another cover's hero still shows.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const thumbnail = workerApiClient.thumbnailUrl({ thumbnailUrl: coverThumbnailUrl });
 
   return (
     <div className="pdx-hero">
       {/* Keyed by source, so a new cover never shows the old picture while it loads. */}
       <img key={thumbnail} className="pdx-hero-blur" src={thumbnail} alt="" />
-      {heroUrl && <img key={heroUrl} className="pdx-hero-img" src={heroUrl} alt={`Cover photo of ${name}`} />}
+      {heroUrl && heroUrl !== failedUrl && (
+        <img
+          key={heroUrl}
+          className="pdx-hero-img"
+          src={heroUrl}
+          alt={`Cover photo of ${name}`}
+          onError={() => setFailedUrl(heroUrl)}
+        />
+      )}
       <div className="pdx-hero-text">
         <Title order={2} className="pdx-hero-name">
           {name}

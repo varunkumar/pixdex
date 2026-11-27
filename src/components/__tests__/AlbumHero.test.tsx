@@ -1,6 +1,6 @@
 import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState, type ComponentProps, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadHero } from '../../services/heroImage';
@@ -105,5 +105,27 @@ describe('AlbumHero', () => {
     expect(sharp()).not.toBeInTheDocument();
     expect(blurred(container)).toHaveAttribute('src', `/api/thumbnails/${OTHER}`);
     await waitFor(() => expect(loadHero).toHaveBeenLastCalledWith(OTHER, 'ph2', true));
+  });
+
+  it('hides a hero that fails to load, leaving the blurred thumbnail', async () => {
+    vi.mocked(loadHero).mockResolvedValue(`/api/heroes/${HASH}`);
+    const { container, update } = renderHero();
+    fireEvent.error(await screen.findByRole('img', { name: 'Cover photo of Kanha' }));
+    expect(container.querySelector('img.pdx-hero-img')).not.toBeInTheDocument();
+    expect(blurred(container)).toBeInTheDocument();
+    update({ photoCount: 129 });
+    expect(await screen.findByText('129 photos')).toBeInTheDocument();
+    expect(sharp()).not.toBeInTheDocument();
+  });
+
+  it("shows a new cover's hero after an earlier one failed to load", async () => {
+    vi.mocked(loadHero).mockImplementation((hash) => Promise.resolve(`/api/heroes/${hash}`));
+    const { update } = renderHero();
+    fireEvent.error(await screen.findByRole('img', { name: 'Cover photo of Kanha' }));
+    update({ coverPhotoId: 'ph2', coverThumbnailUrl: `/thumbnails/${OTHER}` });
+    expect(await screen.findByRole('img', { name: 'Cover photo of Kanha' })).toHaveAttribute(
+      'src',
+      `/api/heroes/${OTHER}`
+    );
   });
 });

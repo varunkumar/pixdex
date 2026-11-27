@@ -30,14 +30,14 @@ R2 is a resized copy (2048px long side) of each album cover, for the album hero.
   a filter is active; without a cover thumbnail (or until the summary loads) the old header stays. The blurred thumbnail shows until
   the hero loads, and stays, with no error text, when there is none. The image is `/api/heroes/<content hash>` (hash taken from the
   thumbnail URL). When it is missing (404) and the viewer owns the album, the browser fetches `/api/originals/:coverId`, resizes it
-  to a 2048px long side (never enlarging, EXIF orientation applied), encodes JPEG (quality 0.85, lowered until at most 2 MB) and
+  to a 2048px long side (never enlarging, EXIF orientation applied, transparent areas filled white), encodes JPEG (quality 0.85, lowered until at most 2 MB) and
   uploads it with `PUT`. The query `['album-hero', hash]` has `staleTime` and `gcTime` Infinity and `retry: false`, so each cover is
   tried once per page session (`loadHero` never rejects and does no de-duplication itself). A new cover gets its own hero; an earlier
   cover reuses the stored one. Worker routes (`worker/src/routes/heroes.ts`, R2 key `hero/<contentHash>.jpg` in the `THUMBNAILS`
   bucket): `GET /heroes/:contentHash` (thumbnail visibility; 404 if not visible or not made; private immutable one year) and
   `PUT /heroes/:contentHash` (`guardedWrite`; 404 not visible, 403 viewer, 400 bad hash or not a JPEG, 413 over 2 MB; conditional
   put, so 201 when stored and 200 when one already exists). No cleanup of old heroes; to replace a bad one delete the R2 object by
-  hand. `dev/mockApi.ts` serves `GET /heroes/<hash>`. Performance (not measured locally, check with `wrangler tail`): a hero view is
+  hand (browsers that already loaded it keep it for up to a year, the immutable cache, until their site data is cleared). `dev/mockApi.ts` serves `GET /heroes/<hash>`. Performance (not measured locally, check with `wrangler tail`): a hero view is
   1 D1 read plus 1 R2 get, then browser cached (a missing hero costs the same, once per page session); creation, once per cover, is
   the existing original access check (one Drive call for a Drive photo), 1 D1 read and 1 conditional R2 put, plus one extra GET
   (1 D1 read, 1 R2 get) after creating; 0 D1 rows written, no migration, no image processing in the Worker (at most a 2 MB body is

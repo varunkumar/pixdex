@@ -9,8 +9,9 @@ const fetchMock = vi.fn<typeof fetch>();
 const createImageBitmapMock = vi.fn();
 const drawImage = vi.fn();
 const close = vi.fn();
+const fillRect = vi.fn();
 const bitmap = { width: 6000, height: 4000, close };
-const context = { drawImage, imageSmoothingQuality: 'low' };
+const context = { drawImage, fillRect, fillStyle: '#000000', imageSmoothingQuality: 'low' };
 
 /** Encoded size in bytes for each requested quality. */
 let sizeFor: (quality: number) => number;
@@ -20,6 +21,8 @@ beforeEach(() => {
   sizeFor = () => 1000;
   encodes = [];
   context.imageSmoothingQuality = 'low';
+  context.fillStyle = '#000000';
+  fillRect.mockReset();
   fetchMock.mockReset();
   drawImage.mockReset();
   close.mockReset();
@@ -81,6 +84,19 @@ describe('resizeToJpeg', () => {
     expect(encodes[0]).toMatchObject({ type: 'image/jpeg', quality: 0.85, width: 2048, height: 1365 });
     expect(out).toBe(encodes[0].blob);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('fills the canvas white before drawing, so transparent areas do not encode as black', async () => {
+    let fillStyle: string | undefined;
+    fillRect.mockImplementation(() => {
+      fillStyle = context.fillStyle;
+    });
+
+    await resizeToJpeg(original);
+
+    expect(fillStyle).toBe('#fff');
+    expect(fillRect).toHaveBeenCalledWith(0, 0, 2048, 1365);
+    expect(fillRect.mock.invocationCallOrder[0]).toBeLessThan(drawImage.mock.invocationCallOrder[0]);
   });
 
   it('lowers the quality until the image fits in 2 MB', async () => {

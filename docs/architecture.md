@@ -151,9 +151,11 @@ candidate). It returns 404 if no photo qualifies.
 - `routes/heroes.ts` - album hero banners, R2 key `hero/<contentHash>.jpg` in the thumbnails bucket. `GET /heroes/:contentHash`
   has thumbnail visibility (404 if not visible or not made yet; private, immutable). `PUT /heroes/:contentHash` is the album
   owner's upload (404 not visible, 403 viewer, 400 bad hash or not a JPEG, 413 over 2 MB; conditional put: 201 stored, 200 kept).
-  The Worker does no image work: the owner's browser makes the 2048px JPEG from the original (`src/services/heroImage.ts`) when the
+  The Worker does no image work: the owner's browser makes the 2048px JPEG from the original (`src/services/heroImage.ts`, transparent areas filled white) when the
   album page (`AlbumHero`) finds none. Cost: 1 D1 read and 1 R2 get per view (then browser cached); creation once per cover adds the
   original access check, 1 D1 read, 1 conditional R2 put and one more GET; no migration.
+  A stored hero is never overwritten: replace a bad one by deleting the R2 object by hand (browsers that already loaded it keep
+  it for up to a year, the immutable cache, until their site data is cleared).
 - `routes/album-contents.ts` - `GET /albums/contents?name=` returns `{ people, known, species }` for one album the viewer can
   see (404 otherwise, 400 without `name`): per-list tiles with `photoCount` (distinct photos), at most 200 each, sorted by
   count then name; people use only `auto` and `confirmed` faces and carry the viewer's own label or `null` for people they

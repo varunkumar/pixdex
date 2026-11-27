@@ -36,6 +36,9 @@ export async function resizeToJpeg(original: Blob): Promise<Blob> {
     canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas is not available');
+    // JPEG has no transparency: without a white ground, transparent pixels encode as black.
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, width, height);
     context.imageSmoothingQuality = 'high';
     context.drawImage(bitmap, 0, 0, width, height);
   } finally {
