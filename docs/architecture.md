@@ -129,7 +129,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/ignored`, `people/:id/auto-faces`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
+`people/groups`, `people/ignored`, `people/review-queue`, `people/:id/auto-faces`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails are cached immutably (content-hash addressed); originals and face crops are cached
@@ -415,6 +415,9 @@ invocation):
   the dashboard) and tune them. This is a to-do for the owner at merge.
 
 ### Reviewing auto matches
+
+`GET /people/review-queue` counts the caller's people's `auto` faces in albums they own, most first; the "To review"
+page (`/review`) and the People page link use it, joined in the browser with `GET /people` for names and covers.
 
 `GET /people/:id/auto-faces` pages a person's `auto` faces in albums the caller owns, weakest match first (keyset on
 score and rowid, 48 per page). `POST /people/:id/auto-faces/review` (`{ confirm, reject }`, 1 to 200 ids in total)

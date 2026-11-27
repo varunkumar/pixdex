@@ -13,6 +13,7 @@ import People from './components/People';
 import PersonPage from './components/PersonPage';
 import PhotoDetail from './components/PhotoDetail';
 import ReviewAutoFaces from './components/ReviewAutoFaces';
+import ReviewQueue from './components/ReviewQueue';
 import Search from './components/Search';
 import Timeline from './components/Timeline';
 import { theme } from './theme';
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
       { path: '/search', element: <Search /> },
       { path: '/photos/:id', element: <PhotoDetail /> },
       { path: '/people', element: <People /> },
+      { path: '/review', element: <ReviewQueue /> },
       { path: '/people/:id', element: <PersonPage /> },
       { path: '/people/:id/review', element: <ReviewAutoFaces /> },
       { path: '/daily', element: <DailySuggestion /> },

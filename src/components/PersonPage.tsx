@@ -5,10 +5,12 @@ import { useCallback, useState } from 'react';
 import type { IconType } from 'react-icons';
 import { TbCalendar, TbDotsVertical, TbSparkles, TbStar } from 'react-icons/tb';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useHistoryState } from '../hooks/useHistoryState';
+import { useLastAddress, useRememberAddress } from '../hooks/useLastAddress';
 import { useListParams } from '../hooks/useListParams';
 import { useMatchQueue } from '../hooks/useMatchQueue';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
-import { noteRemovedName } from '../services/matchQueue';
+import { markReviewQueueStale, noteRemovedName } from '../services/matchQueue';
 import { photoCaption } from '../services/text';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
@@ -129,7 +131,16 @@ const PersonFaceActions = ({
   );
 };
 
+interface Found {
+  /** Null until "Review suggestions" has answered. */
+  suggestions: SerializedFace[] | null;
+  cursor: string | null;
+}
+const NOTHING_FOUND: Found = { suggestions: null, cursor: null };
+
 const PersonPage = () => {
+  useRememberAddress();
+  const peopleList = useLastAddress('/people');
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -139,8 +150,8 @@ const PersonPage = () => {
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [suggestions, setSuggestions] = useState<SerializedFace[] | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
+  // Kept with the history entry: opening a suggestion's photo and going back must not lose the list.
+  const [{ suggestions, cursor }, setFound] = useHistoryState<Found>(`suggestions:${id}`, NOTHING_FOUND);
 
   const { data: people = [], isSuccess: peopleLoaded } = useQuery({
     queryKey: ['people'],
@@ -166,6 +177,7 @@ const PersonPage = () => {
   );
 
   const refresh = () => {
+    markReviewQueueStale(queryClient);
     void queryClient.invalidateQueries({ queryKey: ['photo-faces'] });
     void queryClient.invalidateQueries({ queryKey: ['people'] });
     for (const key of SEARCH_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });
@@ -191,11 +203,14 @@ const PersonPage = () => {
     mutationFn: (from: string | null) =>
       from ? workerApiClient.matchPerson(id, { cursor: from }) : workerApiClient.matchPerson(id),
     onSuccess: (res, from) => {
-      setSuggestions((prev) => (from ? [...(prev ?? []), ...res.suggestions] : res.suggestions));
-      setCursor(res.nextCursor);
+      setFound((prev) => ({
+        suggestions: from ? [...(prev.suggestions ?? []), ...res.suggestions] : res.suggestions,
+        cursor: res.nextCursor,
+      }));
     },
   });
-  const drop = (faceId: string) => setSuggestions((prev) => (prev ?? []).filter((f) => f.id !== faceId));
+  const drop = (faceId: string) =>
+    setFound((prev) => ({ ...prev, suggestions: (prev.suggestions ?? []).filter((f) => f.id !== faceId) }));
   const accept = useMutation({
     mutationFn: (faceId: string) => workerApiClient.assignFace(faceId, id),
     onSuccess: (_r, faceId) => {
@@ -212,7 +227,7 @@ const PersonPage = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to="/people" size="sm">
+      <Anchor component={Link} to={peopleList} size="sm">
         ← All people
       </Anchor>
       {peopleLoaded && !person && <Text c="dimmed">This person was not found.</Text>}

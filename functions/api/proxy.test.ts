@@ -237,6 +237,14 @@ describe('Pages Function identity', () => {
       expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
     });
 
+    it('forwards GET people/review-queue with the verified email', async () => {
+      const res = await get('/api/people/review-queue', 'Friend@example.com');
+      expect(res.status).toBe(200);
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe('https://worker.example.dev/people/review-queue');
+      expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
+    });
+
     it('forwards POST people/:id/auto-faces/review', async () => {
       const res = await onRequestPost({
         request: new Request('https://pixdex.example.dev/api/people/p1/auto-faces/review', {

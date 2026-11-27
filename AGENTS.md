@@ -143,7 +143,19 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   `ReviewAutoFaces.tsx`: all ticked, buttons act on the shown page only and wait for every picture; a failed picture is in
   neither list; "Skip page"; the page query never refetches under the ticks; "Open photo" opens a new tab), and "Confirm X"
   beside "Not X" in the photo menu (needs `canEdit` on both the person and the photo). Rejected ids go to
-  `noteRemovedName`. Confirming starts no match run. Performance (local D1): the list reads about 5 rows per auto face of the
+  `noteRemovedName`. Confirming starts no match run.
+  "To review" (`/review`, `ReviewQueue.tsx`; People page link "N matches to review"; "All to review" and "Next: ..." on
+  the review grid) lists the caller's people with `auto` faces in owned albums, from `GET /people/review-queue`
+  (`{ people: [{ id, count }] }`, most first, `REVIEW_QUEUE_SQL`; names and covers come from `GET /people`). It reads
+  about 5 rows per pending face (2,671 at 530; 14,898 at 3,000; 42,123 at 8,500; local D1), so it is requested only by
+  those screens (query key `['review-queue']`, 5 minute staleTime). Binding rule: a change to auto faces calls
+  `markReviewQueueStale` (`refetchType: 'none'`), never an immediate refetch, and no navigation badge or other page may
+  request it. "Next" skips people already finished in this visit (`services/reviewVisit.ts`, browser memory).
+- Back navigation (frontend): state a person expects to find again after Back goes in the address when it is a page
+  number or filter (`useListParams`; People unnamed groups use `groups` and `groupSize`, with `keepScroll`), otherwise
+  in `useHistoryState` (per history entry, browser memory: review grid page and ticks, "Ignored faces" open, person
+  suggestions). Never plain `useState` for these. In-page back links return to the last shown address of the target
+  (`useRememberAddress` / `useLastAddress`; People and person pages). Performance (local D1): the list reads about 5 rows per auto face of the
   person on every page (first page 2.8K rows at 530 faces, 15K at 3,000; paging through 3,000 without changes 577K); a
   review of 48 reads 432 to 672 rows and writes 192 to 336; no embeddings read, at most 48 rows mapped in the Worker.
 - Matching references (migration `0023_person_references.sql`, table `person_references (person_id, face_id)` plus
@@ -200,7 +212,7 @@ fetched on demand, and viewers' browsers keep a copy of album cover originals
   conflict retry), revoke 3 (2 if not a member, 5 with a retry), deny none; `/me` still reads no D1 (one env var); the browse hot path is unchanged, and strangers now cost nothing because Access stops them
   at the edge. Turnstile, the Access API, the bypass behaviour and the rate-limit binding cannot be measured locally.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
-  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET people/:id/auto-faces`, `GET albums/contents` and `GET me`; also forwards the
+  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET people/review-queue`, `GET people/:id/auto-faces`, `GET albums/contents` and `GET me`; also forwards the
   browser writes (JSON bodies only): `PUT albums/cover`, `PUT albums/shares`, `PUT albums/framing`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`, `people/:id/faces`,
   `people/:id/match`, `people/:id/cover`, `people/:id/auto-faces/review`, `faces/:id/assign|reject|unassign`; admin: `GET admin/requests` and

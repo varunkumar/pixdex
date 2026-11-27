@@ -50,6 +50,7 @@ const ALLOWED_PATHS = [
   /^people\/groups$/,
   /^people\/known$/,
   /^people\/ignored$/,
+  /^people\/review-queue$/,
   /^people\/[^/]+\/auto-faces$/,
   /^photos\/[^/]+\/faces$/,
   /^faces\/[^/]+\/crop$/,

@@ -1,9 +1,9 @@
 import { focusManager } from '@tanstack/react-query';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { noteRemovedName } from '../../services/matchQueue';
-import { renderWithProviders } from '../../test/renderWithProviders';
+import { leaveAndGoBack, renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
 import type { SerializedFace } from '../../types/api';
 import ReviewAutoFaces from '../ReviewAutoFaces';
 
@@ -17,6 +17,7 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     getPeople: vi.fn(),
     getAutoFaces: vi.fn(),
     reviewAutoFaces: vi.fn(),
+    getReviewQueue: vi.fn(),
     thumbnailUrl: vi.fn((f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`),
   },
 }));
@@ -54,6 +55,7 @@ describe('ReviewAutoFaces', () => {
     vi.resetAllMocks();
     vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([person]);
+    vi.mocked(workerApiClient.getReviewQueue).mockResolvedValue([]);
     vi.mocked(workerApiClient.getAutoFaces).mockImplementation(async (_id, cursor) =>
       cursor
         ? { faces: [face('d')], nextCursor: null }
@@ -191,6 +193,71 @@ describe('ReviewAutoFaces', () => {
     expect(workerApiClient.getAutoFaces).toHaveBeenCalledTimes(1);
     expect(tile(1)).toHaveAttribute('aria-pressed', 'false');
     focusManager.setFocused(undefined);
+  });
+
+  it('links back to the list and asks for it only once the pages are finished', async () => {
+    await showPage();
+    expect(screen.getByRole('link', { name: 'All to review' })).toHaveAttribute('href', '/review');
+    expect(workerApiClient.getReviewQueue).not.toHaveBeenCalled();
+  });
+
+  it('offers the person with the most pending next, never one already finished in this visit', async () => {
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue([
+      person,
+      { ...person, id: 'pe2', name: 'Ravi' },
+      { ...person, id: 'pe3', name: 'Meera' },
+    ]);
+    vi.mocked(workerApiClient.getAutoFaces).mockResolvedValue({ faces: [], nextCursor: null });
+    // pe1 stays the largest, as after skipped pages.
+    vi.mocked(workerApiClient.getReviewQueue).mockResolvedValue([
+      { id: 'pe1', count: 180 },
+      { id: 'pe2', count: 97 },
+      { id: 'pe3', count: 35 },
+    ]);
+    show();
+    fireEvent.click(await screen.findByRole('link', { name: 'Next: Ravi (97)' }));
+    await screen.findByRole('heading', { name: 'Review auto matches: Ravi' });
+    expect(await screen.findByRole('link', { name: 'Next: Meera (35)' })).toHaveAttribute('href', '/people/pe3/review');
+    expect(workerApiClient.getAutoFaces).toHaveBeenLastCalledWith('pe2', undefined);
+  });
+
+  it('offers no next person when nobody else is pending', async () => {
+    vi.mocked(workerApiClient.getAutoFaces).mockResolvedValue({ faces: [], nextCursor: null });
+    vi.mocked(workerApiClient.getReviewQueue).mockResolvedValue([{ id: 'pe1', count: 2 }]);
+    show();
+    await screen.findByText('No more auto matches.');
+    await waitFor(() => expect(workerApiClient.getReviewQueue).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: /^Next:/ })).toBeNull();
+  });
+
+  const showWithHistory = () =>
+    renderWithRouter(
+      [
+        { path: '/people/:id/review', element: <ReviewAutoFaces /> },
+        { path: '/elsewhere', element: <p>elsewhere</p> },
+      ],
+      ['/people/pe1/review']
+    );
+
+  it('comes back to the same page with the same ticks after Back', async () => {
+    const { router } = showWithHistory();
+    await screen.findByRole('button', { name: 'Face 3 is Asha' });
+    fireEvent.click(button('Skip page'));
+    await waitFor(() => expect(pictures()).toHaveLength(1));
+    fireEvent.click(tile(1));
+    await leaveAndGoBack(router);
+    await waitFor(() => expect(tile(1)).toHaveAttribute('aria-pressed', 'false'));
+    expect(pictures()).toHaveLength(1);
+    expect(workerApiClient.getAutoFaces).toHaveBeenLastCalledWith('pe1', '0.6|3');
+  });
+
+  it('starts from the weakest match when the review is opened again, not gone back to', async () => {
+    const { router } = showWithHistory();
+    await screen.findByRole('button', { name: 'Face 3 is Asha' });
+    fireEvent.click(button('Skip page'));
+    await waitFor(() => expect(pictures()).toHaveLength(1));
+    await act(() => router.navigate('/people/pe1/review'));
+    await waitFor(() => expect(pictures()).toHaveLength(3));
   });
 
   it('shows a viewer nothing and requests no faces', async () => {

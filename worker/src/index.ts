@@ -31,6 +31,7 @@ import {
   putPersonLabelRoute,
   setPersonCoverRoute,
   renamePersonRoute,
+  reviewQueueRoute,
 } from './routes/people';
 import { searchRoute } from './routes/search';
 import { bucketsRoute, timelineRoute } from './routes/timeline';
@@ -100,6 +101,7 @@ app.get('/people/known', listKnownRoute);
 guardedWrite('POST', '/people', createPersonRoute);
 app.get('/people/groups', groupsRoute);
 app.get('/people/ignored', ignoredFacesRoute);
+app.get('/people/review-queue', reviewQueueRoute);
 guardedWrite('PATCH', '/people/:id', renamePersonRoute);
 guardedWrite('DELETE', '/people/:id', deletePersonRoute);
 guardedWrite('POST', '/people/:id/faces', assignFacesRoute);

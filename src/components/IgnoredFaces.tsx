@@ -1,7 +1,7 @@
 import { Button, Group, Stack, Text } from '@mantine/core';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useHistoryState } from '../hooks/useHistoryState';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { refreshAfterRestoring } from '../services/matchQueue';
 import { errorMessage } from '../services/peopleKeys';
@@ -10,7 +10,7 @@ import FaceTile from './FaceTile';
 /** The caller's ignored faces, with undo. Closed by default, so the People page makes no extra request. */
 const IgnoredFaces = () => {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useHistoryState('ignored-open', false);
   const query = useInfiniteQuery({
     queryKey: ['ignored-faces'],
     queryFn: ({ pageParam }) => workerApiClient.getIgnoredFaces(pageParam),

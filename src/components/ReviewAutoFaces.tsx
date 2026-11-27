@@ -1,12 +1,16 @@
 import { Anchor, Box, Button, Group, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TbCheck, TbX } from 'react-icons/tb';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import { useHistoryState } from '../hooks/useHistoryState';
+import { useLastAddress } from '../hooks/useLastAddress';
+import { useReviewQueue } from '../hooks/useReviewQueue';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { noteRemovedName, refreshAfterReview } from '../services/matchQueue';
 import { errorMessage, UNNAMED_PERSON } from '../services/peopleKeys';
-import type { SerializedFace } from '../types/api';
+import { finishedReviews, noteReviewFinished } from '../services/reviewVisit';
+import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
 
 const TILE = 96;
@@ -91,16 +95,20 @@ const ReviewPage = ({
   personId,
   name,
   faces,
+  unticked: untickedIds,
+  onToggle,
   onDone,
 }: {
   personId: string;
   name: string;
   faces: SerializedFace[];
+  unticked: readonly string[];
+  onToggle: (faceId: string) => void;
   /** Moves to the next page; `message` says what was saved. */
   onDone: (message: string | null) => void;
 }) => {
   const queryClient = useQueryClient();
-  const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set());
+  const unticked = new Set(untickedIds);
   const [pictures, setPictures] = useState<ReadonlyMap<string, Picture>>(new Map());
   // A second click can land before the buttons re-render as busy.
   const sending = useRef(false);
@@ -139,13 +147,7 @@ const ReviewPage = ({
             ticked={!unticked.has(f.id)}
             picture={pictures.get(f.id)}
             onPicture={(state) => setPictures((prev) => new Map(prev).set(f.id, state))}
-            onToggle={() =>
-              setUnticked((prev) => {
-                const next = new Set(prev);
-                if (!next.delete(f.id)) next.add(f.id);
-                return next;
-              })
-            }
+            onToggle={() => onToggle(f.id)}
           />
         ))}
       </Group>
@@ -178,11 +180,42 @@ const ReviewPage = ({
   );
 };
 
+/** The person with the most matches pending, leaving out this one and those already gone through. */
+const NextPerson = ({ personId }: { personId: string }) => {
+  const queryClient = useQueryClient();
+  const queue = useReviewQueue();
+  const { data: people = [] } = useQuery<PersonSummary[]>({
+    queryKey: ['people'],
+    queryFn: () => workerApiClient.getPeople(),
+  });
+  // Cached counts may predate the saves just made: wait for the fresh ones.
+  if (queue.isFetching) return null;
+  const done = finishedReviews(queryClient);
+  const next = queue.data?.find((p) => p.id !== personId && !done.has(p.id) && people.some((q) => q.id === p.id));
+  if (!next) return null;
+  const name = people.find((p) => p.id === next.id)?.name ?? UNNAMED_PERSON;
+  return (
+    <Button component={Link} to={`/people/${next.id}/review`} size="xs">
+      Next: {name} ({next.count})
+    </Button>
+  );
+};
+
+interface Position {
+  /** Counts "Start again", so the same cursor is requested afresh. */
+  round: number;
+  cursor?: string;
+  done?: boolean;
+  /** Faces unticked on the page at `cursor`. */
+  unticked: string[];
+}
+
 /** Pages through a person's auto matches, weakest first. `done` follows the last page. */
 const Review = ({ personId, name }: { personId: string; name: string }) => {
-  const [position, setPosition] = useState<{ round: number; cursor?: string; done?: boolean }>({ round: 0 });
+  // The page and its ticks belong to the history entry: Back returns to them, a fresh visit starts over.
+  const [position, setPosition] = useHistoryState<Position>(`review:${personId}`, { round: 0, unticked: [] });
   const [message, setMessage] = useState<string | null>(null);
-  const { round, cursor, done } = position;
+  const { round, cursor, done, unticked } = position;
   // The page on screen must not change under the ticks: no refetch on focus, reconnect or age.
   const query = useQuery({
     queryKey: ['auto-faces', personId, round, cursor ?? ''],
@@ -195,6 +228,10 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
   });
   const page = query.data;
   const finished = done || page?.faces.length === 0;
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (finished) noteReviewFinished(queryClient, personId);
+  }, [finished, queryClient, personId]);
 
   return (
     <Stack gap="md">
@@ -218,11 +255,12 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
             variant="light"
             onClick={() => {
               setMessage(null);
-              setPosition({ round: round + 1 });
+              setPosition({ round: round + 1, unticked: [] });
             }}
           >
             Start again
           </Button>
+          <NextPerson personId={personId} />
         </Group>
       ) : (
         page && (
@@ -231,9 +269,20 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
             personId={personId}
             name={name}
             faces={page.faces}
+            unticked={unticked}
+            onToggle={(faceId) =>
+              setPosition((prev) => ({
+                ...prev,
+                unticked: prev.unticked.includes(faceId)
+                  ? prev.unticked.filter((id) => id !== faceId)
+                  : [...prev.unticked, faceId],
+              }))
+            }
             onDone={(saved) => {
               setMessage(saved);
-              setPosition(page.nextCursor ? { round, cursor: page.nextCursor } : { round, done: true });
+              setPosition(
+                page.nextCursor ? { round, cursor: page.nextCursor, unticked: [] } : { round, done: true, unticked: [] }
+              );
             }}
           />
         )
@@ -244,6 +293,8 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
 
 const ReviewAutoFaces = () => {
   const { id = '' } = useParams();
+  const { key } = useLocation();
+  const personPage = useLastAddress(`/people/${id}`);
   const { data: people = [], isSuccess } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
@@ -253,9 +304,16 @@ const ReviewAutoFaces = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to={`/people/${id}`} size="sm">
-        ← Back to the person
-      </Anchor>
+      <Group gap="lg">
+        <Anchor component={Link} to={personPage} size="sm">
+          ← Back to the person
+        </Anchor>
+        {person?.canEdit && (
+          <Anchor component={Link} to="/review" size="sm">
+            All to review
+          </Anchor>
+        )}
+      </Group>
       {isSuccess && !person && <Text c="dimmed">This person was not found.</Text>}
       {person && !person.canEdit && <Text c="dimmed">Only the owner of this person can review their matches.</Text>}
       {person?.canEdit && (
@@ -266,7 +324,7 @@ const ReviewAutoFaces = () => {
               Weakest matches first. Untick any face that is not {name}. Confirmed faces are never moved by matching.
             </Text>
           </Stack>
-          <Review key={id} personId={id} name={name} />
+          <Review key={`${id}:${key}`} personId={id} name={name} />
         </>
       )}
     </Stack>

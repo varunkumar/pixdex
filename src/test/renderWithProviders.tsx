@@ -2,7 +2,7 @@
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import {
   createMemoryRouter,
@@ -52,3 +52,11 @@ export function renderWithRouter(routes: RouteObject[], initialEntries: string[]
   );
   return { router, ...utils };
 }
+
+/** Leaves the page for another one and comes back with the browser's Back, so the page is mounted again. */
+export async function leaveAndGoBack(router: ReturnType<typeof createMemoryRouter>) {
+  await act(() => router.navigate('/elsewhere'));
+  await screen.findByText('elsewhere');
+  await act(() => router.navigate(-1));
+}
+

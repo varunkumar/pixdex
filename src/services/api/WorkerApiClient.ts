@@ -332,6 +332,11 @@ export class WorkerApiClient {
     return this.getJson(`/people/ignored${suffix}`);
   }
 
+  /** The caller's people with auto matches waiting for review, most first. */
+  async getReviewQueue(): Promise<{ id: string; count: number }[]> {
+    return (await this.getJson<{ people: { id: string; count: number }[] }>('/people/review-queue')).people;
+  }
+
   /** A person's auto-matched faces in the caller's albums, weakest match first, a cursor page at a time. */
   async getAutoFaces(personId: string, cursor?: string): Promise<{ faces: SerializedFace[]; nextCursor: string | null }> {
     const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';

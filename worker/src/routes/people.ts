@@ -380,6 +380,23 @@ export async function ignoredFacesRoute(c: Ctx) {
   });
 }
 
+/**
+ * The caller's people with auto faces waiting in albums they own, most first. Binds ?1 the caller's email. Walks the
+ * caller's persons, then each one's auto faces on idx_faces_person_status_created, with photo and album key lookups.
+ * The name only orders the caller's own people; it is never returned.
+ */
+export const REVIEW_QUEUE_SQL = `SELECT p.id, COUNT(*) AS count FROM persons p
+  CROSS JOIN faces f INDEXED BY idx_faces_person_status_created ON f.person_id = p.id AND f.assign_status = 'auto'
+  CROSS JOIN photos ph ON ph.id = f.photo_id CROSS JOIN albums a ON a.name = ph.album
+  WHERE p.owner_email = ?1 AND a.owner_email = ?1
+  GROUP BY p.id ORDER BY count DESC, p.name COLLATE NOCASE, p.id`;
+
+/** D1: one statement whose reads grow with the caller's auto faces; 0 writes. Worker: at most one row per person. */
+export async function reviewQueueRoute(c: Ctx) {
+  const { results } = await c.env.DB.prepare(REVIEW_QUEUE_SQL).bind(userOf(c).email).all<{ id: string; count: number }>();
+  return c.json({ people: results });
+}
+
 export const AUTO_PAGE_SIZE = 48;
 
 /** The sort key of the review list; an auto face always has a score, the fallback keeps the keyset total. */
