@@ -67,8 +67,10 @@ const AlbumHero = ({ name, photoCount, coverPhotoId, coverThumbnailUrl, framing,
       workerApiClient.setAlbumFraming(v.album, v.hash, v.framing),
     onSuccess: async (_, v) => {
       const queryKey = ['album-summary', v.album];
-      // Shown even if the refresh below fails.
-      queryClient.setQueryData<AlbumSummary | null>(queryKey, (old) => old && { ...old, coverFraming: v.framing });
+      // Shown even if the refresh below fails, but only on the cover it was saved for.
+      queryClient.setQueryData<AlbumSummary | null>(queryKey, (old) =>
+        old && heroHash(old.coverThumbnailUrl) === v.hash ? { ...old, coverFraming: v.framing } : old
+      );
       await queryClient.invalidateQueries({ queryKey });
       setDraft((d) => (d?.key === v.key ? null : d));
     },

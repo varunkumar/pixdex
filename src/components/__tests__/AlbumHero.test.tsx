@@ -358,15 +358,36 @@ describe('AlbumHero reposition', () => {
 
   it('puts the saved framing in the cached summary, in case the refresh fails', async () => {
     const client = new QueryClient();
-    client.setQueryData(['album-summary', 'Kanha'], { name: 'Kanha', coverFraming: null });
+    const summary = { name: 'Kanha', coverThumbnailUrl: `/thumbnails/${HASH}`, coverFraming: null };
+    client.setQueryData(['album-summary', 'Kanha'], summary);
     await startEditing({}, client);
     fireEvent.keyDown(surface(), { key: 'ArrowRight' });
     click('Save');
     await waitFor(() => expect(editing()).toBe(false));
     expect(client.getQueryData(['album-summary', 'Kanha'])).toEqual({
-      name: 'Kanha',
+      ...summary,
       coverFraming: { x: 51, y: 50, zoom: 1 },
     });
+  });
+
+  it('does not put the framing on a cover that changed while it was saving', async () => {
+    let saved = () => {};
+    save.mockReturnValue(new Promise<void>((resolve) => (saved = resolve)));
+    const client = new QueryClient();
+    const key = ['album-summary', 'Kanha'];
+    client.setQueryData(key, { name: 'Kanha', coverThumbnailUrl: `/thumbnails/${HASH}`, coverFraming: null });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const { update } = await startEditing({}, client);
+    fireEvent.keyDown(surface(), { key: 'ArrowRight' });
+    click('Save');
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    // Another cover was set, and its summary arrived before the save finished.
+    const changed = { name: 'Kanha', coverThumbnailUrl: `/thumbnails/${OTHER}`, coverFraming: null };
+    client.setQueryData(key, changed);
+    update({ canEdit: true, coverPhotoId: 'ph2', coverThumbnailUrl: `/thumbnails/${OTHER}` });
+    await act(async () => saved());
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: key }));
+    expect(client.getQueryData(key)).toEqual(changed);
   });
 
   it('ignores changes while saving', async () => {
