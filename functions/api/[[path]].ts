@@ -34,6 +34,10 @@ interface Context {
   env: Env;
 }
 
+// Album hero banners, addressed by content hash: read like a thumbnail, and the one write with a binary (JPEG)
+// body. The Worker checks visibility on read and album ownership on write.
+const HERO_PATH = /^heroes\/[A-Za-z0-9_-]{16,64}$/;
+
 // Only the Worker's read routes are reachable through the proxy. /ingest/* and
 // anything else is deliberately not forwarded.
 const ALLOWED_PATHS = [
@@ -46,6 +50,7 @@ const ALLOWED_PATHS = [
   /^daily-pick$/,
   /^photos\/[^/]+$/,
   /^thumbnails\/[^/]+$/,
+  HERO_PATH,
   /^people$/,
   /^people\/groups$/,
   /^people\/known$/,
@@ -63,15 +68,15 @@ const ORIGINALS_PATH = /^originals\/[^/]+$/;
 // intentionally dropped: headers are built from this allowlist only.
 const FORWARDED_HEADERS = ['accept', 'if-none-match', 'if-modified-since', 'range'];
 
-// Thumbnails are addressed by content hash, so they never change and can be
-// cached hard. Everything else (search, albums, daily pick, photo metadata)
+// Thumbnails and heroes are addressed by content hash, so they never change and
+// can be cached hard. Everything else (search, albums, daily pick, photo metadata)
 // changes as photos are indexed and must be revalidated on every request.
 // Originals are large and stable per id, so a short cache is fine. Errors are
 // never cached.
 function cacheControlFor(path: string, ok: boolean): string {
   if (!ok) return 'no-store';
   if (path.endsWith('/crop')) return 'private, max-age=86400';
-  if (path.startsWith('thumbnails/')) return 'private, max-age=31536000, immutable';
+  if (path.startsWith('thumbnails/') || HERO_PATH.test(path)) return 'private, max-age=31536000, immutable';
   if (ORIGINALS_PATH.test(path)) return 'private, max-age=3600';
   return 'private, no-cache';
 }
@@ -161,11 +166,13 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
   return out;
 };
 
-// Browser writes. Each method has its own narrow allowlist. Bodies are JSON only,
-// so a cross-origin form post cannot trigger them (it would need a CORS preflight).
+// Browser writes. Each method has its own narrow allowlist. Bodies are JSON, except
+// a hero upload (PUT HERO_PATH), which is image/jpeg only. Neither type can be sent
+// by a cross-origin form post (it would need a CORS preflight).
 const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
-  // Choosing an album's cover; sharing an album (owner-only, enforced by the Worker); a viewer's own name for a person.
-  PUT: [/^albums\/cover$/, /^albums\/shares$/, /^people\/[^/]+\/label$/],
+  // Choosing an album's cover; sharing an album (owner-only, enforced by the Worker); a viewer's own name for a person;
+  // uploading an album hero (owner-only, enforced by the Worker).
+  PUT: [/^albums\/cover$/, /^albums\/shares$/, /^people\/[^/]+\/label$/, HERO_PATH],
   // Creating people, assigning faces to people, and face review.
   POST: [
     /^people$/,
@@ -198,7 +205,9 @@ async function forwardWrite(
     return new Response('Not found', { status: 404 });
   }
   const hasBody = method !== 'DELETE';
-  if (hasBody && !request.headers.get('content-type')?.startsWith('application/json')) {
+  const isHero = method === 'PUT' && HERO_PATH.test(path);
+  const contentType = request.headers.get('content-type');
+  if (hasBody && !(isHero ? contentType === 'image/jpeg' : contentType?.startsWith('application/json'))) {
     return new Response('Unsupported media type', { status: 415 });
   }
   if (!env.WORKER_URL || !env.READ_TOKEN) return new Response('Proxy is not configured', { status: 500 });
@@ -207,14 +216,15 @@ async function forwardWrite(
     Authorization: `Bearer ${env.READ_TOKEN}`,
     'X-Viewer-Email': identity.email,
   };
-  if (hasBody) headers['Content-Type'] = 'application/json';
+  if (hasBody) headers['Content-Type'] = isHero ? 'image/jpeg' : 'application/json';
 
   let response: Response;
   try {
     response = await fetch(`${env.WORKER_URL.replace(/\/$/, '')}/${path}`, {
       method,
       headers,
-      ...(hasBody ? { body: await request.text() } : {}),
+      // A hero is binary: reading it as text would corrupt the bytes.
+      ...(hasBody ? { body: isHero ? await request.arrayBuffer() : await request.text() } : {}),
     });
   } catch {
     return new Response('Upstream unavailable', { status: 502 });

@@ -254,6 +254,75 @@ describe('Pages Function identity', () => {
     });
   });
 
+  describe('album heroes', () => {
+    const HASH = 'a'.repeat(32);
+    const BYTES = [0xff, 0xd8, 0xff, 0x00, 0x80];
+
+    async function put(path: string, contentType: string) {
+      return onRequestPut({
+        request: new Request(`https://pixdex.example.dev${path}`, {
+          method: 'PUT',
+          headers: {
+            'content-type': contentType,
+            'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'Friend@Example.com' })),
+            'X-Viewer-Email': 'owner@example.com',
+          },
+          body: new Uint8Array(BYTES),
+        }),
+        env,
+      });
+    }
+
+    it('GET is proxied and cached for a year', async () => {
+      const res = await get(`/api/heroes/${HASH}`, 'friend@example.com');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+      expect(String(upstreamCalls()[0][0])).toBe(`https://worker.example.dev/heroes/${HASH}`);
+    });
+
+    it('a missing hero is not cached', async () => {
+      fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
+        String(input) === CERTS_URL ? certsResponse([key]) : new Response('Not Found', { status: 404 }),
+      );
+      const res = await get(`/api/heroes/${HASH}`, 'friend@example.com');
+      expect(res.status).toBe(404);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(upstreamCalls()).toHaveLength(1);
+    });
+
+    it('PUT forwards the bytes unchanged', async () => {
+      const res = await put(`/api/heroes/${HASH}`, 'image/jpeg');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      const [[url, init]] = upstreamCalls();
+      expect(String(url)).toBe(`https://worker.example.dev/heroes/${HASH}`);
+      expect(init.method).toBe('PUT');
+      expect([...new Uint8Array(await new Response(init.body).arrayBuffer())]).toEqual(BYTES);
+      const h = new Headers(init.headers);
+      expect(h.get('content-type')).toBe('image/jpeg');
+      expect(h.get('x-viewer-email')).toBe('friend@example.com');
+      expect(h.get('authorization')).toBe('Bearer secret-token');
+    });
+
+    it('PUT needs image/jpeg', async () => {
+      const res = await put(`/api/heroes/${HASH}`, 'application/json');
+      expect(res.status).toBe(415);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+
+    it('image/jpeg is refused on other writes', async () => {
+      const res = await put('/api/albums/cover', 'image/jpeg');
+      expect(res.status).toBe(415);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+
+    it('a malformed hash is 404', async () => {
+      expect((await put('/api/heroes/a/b', 'image/jpeg')).status).toBe(404);
+      expect((await get('/api/heroes/a/b', 'friend@example.com')).status).toBe(404);
+      expect(upstreamCalls()).toHaveLength(0);
+    });
+  });
+
   describe('originals', () => {
     it('returns 404 when the access check is 404, without calling the tunnel', async () => {
       accessStatus = 404;
