@@ -4,7 +4,7 @@ Changes `2026-11-27-album-hero-cover-design.md`, which this replaces where they 
 
 ## Intent
 
-- No header images in R2. Each browser keeps its own copy, one per album, so old covers are not kept.
+- No header images in R2. Each browser keeps the cover's original file, one per album, so old covers are not kept.
 - The owner can move and zoom the cover inside the banner, and everyone who can see the album gets that framing.
 
 ## Approaches (image storage)
@@ -25,19 +25,20 @@ Framing is saved with the album in D1, not in the browser.
   - `ready`: show the stored image. No network request for the hero.
   - `unavailable`: show the blurred thumbnail and try the original again.
   - `undecodable`: show the blurred thumbnail and do not try again.
-- No record, or another cover's record: fetch `/api/originals/:coverId`, resize, and overwrite the record.
+- No record, or another cover's record: fetch `/api/originals/:coverId` and overwrite the record with it.
 - Every visit to the album page retries an `unavailable` record, including returning to it without reloading.
   There is no back-off. Two mounts at once share one attempt.
 - `unavailable`: network error, any non-OK status (tunnel down, agent off, Drive failure, access error), or a
   response whose content type is not `image/*` (such as a sign-in or error page served with 200).
-- `undecodable`: an `image/*` response the browser cannot decode or re-encode (such as HEIC in Chrome). Retrying
+- `undecodable`: an `image/*` response the browser cannot decode (such as HEIC in Chrome). Retrying
   would download the same full file every visit; another browser, or a new cover, tries again.
 - Viewers make their own copy the same way; the existing originals access check already allows it.
-- IndexedDB missing, blocked or full: the page still works and shows the image it just made; it is fetched again
+- IndexedDB missing, blocked or full: the page still works and shows the image it just fetched; it is fetched again
   next visit. Errors are never shown.
 - A browser may clear the store (Safari can after about a week without visits); the copy is then made again.
-- Copy: long side 3072px (was 2048) so zoom stays reasonably sharp, never enlarged, EXIF orientation applied,
-  transparency filled white, JPEG quality 0.85. No size cap, since nothing is uploaded.
+- The file is stored exactly as served: no resizing, re-encoding or size cap. The browser applies EXIF
+  orientation when showing it, and transparent areas show the banner's background. Storage grows by about one
+  original (often several MB) per album visited.
 
 ## Reposition and zoom
 
@@ -61,6 +62,7 @@ Framing is saved with the album in D1, not in the browser.
 ## Removed
 
 The `/heroes` Worker routes, their tests, the proxy hero paths and binary PUT branch, the dev mock's hero path,
+the canvas resize and upload code,
 and the docs saying header images are in R2. Existing `hero/` objects in the `pixdex-thumbnails` bucket are
 deleted by hand after deploy.
 
@@ -71,7 +73,7 @@ between devices, clearing records of deleted albums, any agent change.
 
 ## Constraints and access
 
-Originals are never stored on Cloudflare. A stored copy stays in that browser after access is revoked, but the
+Originals are never stored on Cloudflare. They are now kept in viewers' browsers too, and a stored copy stays in that browser after access is revoked, but the
 album page, which is the only thing that shows it, no longer loads for that user.
 
 ## Performance
