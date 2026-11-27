@@ -268,7 +268,7 @@ Keep them additive; for a destructive one, take a Time Travel bookmark first. De
 - Search omnibox (`src/components/omnibox/`): the bar shows album, own-people (blue), known (violet, "known" marker) and date chips; typed words
   become suggestions through the shared matcher (`src/services/omnibox/matcher.ts`: debounce 150 ms, from 3 characters per span, each word
   matches anywhere inside a name or alias word, case and accent insensitive, no fuzzy matching, longest span wins, a person never used twice,
-  at most 3 ambiguous chips per span plus "+N more"); typing alone never filters; Enter is a plain search, "Ask AI" / Cmd+Enter only where the
+  at most 3 ambiguous chips per span plus "+N more", an option that replaces the chips with a scrollable list of every match for that span, headed "Matches for <words> (N)"; typing, blur, Escape or a pick closes it, and it uses only the already loaded lists, so no extra request); typing alone never filters; Enter is a plain search, "Ask AI" / Cmd+Enter only where the
   Prompt API exists. "Add both" (shown for two person spans, only if the cap of 5 allows) carries the real count from one `GET /search?limit=1`
   per distinct set of top matches after each 150 ms pause in typing, cached by ids and filters, never per keystroke. Binding rules:
   `onSelection(patch, nextText?)` is ONE URL update per pick (never two in a row), and the trimmed text is written to `q` only when the
