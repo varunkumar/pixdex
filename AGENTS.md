@@ -433,6 +433,7 @@ never add content to `CLAUDE.md`.
 
 - [Architecture](docs/architecture.md): components, data flow, config and secrets
 - [Development guide](docs/development.md): commands, hooks, deploys, conventions
+- [Manual data updates](docs/manual-updates.md): safe one-off fixes to production D1 (for example album dates); read it before changing live data by hand
 - [README](README.md): setup, batch indexing, originals tunnel
 - [Original design spec](docs/superpowers/specs/2026-09-18-pixdex-local-cloud-redesign-design.md)
 

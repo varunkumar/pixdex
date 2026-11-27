@@ -518,7 +518,8 @@ a merged migration runs on production before the new code goes live. See
 - `agent/` - local indexing CLI and originals server; `agent/sidecar/` is the
   InsightFace service
 - `docs/` - [architecture](docs/architecture.md),
-  [development guide](docs/development.md), plans and specs, and
+  [development guide](docs/development.md),
+  [manual data updates](docs/manual-updates.md), plans and specs, and
   `screenshots/` (README images, generated from dummy data)
 
 Agent-oriented summary: `AGENTS.md`. Update this README and `AGENTS.md` with
