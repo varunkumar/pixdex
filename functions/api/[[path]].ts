@@ -52,6 +52,7 @@ const ALLOWED_PATHS = [
   /^people\/ignored$/,
   /^people\/review-queue$/,
   /^people\/[^/]+\/auto-faces$/,
+  /^people\/[^/]+\/faces$/,
   /^photos\/[^/]+\/faces$/,
   /^faces\/[^/]+\/crop$/,
   // Access requests list for the admin page; the Worker answers 404 to anyone but ADMIN_EMAIL.

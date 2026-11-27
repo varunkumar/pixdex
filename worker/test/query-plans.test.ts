@@ -7,7 +7,7 @@ import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
 import { GROUP_CANDIDATES_SQL, MATCH_CANDIDATES_SQL, MATCH_MOVED_SQL, MATCH_UNNAMED_SQL, ignoredFacesSql, autoFacesSql, CONFIRM_AUTO_SQL, REJECT_AUTO_INSERT_SQL, REJECT_AUTO_SQL, REVIEW_QUEUE_SQL } from '../src/routes/people';
-import { IGNORE_FACES_SQL, RESTORE_FACES_SQL } from '../src/routes/faces';
+import { IGNORE_FACES_SQL, personPhotoFacesSql, RESTORE_FACES_SQL } from '../src/routes/faces';
 import { CHOOSE_REFERENCES_SQL, DROP_REFERENCES_SQL } from '../src/people/referenceSelection';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
@@ -31,6 +31,13 @@ describe('query plans (no unbounded scans on the new owner paths)', () => {
     const p = await plan(`SELECT 1 FROM photos p${a.join} WHERE p.content_hash = ?${a.where}`, 'h', ...a.params);
     expect(p).toMatch(/SEARCH p USING INDEX sqlite_autoindex_photos_\d \(content_hash=\?\)/);
     expect(p).toMatch(/SEARCH va USING PRIMARY KEY \(name=\?\)/);
+  });
+
+  it("a person's faces for a page of photos walk the photo index, never all of the person's faces", async () => {
+    const s = scopeFor(U, 'ph.album');
+    const p = await plan(personPhotoFacesSql(s.sql), U.email, U.email, '[]', 'p1', ...s.params);
+    expect(p).toMatch(/SEARCH f USING INDEX idx_faces_photo_id \(photo_id=\?\)/);
+    expect(p).not.toMatch(/idx_faces_person_status_created|SCAN f\b|SCAN ph\b/);
   });
 
   it('person name uniqueness check uses the per-owner index', async () => {

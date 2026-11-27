@@ -2,11 +2,11 @@ import type { Context } from 'hono';
 import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { userOf } from '../access';
-import { photoAccess } from '../db/visibility';
+import { photoAccess, scopeFor } from '../db/visibility';
 import { denial, faceRoles, personRole } from '../db/people';
 import { requireFacesOwned } from './people';
 import { refreshReferences } from '../people/referenceSelection';
-import { FACE_SELECT, confirmFacesStmts, nameBinds, serializeFace, type FaceWithJoins } from '../db/faces';
+import { FACE_SELECT, PERSON_NAME_SQL, confirmFacesStmts, nameBinds, serializeFace, type FaceWithJoins } from '../db/faces';
 
 type Ctx = Context<{ Bindings: Env }>;
 
@@ -73,7 +73,39 @@ export async function unassignFaceRoute(c: Ctx) {
   return c.json(serializeFace((await loadFace(c, id))!));
 }
 
-const faceIdsBody = z.object({ faceIds: z.array(z.string().check(z.minLength(1))).check(z.minLength(1), z.maxLength(200)) });
+/** One page of photos: the person page's largest page size. */
+export const MAX_FACE_PHOTOS = 48;
+
+/**
+ * One person's confirmed and auto faces on the given photos. The photo ids drive the query, so faces come from
+ * idx_faces_photo_id; the unary `+` keeps the planner from walking every face of the person instead. Binds: the two
+ * name emails, JSON photo ids, person id, scope params.
+ */
+export const personPhotoFacesSql = (scopeSql: string) => `SELECT f.id, f.photo_id, f.bbox_x, f.bbox_y, f.bbox_w, f.bbox_h,
+  f.det_score, f.person_id, f.assign_status, f.match_score, f.crop_key, f.ignored_at,
+  ${PERSON_NAME_SQL} AS person_name, ph.content_hash AS content_hash
+  FROM json_each(?) j CROSS JOIN faces f ON f.photo_id = j.value
+  JOIN photos ph ON ph.id = f.photo_id LEFT JOIN persons p ON p.id = f.person_id
+  WHERE +f.person_id = ? AND +f.assign_status IN ('confirmed', 'auto')${scopeSql}`;
+
+/**
+ * A person's faces for a page of photos, instead of one request per photo. An unknown or invisible person or photo
+ * simply matches nothing, so no role check is read. D1: 1 statement, 0 writes.
+ */
+export async function personFacesRoute(c: Ctx) {
+  const requested = (c.req.query('photos') ?? '').split(',').map((id) => id.trim()).filter(Boolean);
+  const photos = [...new Set(requested)];
+  if (photos.length === 0 || photos.length > MAX_FACE_PHOTOS)
+    return c.json({ error: `photos must list 1 to ${MAX_FACE_PHOTOS} ids` }, 400);
+  const user = userOf(c);
+  const access = scopeFor(user, 'ph.album');
+  const { results } = await c.env.DB.prepare(personPhotoFacesSql(access.sql))
+    .bind(...nameBinds(user), JSON.stringify(photos), c.req.param('id') as string, ...access.params)
+    .all<FaceWithJoins>();
+  return c.json({ faces: results.map(serializeFace) });
+}
+
+const faceIdsBody =z.object({ faceIds: z.array(z.string().check(z.minLength(1))).check(z.minLength(1), z.maxLength(200)) });
 
 /**
  * Only an unnamed face can be ignored, so a face matched meanwhile is skipped. `+` keeps the primary-key lookups.

@@ -16,7 +16,7 @@ import { ingestRelocateRoute } from './routes/ingest-relocate';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { albumContentsRoute } from './routes/album-contents';
 import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
-import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute, ignoreFacesRoute, restoreFacesRoute } from './routes/faces';
+import { assignFaceRoute, faceCropRoute, personFacesRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute, ignoreFacesRoute, restoreFacesRoute } from './routes/faces';
 import {
   assignFacesRoute,
   autoFacesRoute,
@@ -107,6 +107,7 @@ guardedWrite('DELETE', '/people/:id', deletePersonRoute);
 guardedWrite('POST', '/people/:id/faces', assignFacesRoute);
 guardedWrite('POST', '/people/:id/match', matchPersonRoute);
 guardedWrite('POST', '/people/:id/cover', setPersonCoverRoute);
+app.get('/people/:id/faces', personFacesRoute);
 app.get('/people/:id/auto-faces', autoFacesRoute);
 guardedWrite('POST', '/people/:id/auto-faces/review', reviewAutoFacesRoute);
 guardedWrite('PUT', '/people/:id/label', putPersonLabelRoute);

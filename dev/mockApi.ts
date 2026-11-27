@@ -110,7 +110,14 @@ function autoFacesOf(personId: string): SerializedFace[] {
     }));
 }
 
-/** Saved cover framing per album, kept until the dev server restarts. */
+/** One dummy face of the person on each asked photo that shows them; every second one is still an auto match. */
+function personFacesOf(personId: string, photoIds: string[]): SerializedFace[] {
+  return autoFacesOf(personId)
+    .filter((f, i, all) => photoIds.includes(f.photoId) && all.findIndex((o) => o.photoId === f.photoId) === i)
+    .map((f, i) => (i % 2 === 0 ? f : { ...f, status: 'confirmed' as const, matchScore: null }));
+}
+
+/** Saved cover framing per album,kept until the dev server restarts. */
 const FRAMINGS = new Map<string, Framing & { hash: string }>();
 
 /** Dummy species, keyed by scientific name (what `species=` filters on). */
@@ -460,6 +467,11 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     const pendingCount = REQUESTS.filter((r) => r.status === 'pending').length;
     const requests = REQUESTS.filter((r) => !wanted || r.status === wanted).sort((a, b) => b.id - a.id);
     return sendJson(res, 200, { requests, pendingCount, queueFull: pendingCount >= 3 });
+  }
+  const personFaces = /^\/people\/([^/]+)\/faces$/.exec(path);
+  if (personFaces) {
+    const personId = decodeURIComponent(personFaces[1]);
+    return sendJson(res, 200, { faces: personFacesOf(personId, list(url.searchParams.get('photos'))) });
   }
   if (path === '/people') return sendJson(res, 200, { people: OWN });
   if (path === '/people/known') return sendJson(res, 200, { known: KNOWN });
