@@ -6,7 +6,7 @@ import { knownFilterSql } from '../src/db/known';
 import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
-import { GROUP_CANDIDATES_SQL, MATCH_CANDIDATES_SQL, MATCH_MOVED_SQL, MATCH_UNNAMED_SQL, ignoredFacesSql, autoFacesSql, CONFIRM_AUTO_SQL, REJECT_AUTO_INSERT_SQL, REJECT_AUTO_SQL } from '../src/routes/people';
+import { GROUP_CANDIDATES_SQL, MATCH_CANDIDATES_SQL, MATCH_MOVED_SQL, MATCH_UNNAMED_SQL, ignoredFacesSql, autoFacesSql, CONFIRM_AUTO_SQL, REJECT_AUTO_INSERT_SQL, REJECT_AUTO_SQL, REVIEW_QUEUE_SQL } from '../src/routes/people';
 import { IGNORE_FACES_SQL, RESTORE_FACES_SQL } from '../src/routes/faces';
 import { CHOOSE_REFERENCES_SQL, DROP_REFERENCES_SQL } from '../src/people/referenceSelection';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
@@ -129,6 +129,16 @@ describe('review of auto matches', () => {
     const p = await plan(sql, ...params);
     expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX sqlite_autoindex_faces_1 \(id=\?\)/);
     expect(p).not.toMatch(/SCAN (faces|ph|a)\b/);
+  });
+});
+
+describe('review queue', () => {
+  it("walks only the caller's people and their auto faces", async () => {
+    const p = await plan(REVIEW_QUEUE_SQL, U.email);
+    expect(p).toMatch(/SEARCH p USING (COVERING )?INDEX idx_persons_owner_name_lower \(owner_email=\?\)/);
+    expect(p).toMatch(/SEARCH f USING INDEX idx_faces_person_status_created \(person_id=\? AND assign_status=\?\)/);
+    expect(p).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
+    expect(p).not.toMatch(/SCAN (p|f|ph|a)\b/);
   });
 });
 

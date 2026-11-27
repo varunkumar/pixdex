@@ -18,6 +18,7 @@ vi.mock("../../services/api/WorkerApiClient", () => ({
     ignoreFaces: vi.fn(),
     restoreFaces: vi.fn(),
     getIgnoredFaces: vi.fn(),
+    getReviewQueue: vi.fn(),
     thumbnailUrl: vi.fn(
       (f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`,
     ),
@@ -78,6 +79,7 @@ describe("People", () => {
       (f) => `/api${f.thumbnailUrl}`,
     );
     vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
+    vi.mocked(workerApiClient.getReviewQueue).mockResolvedValue([]);
     vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
       groups: [group("f1", "f2")],
       scanned: 2,
@@ -649,5 +651,24 @@ describe("People: ignoring faces", () => {
       await screen.findByRole("button", { name: "Ignored faces" }),
     );
     expect(await screen.findByText("No ignored faces.")).toBeInTheDocument();
+  });
+
+  it("links to the matches waiting for review, with their total", async () => {
+    vi.mocked(workerApiClient.getReviewQueue).mockResolvedValue([
+      { id: "pe1", count: 300 },
+      { id: "pe2", count: 12 },
+    ]);
+    show();
+    expect(
+      await screen.findByRole("link", { name: "312 matches to review" }),
+    ).toHaveAttribute("href", "/review");
+  });
+
+  it("shows no review link when nothing is pending or the request fails", async () => {
+    vi.mocked(workerApiClient.getReviewQueue).mockRejectedValue(new Error("500"));
+    show();
+    await screen.findByText("Asha");
+    await waitFor(() => expect(workerApiClient.getReviewQueue).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: /to review/ })).toBeNull();
   });
 });

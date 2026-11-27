@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
 import {
+  markReviewQueueStale,
   matchAfterNaming,
   noteRemovedName,
   refreshAfterIgnoring,
@@ -242,6 +243,7 @@ const PhotoFaces = ({
   });
 
   const refresh = () => {
+    markReviewQueueStale(queryClient);
     void queryClient.invalidateQueries({ queryKey: ['photo-faces', photoId] });
     void queryClient.invalidateQueries({ queryKey: ['people'] });
     for (const key of SEARCH_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });

@@ -24,8 +24,16 @@ const invalidate = (client: QueryClient, keys: string[]) => {
   for (const key of keys) void client.invalidateQueries({ queryKey: [key] });
 };
 
+/** Marks the review counts out of date without requesting them now: the Worker reads every pending face. */
+export function markReviewQueueStale(client: QueryClient) {
+  void client.invalidateQueries({ queryKey: ['review-queue'], refetchType: 'none' });
+}
+
 /** After matching has written faces: everything that shows people or faces is out of date. */
-const refreshAfterMatching = (client: QueryClient) => invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS]);
+const refreshAfterMatching = (client: QueryClient) => {
+  markReviewQueueStale(client);
+  invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS]);
+};
 
 /**
  * Removes faces from the cached unnamed groups instead of refetching them, so naming or ignoring does not
@@ -51,6 +59,7 @@ const SEARCH_KEYS_BUT_GROUPS = SEARCH_KEYS.filter((k) => k !== 'people-groups');
 /** Right after faces are named, before matching has even run. */
 export function refreshAfterNaming(client: QueryClient, faceIds: string[]) {
   dropFromGroups(client, faceIds);
+  markReviewQueueStale(client);
   invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS_BUT_GROUPS]);
 }
 
@@ -69,6 +78,7 @@ export function refreshAfterRestoring(client: QueryClient) {
 
 /** After auto matches were confirmed or rejected: rejected faces also leave counts and rejoin the unnamed groups. */
 export function refreshAfterReview(client: QueryClient) {
+  markReviewQueueStale(client);
   invalidate(client, ['photo-faces', 'people', 'album-contents', ...SEARCH_KEYS]);
 }
 

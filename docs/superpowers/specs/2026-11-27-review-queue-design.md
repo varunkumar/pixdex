@@ -1,6 +1,6 @@
 # "To review" page for pending auto matches: design
 
-Date: 2026-11-27. Status: awaiting approval.
+Date: 2026-11-27. Status: approved and built.
 
 ## Intent
 
@@ -42,6 +42,12 @@ each person.
   in `docs/development.md`. Requested by the People page, `/review` and the end of a review; cached 5 minutes and
   refreshed after a review, naming or a match run. Search, Timeline and other pages do not request it.
 - Worker CPU: maps at most one row per person.
+
+## Changed while building
+
+Changes no longer refresh the count at once: they mark it stale, and it is requested again when a page showing it is
+next opened. Refetching on every naming would have read every pending face each time. Measured: about 5 rows per
+pending face (`docs/development.md`).
 
 ## Not included
 

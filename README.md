@@ -395,6 +395,11 @@ best rated or alphabetical.
   ever changed, one that changed after the page loaded is skipped, and one whose picture did not load is left alone.
   Only the person's owner can do this, for faces in their own albums. A wrong confirm can attract similar wrong faces
   if it is used as a reference (below), until you correct it with "Not X" on the photo's page.
+- **To review:** when automatic matches are waiting, the People page shows "N matches to review". It opens a list of
+  your people with their pending counts, most first. "Review" opens that person's grid; once you reach the end,
+  "Next: <name>" moves to the person with the most pending, skipping anyone you already finished in this visit.
+  Unnamed groups are not counted. The count is refreshed when you next open these pages (at most 5 minutes old after
+  a background match).
 - **Which faces matching compares against:** up to 30 confirmed faces per person, spread across the years the photos
   were taken, so someone photographed at 5 and at 40 is matched on both. Each year takes turns, giving its largest
   faces first; photos with no date count as one more year. A scanned print counts in the year of its date, usually the

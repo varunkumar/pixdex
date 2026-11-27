@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import { TbUsers, TbX } from "react-icons/tb";
 import { Link } from "react-router-dom";
 import { useListParams } from "../hooks/useListParams";
+import { useReviewQueue } from "../hooks/useReviewQueue";
 import { workerApiClient } from "../services/api/WorkerApiClient";
 import {
   matchAfterNaming,
@@ -212,6 +213,8 @@ const People = () => {
     queryKey: ["people"],
     queryFn: () => workerApiClient.getPeople(),
   });
+  const reviewQueue = useReviewQueue();
+  const pending = reviewQueue.data?.reduce((n, p) => n + p.count, 0) ?? 0;
   const groupsQuery = useInfiniteQuery({
     queryKey: ["people-groups"],
     queryFn: ({ pageParam }) => workerApiClient.getFaceGroups(pageParam),
@@ -262,6 +265,11 @@ const People = () => {
   return (
     <Stack gap="lg">
       <Title order={2}>People</Title>
+      {pending > 0 && (
+        <Button component={Link} to="/review" variant="light" w="fit-content">
+          {pending} {pending === 1 ? "match" : "matches"} to review
+        </Button>
+      )}
       {groupsQuery.error != null && (
         <Text c="red">Could not load unnamed faces</Text>
       )}

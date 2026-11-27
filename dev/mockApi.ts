@@ -437,6 +437,12 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     return sendJson(res, 405, {
       error: 'The dev mock is read-only apart from admin decisions, cover framing, ignoring faces and face review',
     });
+  if (path === '/people/review-queue') {
+    const people = OWN.map((p) => ({ id: p.id, count: autoFacesOf(p.id).filter((f) => !REVIEWED.has(f.id)).length }))
+      .filter((p) => p.count > 0)
+      .sort((a, b) => b.count - a.count);
+    return sendJson(res, 200, { people });
+  }
   const auto = /^\/people\/([^/]+)\/auto-faces$/.exec(path);
   if (auto) {
     // Same keyset as the Worker, with the face id standing in for the rowid.

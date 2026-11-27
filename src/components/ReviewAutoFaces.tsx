@@ -1,12 +1,14 @@
 import { Anchor, Box, Button, Group, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TbCheck, TbX } from 'react-icons/tb';
 import { Link, useParams } from 'react-router-dom';
+import { useReviewQueue } from '../hooks/useReviewQueue';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { noteRemovedName, refreshAfterReview } from '../services/matchQueue';
 import { errorMessage, UNNAMED_PERSON } from '../services/peopleKeys';
-import type { SerializedFace } from '../types/api';
+import { finishedReviews, noteReviewFinished } from '../services/reviewVisit';
+import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
 
 const TILE = 96;
@@ -178,6 +180,27 @@ const ReviewPage = ({
   );
 };
 
+/** The person with the most matches pending, leaving out this one and those already gone through. */
+const NextPerson = ({ personId }: { personId: string }) => {
+  const queryClient = useQueryClient();
+  const queue = useReviewQueue();
+  const { data: people = [] } = useQuery<PersonSummary[]>({
+    queryKey: ['people'],
+    queryFn: () => workerApiClient.getPeople(),
+  });
+  // Cached counts may predate the saves just made: wait for the fresh ones.
+  if (queue.isFetching) return null;
+  const done = finishedReviews(queryClient);
+  const next = queue.data?.find((p) => p.id !== personId && !done.has(p.id) && people.some((q) => q.id === p.id));
+  if (!next) return null;
+  const name = people.find((p) => p.id === next.id)?.name ?? UNNAMED_PERSON;
+  return (
+    <Button component={Link} to={`/people/${next.id}/review`} size="xs">
+      Next: {name} ({next.count})
+    </Button>
+  );
+};
+
 /** Pages through a person's auto matches, weakest first. `done` follows the last page. */
 const Review = ({ personId, name }: { personId: string; name: string }) => {
   const [position, setPosition] = useState<{ round: number; cursor?: string; done?: boolean }>({ round: 0 });
@@ -195,6 +218,10 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
   });
   const page = query.data;
   const finished = done || page?.faces.length === 0;
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (finished) noteReviewFinished(queryClient, personId);
+  }, [finished, queryClient, personId]);
 
   return (
     <Stack gap="md">
@@ -223,6 +250,7 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
           >
             Start again
           </Button>
+          <NextPerson personId={personId} />
         </Group>
       ) : (
         page && (
@@ -253,9 +281,16 @@ const ReviewAutoFaces = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to={`/people/${id}`} size="sm">
-        ← Back to the person
-      </Anchor>
+      <Group gap="lg">
+        <Anchor component={Link} to={`/people/${id}`} size="sm">
+          ← Back to the person
+        </Anchor>
+        {person?.canEdit && (
+          <Anchor component={Link} to="/review" size="sm">
+            All to review
+          </Anchor>
+        )}
+      </Group>
       {isSuccess && !person && <Text c="dimmed">This person was not found.</Text>}
       {person && !person.canEdit && <Text c="dimmed">Only the owner of this person can review their matches.</Text>}
       {person?.canEdit && (

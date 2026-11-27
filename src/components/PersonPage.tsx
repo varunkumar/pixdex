@@ -8,7 +8,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { useMatchQueue } from '../hooks/useMatchQueue';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
-import { noteRemovedName } from '../services/matchQueue';
+import { markReviewQueueStale, noteRemovedName } from '../services/matchQueue';
 import { photoCaption } from '../services/text';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
@@ -166,6 +166,7 @@ const PersonPage = () => {
   );
 
   const refresh = () => {
+    markReviewQueueStale(queryClient);
     void queryClient.invalidateQueries({ queryKey: ['photo-faces'] });
     void queryClient.invalidateQueries({ queryKey: ['people'] });
     for (const key of SEARCH_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });

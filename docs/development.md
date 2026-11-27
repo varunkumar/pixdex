@@ -402,6 +402,26 @@ Measured locally in the Workers test runtime with 5,000 photos and 25,497 faces 
 
 Real D1 numbers are unmeasured: after deploy check `wrangler d1 insights pixdex` and `wrangler tail`.
 
+### Review queue performance
+
+Measured locally in the Workers test runtime (16 people, 1,000 photos, plus 700 confirmed and 5,000 unnamed faces,
+which the query does not touch):
+
+| Pending auto faces | Rows read | Rows written |
+|---|---|---|
+| 0 | 18 | 0 |
+| 530 | 2,671 | 0 |
+| 3,000 | 14,898 | 0 |
+| 8,500 | 42,123 | 0 |
+
+- `GET /people/review-queue` is one statement, about 5 rows read per pending face. At 8,500 pending, 100 requests are
+  about 84% of the free daily 5M, so it runs only for the People page, `/review` and the end of a review, is cached
+  5 minutes in the browser, and changes only mark it stale (no immediate refetch). A reload requests it again.
+- Worker CPU: at most one row per person. No migration, index or changed query.
+- If it becomes too costly: a partial index on auto faces, or a count kept up to date on `persons`.
+
+Real D1 numbers are unmeasured: check `wrangler d1 insights pixdex` after deploy.
+
 ### Matching references performance (migration 0023)
 
 Measured locally in the Workers test runtime with 5,000 photos over 19 years and 16 people holding 716 confirmed faces
