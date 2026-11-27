@@ -7,6 +7,17 @@ cd "$(git rev-parse --show-toplevel)"
 staged=$(git diff --cached --name-only --diff-filter=ACMR)
 [ -z "$staged" ] && exit 0
 
+# AGENTS.md loads into every agent session: keep it short. Runs for docs-only commits too.
+max_agents_lines=200
+if git cat-file -e :AGENTS.md 2>/dev/null; then
+  agents_lines=$(git show :AGENTS.md | awk 'END { print NR }')
+  if [ "$agents_lines" -gt "$max_agents_lines" ]; then
+    echo "pre-commit: AGENTS.md has $agents_lines lines (limit $max_agents_lines)." >&2
+    echo "pre-commit: move details to docs/agents/ and keep a link." >&2
+    exit 1
+  fi
+fi
+
 # Docs/markdown-only commits need no gate.
 code=$(printf '%s\n' "$staged" | grep -v -E '^docs/|\.md$|\.todo$|^TODO' || true)
 [ -z "$code" ] && exit 0

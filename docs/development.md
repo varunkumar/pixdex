@@ -27,7 +27,8 @@ only the suites touched by staged changes:
 - `worker/` changes: worker tests
 - `agent/` changes: agent typecheck + tests
 - anything else: frontend lint, tests, build
-- docs/markdown/todo-only commits skip the gate
+- docs/markdown/todo-only commits skip the test suites
+- all commits: the hook rejects an `AGENTS.md` with more than 200 lines
 
 Do not bypass with `--no-verify`.
 
@@ -218,13 +219,26 @@ Rules learned from that:
 
 After every feature or change, in the same commit or PR, update:
 
-- `README.md`: setup, commands, env vars, project structure, user-facing behavior.
-- `AGENTS.md`: layout, commands, rules, and the docs index.
+- `README.md`: short overview and quick setup only.
+- `docs/browsing.md`, `search.md`, `indexing.md`, `people.md`, `sharing.md`:
+  user-facing behavior, commands and setup. Write them in ASD-STE100.
+- `AGENTS.md`: commands, core rules and the index of agent notes.
+- `docs/agents/`: detailed agent notes for each area.
 - `docs/architecture.md` / this file when components, data flow, config, or
   workflow change.
 
 New env vars go in the matching `.env.example` and the config table in
 `docs/architecture.md`. If nothing doc-worthy changed, no update is needed.
+
+## Project structure
+
+- `src/`: React interface. Search box in `components/omnibox` and
+  `services/omnibox`. AI Search logic in `services/aiSearch`.
+- `dev/mockApi.ts`: invented data for `PIXDEX_MOCK=1 npm run dev`.
+- `functions/api`: proxy that adds the read token. `functions/_lib`: Access
+  checks.
+- `worker/`: Cloudflare Worker (Hono, D1, R2) and migrations.
+- `agent/`: indexing CLI and originals server. `agent/sidecar/`: Python services.
 
 ## Conventions
 

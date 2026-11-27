@@ -451,7 +451,7 @@ rowid, `limit` at most 100 within a 5000-rowid window) and writes matches back i
 Read side: `GET /people/known` lists known people with a matched face in a photo the viewer can see; `known=<Qid>,...` on `/search`,
 `/timeline` and `/timeline/buckets` is an AND filter sharing the cap of 5 with `people` (people first, extras silently dropped). The
 People filter on Search and Timeline shows "Your people" (blue) and "Known personalities in your photos" (violet, with a "known"
-marker). Cost and measurement notes: `AGENTS.md` (performance review) and `docs/development.md`.
+marker). Cost and measurement notes: `docs/agents/` (performance reviews) and `docs/development.md`.
 
 Known limits: matching ignores `faces.embedding_model`. After a face model
 change, faces must be re-scanned and re-confirmed (phase A does not mix models).
