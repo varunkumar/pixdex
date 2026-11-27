@@ -8,6 +8,7 @@ import { useListParams } from '../hooks/useListParams';
 import { workerApiClient, type AlbumSort } from '../services/api/WorkerApiClient';
 import AlbumCard from './AlbumCard';
 import ListPagination from './ListPagination';
+import PageLoading from './PageLoading';
 import SortIcons from './SortIcons';
 
 const ALBUM_PAGE_SIZES = [12, 24, 48] as const;
@@ -51,6 +52,7 @@ const Albums = () => {
       </Group>
 
       {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
+      {!data && !error && <PageLoading label="Loading albums" />}
       {data && data.albums.length === 0 && <Text c="dimmed">No albums yet.</Text>}
 
       {data && data.albums.length > 0 && (

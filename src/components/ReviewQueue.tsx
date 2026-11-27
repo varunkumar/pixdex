@@ -7,6 +7,7 @@ import { workerApiClient } from '../services/api/WorkerApiClient';
 import { UNNAMED_PERSON } from '../services/peopleKeys';
 import BackLink from './BackLink';
 import FaceTile from './FaceTile';
+import PageLoading from './PageLoading';
 
 const FACE = 56;
 
@@ -44,7 +45,7 @@ const ReviewQueue = () => {
           </Button>
         </Group>
       )}
-      {!failed && !loaded && <Text c="dimmed">Loading…</Text>}
+      {!failed && !loaded && <PageLoading label="Loading matches" />}
       {loaded && rows.length === 0 && <Text c="dimmed">Nothing to review.</Text>}
       {rows.map(({ person, count }) => {
         const name = person.name ?? UNNAMED_PERSON;

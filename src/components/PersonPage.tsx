@@ -18,7 +18,9 @@ import BackLink from './BackLink';
 import ColumnsToggle from './ColumnsToggle';
 import CoverBadge from './CoverBadge';
 import FaceTile from './FaceTile';
+import InlineConfirm from './InlineConfirm';
 import ListPagination from './ListPagination';
+import PageLoading from './PageLoading';
 import PersonLabelEditor from './PersonLabelEditor';
 import PhotoGrid from './PhotoGrid';
 import SetCoverButton from './SetCoverButton';
@@ -290,15 +292,13 @@ const PersonPage = () => {
           )}
 
           {confirmingDelete && (
-            <Group gap="xs">
-              <Text size="sm">Delete {person.name ?? UNNAMED_PERSON}? Their faces become unnamed again.</Text>
-              <Button size="xs" color="red" loading={remove.isPending} onClick={() => remove.mutate()}>
-                Confirm delete
-              </Button>
-              <Button size="xs" variant="subtle" onClick={() => setConfirmingDelete(false)}>
-                Cancel
-              </Button>
-            </Group>
+            <InlineConfirm
+              message={`Delete ${person.name ?? UNNAMED_PERSON}? Their faces become unnamed again.`}
+              confirmLabel="Confirm delete"
+              loading={remove.isPending}
+              onConfirm={() => remove.mutate()}
+              onCancel={() => setConfirmingDelete(false)}
+            />
           )}
 
           {person?.canEdit && (
@@ -358,6 +358,7 @@ const PersonPage = () => {
       )}
 
       {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
+      {!photos && !error && <PageLoading label="Loading photos" />}
       {photos && photos.length === 0 && <Text c="dimmed">No photos for this person yet.</Text>}
       {person && (
         <Group gap="xs" justify="flex-end">

@@ -34,6 +34,7 @@ import { errorMessage, UNNAMED_PERSON } from "../services/peopleKeys";
 import type { FaceGroup, PersonSummary } from "../types/api";
 import FaceTile from "./FaceTile";
 import ListPagination from "./ListPagination";
+import PageLoading from "./PageLoading";
 import SortIcons from "./SortIcons";
 import PersonLabelEditor from "./PersonLabelEditor";
 import IgnoredFaces from "./IgnoredFaces";
@@ -215,7 +216,11 @@ const People = () => {
     GROUP_PAGE_SIZES.find((s) => s === requestedGroupSize) ??
     GROUP_PAGE_SIZES[0];
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const { data: people = [], isSuccess: peopleLoaded } = useQuery({
+  const {
+    data: people = [],
+    isSuccess: peopleLoaded,
+    isError: peopleFailed,
+  } = useQuery({
     queryKey: ["people"],
     queryFn: () => workerApiClient.getPeople(),
   });
@@ -282,6 +287,10 @@ const People = () => {
       )}
       {groupsQuery.error != null && (
         <Text c="red">Could not load unnamed faces</Text>
+      )}
+
+      {!loaded && !peopleFailed && groupsQuery.error == null && (
+        <PageLoading label="Loading people" />
       )}
 
       {loaded && people.length === 0 && groups.length === 0 && (

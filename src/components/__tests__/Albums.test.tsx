@@ -73,6 +73,12 @@ describe('Albums', () => {
     );
   });
 
+  it('shows a named spinner while the albums load', () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockReturnValue(new Promise(() => {}));
+    renderWithProviders(<Albums />, { route: '/albums' });
+    expect(screen.getByRole('progressbar', { name: 'Loading albums' })).toBeInTheDocument();
+  });
+
   it('shows an empty state for an empty library', async () => {
     vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({ albums: [], total: 0 });
     renderWithProviders(<Albums />, { route: '/albums' });

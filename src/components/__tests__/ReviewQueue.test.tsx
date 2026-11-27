@@ -34,6 +34,12 @@ describe('ReviewQueue', () => {
     ]);
   });
 
+  it('shows a named spinner while loading', async () => {
+    vi.mocked(workerApiClient.getReviewQueue).mockReturnValue(new Promise(() => {}));
+    show();
+    expect(await screen.findByRole('progressbar', { name: 'Loading matches' })).toBeInTheDocument();
+  });
+
   it("lists people in the Worker's order with counts and a way into each review", async () => {
     show();
     const links = await screen.findAllByRole('link', { name: /^Review / });

@@ -95,6 +95,12 @@ describe("People", () => {
     });
   });
 
+  it('shows a named spinner while loading', async () => {
+    vi.mocked(workerApiClient.getPeople).mockReturnValue(new Promise(() => {}));
+    show();
+    expect(await screen.findByRole('progressbar', { name: 'Loading people' })).toBeInTheDocument();
+  });
+
   it("sorts people alphabetically by default and by face count on request", async () => {
     vi.mocked(workerApiClient.getPeople).mockResolvedValue([
       {

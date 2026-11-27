@@ -33,7 +33,7 @@ const LINKS: NavItem[] = [
   { to: '/timeline', label: 'Timeline', icon: MdTimeline, end: false },
   { to: '/search', label: 'Search', icon: MdSearch, end: false },
   { to: '/people', label: 'People', icon: MdPeople, end: false },
-  { to: '/daily', label: 'Daily Pick', icon: MdPhoto, end: false },
+  { to: '/daily', label: 'Daily pick', icon: MdPhoto, end: false },
 ];
 
 /** Shown (never disabled) only to the admin. */

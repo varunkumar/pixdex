@@ -13,6 +13,7 @@ import { finishedReviews, noteReviewFinished } from '../services/reviewVisit';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import BackLink from './BackLink';
 import FaceTile from './FaceTile';
+import PageLoading from './PageLoading';
 
 const TILE = 96;
 
@@ -247,7 +248,7 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
           </Button>
         </Group>
       )}
-      {query.isLoading && <Text c="dimmed">Loading…</Text>}
+      {query.isLoading && <PageLoading label="Loading matches" />}
       {finished ? (
         <Group gap="xs">
           <Text c="dimmed">No more auto matches.</Text>
@@ -296,7 +297,7 @@ const ReviewAutoFaces = () => {
   const { id = '' } = useParams();
   const { key } = useLocation();
   const personPage = useLastAddress(`/people/${id}`);
-  const { data: people = [], isSuccess } = useQuery({
+  const { data: people = [], isSuccess, isPending } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
   });
@@ -309,6 +310,7 @@ const ReviewAutoFaces = () => {
         <BackLink to={personPage}>{person ? name : 'Person'}</BackLink>
         {person?.canEdit && <BackLink to="/review">To review</BackLink>}
       </Group>
+      {isPending && <PageLoading label="Loading matches" />}
       {isSuccess && !person && <Text c="dimmed">This person was not found.</Text>}
       {person && !person.canEdit && <Text c="dimmed">Only the owner of this person can review their matches.</Text>}
       {person?.canEdit && (

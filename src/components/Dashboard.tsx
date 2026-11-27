@@ -7,13 +7,14 @@ import { BRAND } from '../theme';
 
 const RECENT_COUNT = 12;
 
-const Stat = ({ label, value, to }: { label: string; value: number; to: string }) => (
+/** `value` is undefined until it has loaded: a dash, never a false zero. */
+const Stat = ({ label, value, to }: { label: string; value: number | undefined; to: string }) => (
   <UnstyledButton component={Link} to={to}>
     <Text size="sm" c="dimmed">
       {label}
     </Text>
     <Text fz={32} fw={700} lh={1.1}>
-      {value}
+      {value ?? '-'}
     </Text>
   </UnstyledButton>
 );
@@ -36,8 +37,8 @@ const Dashboard = () => {
           {BRAND}
         </Title>
         <SimpleGrid cols={2}>
-          <Stat label="Photos" value={recent?.total ?? 0} to="/search" />
-          <Stat label="Albums" value={albums?.total ?? 0} to="/albums" />
+          <Stat label="Photos" value={recent?.total} to="/search" />
+          <Stat label="Albums" value={albums?.total} to="/albums" />
         </SimpleGrid>
       </Card>
 
@@ -72,7 +73,7 @@ const Dashboard = () => {
         {[
           { to: '/search', label: 'Search' },
           { to: '/albums', label: 'Albums' },
-          { to: '/daily', label: 'Daily Pick' },
+          { to: '/daily', label: 'Daily pick' },
         ].map(({ to, label }) => (
           <Card key={to} withBorder component={Link} to={to} style={{ textDecoration: 'none', color: 'inherit' }}>
             {label}

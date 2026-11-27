@@ -46,7 +46,7 @@ const Lightbox = ({ opened, onClose, thumbnailSrc, originalSrc, originalStatus, 
               : 'The original cannot be shown here.'}{' '}
             {fallbackHref && (
               <Anchor href={fallbackHref} target="_blank" rel="noopener noreferrer" c="aurora.3">
-                Open original
+                View original
               </Anchor>
             )}
           </Text>

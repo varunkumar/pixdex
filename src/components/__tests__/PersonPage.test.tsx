@@ -78,6 +78,12 @@ describe('PersonPage', () => {
     });
   });
 
+  it('shows a named spinner while the photos load', async () => {
+    vi.mocked(workerApiClient.searchPage).mockReturnValue(new Promise(() => {}));
+    show();
+    expect(await screen.findByRole('progressbar', { name: 'Loading photos' })).toBeInTheDocument();
+  });
+
   it('shows photos for the person', async () => {
     show();
     expect(await screen.findByRole('heading', { name: 'Asha' })).toBeInTheDocument();
@@ -377,6 +383,8 @@ describe('PersonPage', () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
     expect(workerApiClient.deletePerson).not.toHaveBeenCalled();
+    expect(screen.getByText('Delete Asha? Their faces become unnamed again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
     await waitFor(() => expect(workerApiClient.deletePerson).toHaveBeenCalledWith('pe1'));
   });

@@ -36,7 +36,7 @@ describe('Layout', () => {
     expect(hrefFor('Timeline')).toContain('/timeline');
     expect(hrefFor('Search')).toContain('/search');
     expect(hrefFor('People')).toContain('/people');
-    expect(hrefFor('Daily Pick')).toContain('/daily');
+    expect(hrefFor('Daily pick')).toContain('/daily');
   });
 
   it('offers log out and a burger for narrow screens', () => {

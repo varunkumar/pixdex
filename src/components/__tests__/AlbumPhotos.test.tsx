@@ -78,6 +78,12 @@ beforeEach(() => {
 });
 
 describe('AlbumPhotos tabs', () => {
+  it('shows a named spinner while the photos load', () => {
+    vi.mocked(workerApiClient.searchPage).mockReturnValue(new Promise(() => {}));
+    renderAlbum();
+    expect(screen.getByRole('progressbar', { name: 'Loading photos' })).toBeInTheDocument();
+  });
+
   it('shows People and Species tabs with counts once contents load', async () => {
     renderAlbum();
     expect(await screen.findByRole('tab', { name: /People/ })).toHaveTextContent('3');

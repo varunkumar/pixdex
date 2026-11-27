@@ -21,6 +21,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { copyText } from '../services/copy';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 import { getDriveUrl, getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
@@ -223,7 +224,7 @@ const PhotoDetail = () => {
 
             {originalUrl && (
               <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer" size="sm">
-                View Original
+                View original
               </Anchor>
             )}
             {driveUrl && (
@@ -292,10 +293,10 @@ const PhotoDetail = () => {
               w="fit-content"
               onClick={() => {
                 const hashtags = photo.suggestedHashtags.map((t) => `#${t}`).join(' ');
-                void navigator.clipboard.writeText(`${photo.suggestedCaption ?? ''}\n\n${hashtags}`.trim());
+                void copyText(`${photo.suggestedCaption ?? ''}\n\n${hashtags}`.trim());
               }}
             >
-              Copy to Clipboard
+              Copy to clipboard
             </Button>
           </Stack>
         </Card>

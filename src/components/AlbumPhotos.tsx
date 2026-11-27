@@ -17,6 +17,7 @@ import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
 import ColumnsToggle from './ColumnsToggle';
 import CoverBadge from './CoverBadge';
 import ListPagination from './ListPagination';
+import PageLoading from './PageLoading';
 import PhotoGrid from './PhotoGrid';
 import SetCoverButton from './SetCoverButton';
 import ShareAlbumModal from './ShareAlbumModal';
@@ -192,6 +193,7 @@ const AlbumPhotos = () => {
               />
             )}
             {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
+            {!data && !error && <PageLoading label="Loading photos" />}
             {data && data.results.length === 0 && (
               <Text c="dimmed">{filter ? 'No photos in this album match this filter.' : 'This album has no photos.'}</Text>
             )}

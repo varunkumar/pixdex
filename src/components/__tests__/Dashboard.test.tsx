@@ -19,7 +19,7 @@ describe('Dashboard', () => {
     });
   });
 
-  it('shows the album count and links to Search/Albums/Daily Pick, with no indexing controls', async () => {
+  it('shows the album count and links to Search/Albums/Daily pick, with no indexing controls', async () => {
     renderWithProviders(<Dashboard />);
 
     expect(await screen.findByText('2')).toBeInTheDocument(); // album count
@@ -30,8 +30,16 @@ describe('Dashboard', () => {
     );
     expect(screen.getByRole('link', { name: 'Search' })).toHaveAttribute('href', '/search');
     expect(screen.getByRole('link', { name: 'Albums' })).toHaveAttribute('href', '/albums');
-    expect(screen.getByRole('link', { name: /daily pick/i })).toHaveAttribute('href', '/daily');
+    expect(screen.getByRole('link', { name: 'Daily pick' })).toHaveAttribute('href', '/daily');
     expect(screen.queryByRole('button', { name: /index photos/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a dash for each count until it has loaded', () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockReturnValue(new Promise(() => {}));
+    vi.mocked(workerApiClient.searchPage).mockReturnValue(new Promise(() => {}));
+    renderWithProviders(<Dashboard />);
+    expect(screen.getAllByText('-')).toHaveLength(2);
+    expect(screen.queryByText('0')).toBeNull();
   });
 
   it('titles the card PixdeX', async () => {

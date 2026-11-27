@@ -13,9 +13,9 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { useState } from 'react';
-import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { copyText } from '../services/copy';
 import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import Lightbox from './Lightbox';
@@ -34,18 +34,8 @@ const DailySuggestion = () => {
 
   const handleCopyToClipboard = () => {
     if (!suggestion) return;
-
-    const content = `${suggestion.suggestedCaption}\n\n${suggestion.suggestedHashtags
-      .map((tag) => `#${tag}`)
-      .join(' ')}`;
-    navigator.clipboard.writeText(content).then(
-      () => {
-        notifications.show({ title: 'Copied to clipboard', message: '', color: 'green', autoClose: 2000 });
-      },
-      (err: Error) => {
-        notifications.show({ title: 'Failed to copy', message: err.message, color: 'red', autoClose: 3000 });
-      }
-    );
+    const hashtags = suggestion.suggestedHashtags.map((tag) => `#${tag}`).join(' ');
+    void copyText(`${suggestion.suggestedCaption}\n\n${hashtags}`);
   };
 
   const originalUrl = suggestion ? getOriginalUrl(suggestion.photo) : null;
@@ -58,7 +48,7 @@ const DailySuggestion = () => {
   return (
     <Card withBorder maw={1100} mx="auto" w="100%">
       <Title order={3} mb="md">
-        Today's Instagram Pick
+        Today's Instagram pick
       </Title>
       {isLoading ? (
         <Stack>
@@ -86,10 +76,10 @@ const DailySuggestion = () => {
           <Text fw={700}>Why this photo?</Text>
           <Text>{suggestion.reason}</Text>
 
-          <Text fw={700}>Suggested Caption</Text>
+          <Text fw={700}>Suggested caption</Text>
           <Textarea value={suggestion.suggestedCaption} readOnly rows={4} />
 
-          <Text fw={700}>Suggested Hashtags</Text>
+          <Text fw={700}>Suggested hashtags</Text>
           <Group gap="xs">
             {suggestion.suggestedHashtags.map((tag) => (
               <Badge key={tag} variant="light">
@@ -99,12 +89,12 @@ const DailySuggestion = () => {
           </Group>
 
           <Button onClick={handleCopyToClipboard} w="fit-content">
-            Copy to Clipboard
+            Copy to clipboard
           </Button>
 
           {originalUrl && (
             <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer">
-              View Original
+              View original
             </Anchor>
           )}
         </Stack>

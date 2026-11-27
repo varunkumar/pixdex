@@ -32,7 +32,7 @@ describe('PhotoTile', () => {
     expect(screen.getAllByText(new RegExp(dateText))).toHaveLength(2);
   });
 
-  it('leaves description, camera and View Original off the tile', () => {
+  it('leaves description, camera and View original off the tile', () => {
     renderWithProviders(
       <PhotoTile
         photo={makePhoto({
@@ -44,7 +44,7 @@ describe('PhotoTile', () => {
     );
     expect(screen.queryByText('Long words here.')).not.toBeInTheDocument();
     expect(screen.queryByText('NIKON Z 8')).not.toBeInTheDocument();
-    expect(screen.queryByText(/view original/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('View original')).not.toBeInTheDocument();
   });
 
   it('shows at most 3 tags in the overlay', () => {
