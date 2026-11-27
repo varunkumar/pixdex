@@ -15,6 +15,9 @@ vi.mock("../../services/api/WorkerApiClient", () => ({
     matchPersonAll: vi.fn(),
     setPersonLabel: vi.fn(),
     clearPersonLabel: vi.fn(),
+    ignoreFaces: vi.fn(),
+    restoreFaces: vi.fn(),
+    getIgnoredFaces: vi.fn(),
     thumbnailUrl: vi.fn(
       (f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`,
     ),
@@ -531,5 +534,120 @@ describe("People", () => {
         await screen.findByText("That name already exists"),
       ).toBeInTheDocument();
     });
+  });
+});
+
+describe("People: ignoring faces", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
+    vi.mocked(workerApiClient.thumbnailUrl).mockImplementation(
+      (f) => `/api${f.thumbnailUrl}`,
+    );
+    vi.mocked(workerApiClient.getFaceGroups).mockResolvedValue({
+      groups: [group("f1", "f2")],
+      scanned: 2,
+      nextCursor: null,
+    });
+    vi.mocked(workerApiClient.ignoreFaces).mockResolvedValue();
+    vi.mocked(workerApiClient.restoreFaces).mockResolvedValue();
+  });
+
+  it("ignores a whole group and drops the card without refetching groups", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Ignore group" }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("face-group")).toBeNull(),
+    );
+    expect(workerApiClient.ignoreFaces).toHaveBeenCalledWith(["f1", "f2"]);
+    expect(workerApiClient.getFaceGroups).toHaveBeenCalledTimes(1);
+    expect(workerApiClient.matchPersonAll).not.toHaveBeenCalled();
+  });
+
+  it("ignores one face and keeps the rest of the group", async () => {
+    show();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ignore face 2 of 2" }),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByTestId("face-tile").length).toBeGreaterThan(0),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("1 face")).toBeInTheDocument(),
+    );
+    expect(workerApiClient.ignoreFaces).toHaveBeenCalledWith(["f2"]);
+  });
+
+  it("keeps the group and says so when ignoring fails", async () => {
+    vi.mocked(workerApiClient.ignoreFaces).mockRejectedValue(new Error("boom"));
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Ignore group" }));
+    expect(
+      await screen.findByText("Something went wrong, try again"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("face-group")).toBeInTheDocument();
+  });
+
+  it("loads ignored faces only when opened, and restores one or all shown", async () => {
+    vi.mocked(workerApiClient.getIgnoredFaces).mockResolvedValue({
+      faces: [face("x1", { ignored: true }), face("x2", { ignored: true })],
+      nextCursor: null,
+    });
+    show();
+    await screen.findByTestId("face-group");
+    expect(workerApiClient.getIgnoredFaces).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Ignored faces" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Restore ignored face 2" }),
+    );
+    await waitFor(() =>
+      expect(workerApiClient.restoreFaces).toHaveBeenCalledWith(["x2"]),
+    );
+    await waitFor(() =>
+      expect(workerApiClient.getFaceGroups).toHaveBeenCalledTimes(2),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Restore all shown" }),
+      ).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Restore all shown" }));
+    await waitFor(() =>
+      expect(workerApiClient.restoreFaces).toHaveBeenCalledWith(["x1", "x2"]),
+    );
+  });
+
+  it("pages ignored faces and says when there are none", async () => {
+    vi.mocked(workerApiClient.getIgnoredFaces)
+      .mockResolvedValueOnce({
+        faces: [face("x1", { ignored: true })],
+        nextCursor: "t|1",
+      })
+      .mockResolvedValueOnce({
+        faces: [face("x2", { ignored: true })],
+        nextCursor: null,
+      });
+    show();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ignored faces" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    expect(
+      await screen.findByRole("button", { name: "Restore ignored face 2" }),
+    ).toBeInTheDocument();
+    expect(workerApiClient.getIgnoredFaces).toHaveBeenLastCalledWith("t|1");
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
+  it("says when nothing is ignored", async () => {
+    vi.mocked(workerApiClient.getIgnoredFaces).mockResolvedValue({
+      faces: [],
+      nextCursor: null,
+    });
+    show();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Ignored faces" }),
+    );
+    expect(await screen.findByText("No ignored faces.")).toBeInTheDocument();
   });
 });

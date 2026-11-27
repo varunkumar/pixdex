@@ -25,23 +25,43 @@ const invalidate = (client: QueryClient, keys: string[]) => {
 const refreshAfterMatching = (client: QueryClient) => invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS]);
 
 /**
- * Right after faces are named. The named faces are removed from the cached unnamed groups instead of refetching
- * them, so a confirmation does not re-request every loaded group page before matching has even run.
+ * Removes faces from the cached unnamed groups instead of refetching them, so naming or ignoring does not
+ * re-request every loaded group page.
  */
-export function refreshAfterNaming(client: QueryClient, faceIds: string[]) {
-  const named = new Set(faceIds);
+function dropFromGroups(client: QueryClient, faceIds: string[]) {
+  const gone = new Set(faceIds);
   client.setQueryData<InfiniteData<FaceGroupsResponse>>(['people-groups'], (data) =>
     data && {
       ...data,
       pages: data.pages.map((page) => ({
         ...page,
         groups: page.groups
-          .map((g) => ({ faces: g.faces.filter((f) => !named.has(f.id)) }))
+          .map((g) => ({ faces: g.faces.filter((f) => !gone.has(f.id)) }))
           .filter((g) => g.faces.length > 0),
       })),
     }
   );
-  invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS.filter((k) => k !== 'people-groups')]);
+}
+
+const SEARCH_KEYS_BUT_GROUPS = SEARCH_KEYS.filter((k) => k !== 'people-groups');
+
+/** Right after faces are named, before matching has even run. */
+export function refreshAfterNaming(client: QueryClient, faceIds: string[]) {
+  dropFromGroups(client, faceIds);
+  invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS_BUT_GROUPS]);
+}
+
+/** Ignoring also hides a face's known-personality match, so known lists and searches change too. */
+const IGNORE_KEYS = ['ignored-faces', 'photo-faces', 'known-people', 'album-contents'];
+
+export function refreshAfterIgnoring(client: QueryClient, faceIds: string[]) {
+  dropFromGroups(client, faceIds);
+  invalidate(client, [...IGNORE_KEYS, ...SEARCH_KEYS_BUT_GROUPS]);
+}
+
+/** Restored faces come back into the unnamed groups, which only the Worker can rebuild. */
+export function refreshAfterRestoring(client: QueryClient) {
+  invalidate(client, [...IGNORE_KEYS, ...SEARCH_KEYS]);
 }
 
 /**

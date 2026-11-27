@@ -54,6 +54,7 @@ const ALLOWED_PATHS = [
   /^people$/,
   /^people\/groups$/,
   /^people\/known$/,
+  /^people\/ignored$/,
   /^photos\/[^/]+\/faces$/,
   /^faces\/[^/]+\/crop$/,
   // Access requests list for the admin page; the Worker answers 404 to anyone but ADMIN_EMAIL.
@@ -180,6 +181,8 @@ const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
     /^people\/[^/]+\/match$/,
     /^people\/[^/]+\/cover$/,
     /^faces\/[^/]+\/(assign|reject|unassign)$/,
+    // Ignoring and restoring faces (album owner only, enforced by the Worker).
+    /^faces\/(ignore|restore)$/,
     // Deciding an access request. Owner-only (ADMIN_EMAIL), enforced by the Worker, which answers 404 to
     // everyone else. The body is `{}`, sent as application/json like every other write.
     /^admin\/requests\/[^/]+\/(approve|deny|revoke)$/,

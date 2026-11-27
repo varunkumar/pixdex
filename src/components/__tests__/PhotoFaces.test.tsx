@@ -18,6 +18,8 @@ vi.mock('../../services/api/WorkerApiClient', () => ({
     setPersonLabel: vi.fn(),
     clearPersonLabel: vi.fn(),
     matchPersonAll: vi.fn(),
+    ignoreFaces: vi.fn(),
+    restoreFaces: vi.fn(),
     thumbnailUrl: vi.fn((f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`),
   },
 }));
@@ -267,5 +269,48 @@ describe('PhotoFaces', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'My name for this person' }), { target: { value: 'Mum' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save my name' }));
     await waitFor(() => expect(workerApiClient.setPersonLabel).toHaveBeenCalledWith('pe1', 'Mum'));
+  });
+});
+
+describe('PhotoFaces: ignoring faces', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(workerApiClient.thumbnailUrl).mockImplementation((f) => `/api${f.thumbnailUrl}`);
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
+    vi.mocked(workerApiClient.ignoreFaces).mockResolvedValue();
+    vi.mocked(workerApiClient.restoreFaces).mockResolvedValue();
+  });
+
+  it('ignores an unnamed face and reloads the faces', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face()]);
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ignore' }));
+    await waitFor(() => expect(workerApiClient.ignoreFaces).toHaveBeenCalledWith(['f1']));
+    await waitFor(() => expect(workerApiClient.getPhotoFaces).toHaveBeenCalledTimes(2));
+  });
+
+  it('offers only Restore on an ignored face', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face({ ignored: true })]);
+    show();
+    expect(await screen.findByText('Ignored')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ignore' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New person' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await waitFor(() => expect(workerApiClient.restoreFaces).toHaveBeenCalledWith(['f1']));
+  });
+
+  it('has no Ignore on a named face', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face({ status: 'auto', personId: 'pe1', personName: 'Asha' })]);
+    show();
+    await screen.findByRole('button', { name: 'Not Asha' });
+    expect(screen.queryByRole('button', { name: 'Ignore' })).toBeNull();
+  });
+
+  it('shows a viewer neither control', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face({ ignored: true })]);
+    show(false);
+    expect(await screen.findByText('Unnamed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restore' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ignore' })).toBeNull();
   });
 });
