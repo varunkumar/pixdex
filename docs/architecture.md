@@ -129,7 +129,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/ignored`, `people/review-queue`, `people/:id/auto-faces`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
+`people/groups`, `people/ignored`, `people/review-queue`, `people/:id/auto-faces`, `people/:id/faces`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails are cached immutably (content-hash addressed); originals and face crops are cached
@@ -419,6 +419,10 @@ invocation):
 `GET /people/review-queue` counts the caller's people's `auto` faces in albums they own, most first; the "To review"
 page (`/review`) and the People page link use it, joined in the browser with `GET /people` for names and covers.
 
+`GET /people/:id/faces?photos=` returns the faces of one person on 1 to 48 photos. The person page sends one request
+for each page. The route reads only photos that the caller can see, and it writes nothing. An unknown person or photo
+gives no faces.
+
 `GET /people/:id/auto-faces` pages a person's `auto` faces in albums the caller owns, weakest match first (keyset on
 score and rowid, 48 per page). `POST /people/:id/auto-faces/review` (`{ confirm, reject }`, 1 to 200 ids in total)
 changes only faces that are, at write time, still that person's auto match in an owned album, and returns the ids it
@@ -451,7 +455,7 @@ rowid, `limit` at most 100 within a 5000-rowid window) and writes matches back i
 Read side: `GET /people/known` lists known people with a matched face in a photo the viewer can see; `known=<Qid>,...` on `/search`,
 `/timeline` and `/timeline/buckets` is an AND filter sharing the cap of 5 with `people` (people first, extras silently dropped). The
 People filter on Search and Timeline shows "Your people" (blue) and "Known personalities in your photos" (violet, with a "known"
-marker). Cost and measurement notes: `AGENTS.md` (performance review) and `docs/development.md`.
+marker). Cost and measurement notes: `docs/agents/` (performance reviews) and `docs/development.md`.
 
 Known limits: matching ignores `faces.embedding_model`. After a face model
 change, faces must be re-scanned and re-confirmed (phase A does not mix models).

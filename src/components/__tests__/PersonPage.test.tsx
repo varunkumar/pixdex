@@ -279,6 +279,24 @@ describe('PersonPage', () => {
     expect(screen.queryByRole('button', { name: /^set as cover/i })).toBeNull();
   });
 
+  it('keeps the controls on the other photos while the faces reload after Not X', async () => {
+    vi.mocked(workerApiClient.searchPage)
+      .mockResolvedValueOnce({ results: [makePhoto({ id: 'p1' }), makePhoto({ id: 'p2' })], total: 2 })
+      .mockResolvedValue({ results: [makePhoto({ id: 'p1' })], total: 1 });
+    // The faces for the new set of photos never arrive, so only the earlier answer can show controls.
+    vi.mocked(workerApiClient.getPersonFaces).mockImplementation((_, photoIds) =>
+      photoIds.length === 2
+        ? Promise.resolve([mine('c1'), mine('a2', { photoId: 'p2', status: 'auto' })])
+        : new Promise(() => {})
+    );
+    vi.mocked(workerApiClient.rejectFace).mockResolvedValue(undefined as never);
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Not Asha' }));
+    await waitFor(() => expect(workerApiClient.getPersonFaces).toHaveBeenLastCalledWith('pe1', ['p1']));
+    expect(screen.getAllByRole('button', { name: /^set as cover/i })).toHaveLength(1);
+  });
+
   it('offers Try again when the faces cannot be loaded', async () => {
     vi.mocked(workerApiClient.getPersonFaces).mockRejectedValueOnce(new Error('boom')).mockResolvedValue([mine('c1')]);
     show();

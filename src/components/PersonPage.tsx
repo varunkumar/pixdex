@@ -167,12 +167,14 @@ const PersonPage = () => {
     placeholderData: keepPreviousData,
   });
   const photos = photoPage?.results;
-  // One request for the whole page of photos. No placeholder: another page's faces must not drive these controls.
+  // One request for the whole page of photos. While it loads, this person's last answer stays, so controls do not blink.
+  // That is safe: a face only drives the tile of its own photo (`facesOn`).
   const photoIds = photos?.map((p) => p.id) ?? [];
   const faces = useQuery({
     queryKey: ['person-faces', id, photoIds],
     queryFn: () => workerApiClient.getPersonFaces(id, photoIds),
     enabled: person?.canEdit === true && photoIds.length > 0,
+    placeholderData: (previous, query) => (query?.queryKey[1] === id ? previous : undefined),
   });
   const on = (photoId: string) => facesOn(faces.data ?? [], photoId, id);
   const isCover = (photoId: string) => person?.cover?.photoId === photoId;
