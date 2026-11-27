@@ -1,8 +1,8 @@
 import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadHero } from '../../services/heroImage';
 import { theme } from '../../theme';
 import AlbumHero from '../AlbumHero';
@@ -14,24 +14,33 @@ vi.mock('../../services/heroImage', async (importOriginal) => ({
 
 const HASH = 'a'.repeat(32);
 const OTHER = 'b'.repeat(32);
+const IMAGE = new Blob(['first'], { type: 'image/jpeg' });
+const OTHER_IMAGE = new Blob(['second'], { type: 'image/jpeg' });
 const PROPS: ComponentProps<typeof AlbumHero> = {
   name: 'Kanha',
   photoCount: 128,
   coverPhotoId: 'ph1',
   coverThumbnailUrl: `/thumbnails/${HASH}`,
-  canCreate: true,
 };
 
 /** One query client for the whole test, so a rerender keeps the cache (like the app). */
 function renderHero(props: Partial<ComponentProps<typeof AlbumHero>> = {}) {
   const client = new QueryClient();
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <Providers client={client}>{children}</Providers>
-  );
-  const utils = render(<AlbumHero {...PROPS} {...props} />, { wrapper });
+  let current = props;
+  let visible = true;
+  const tree = () => <Providers client={client}>{visible && <AlbumHero {...PROPS} {...current} />}</Providers>;
+  const utils = render(tree());
   return {
     ...utils,
-    update: (next: Partial<ComponentProps<typeof AlbumHero>>) => utils.rerender(<AlbumHero {...PROPS} {...next} />),
+    update: (next: Partial<ComponentProps<typeof AlbumHero>>) => {
+      current = next;
+      utils.rerender(tree());
+    },
+    /** Mounts or unmounts the banner alone, keeping the query client (leaving and revisiting the page). */
+    show: (on: boolean) => {
+      visible = on;
+      utils.rerender(tree());
+    },
   };
 }
 
@@ -48,10 +57,30 @@ function Providers({ client, children }: { client: QueryClient; children: ReactN
 
 const blurred = (container: HTMLElement) => container.querySelector('img.pdx-hero-blur');
 const sharp = () => screen.queryByRole('img', { name: 'Cover photo of Kanha' });
+const findSharp = () => screen.findByRole('img', { name: 'Cover photo of Kanha' });
+
+const createObjectURL = vi.fn<(blob: Blob) => string>();
+const revokeObjectURL = vi.fn<(url: string) => void>();
+const { createObjectURL: realCreate, revokeObjectURL: realRevoke } = URL;
 
 beforeEach(() => {
   vi.mocked(loadHero).mockReset().mockReturnValue(new Promise(() => {}));
+  let made = 0;
+  createObjectURL.mockReset().mockImplementation(() => `blob:hero-${++made}`);
+  revokeObjectURL.mockReset();
+  // jsdom has no object URLs.
+  Object.assign(URL, { createObjectURL, revokeObjectURL });
 });
+
+afterEach(() => {
+  Object.assign(URL, { createObjectURL: realCreate, revokeObjectURL: realRevoke });
+});
+
+/** The URLs made and not yet revoked. */
+const liveUrls = () => {
+  const revoked = new Set(revokeObjectURL.mock.calls.map(([url]) => url));
+  return createObjectURL.mock.results.map((r) => r.value as string).filter((url) => !revoked.has(url));
+};
 
 describe('AlbumHero', () => {
   it('shows the blurred thumbnail, the name and the count while the hero loads', () => {
@@ -67,13 +96,21 @@ describe('AlbumHero', () => {
     expect(screen.getByText('1 photo')).toBeInTheDocument();
   });
 
-  it('shows the hero image once it resolves', async () => {
-    vi.mocked(loadHero).mockResolvedValue(`/api/heroes/${HASH}`);
+  it('shows the image through an object URL once it resolves', async () => {
+    vi.mocked(loadHero).mockResolvedValue(IMAGE);
     renderHero();
-    expect(await screen.findByRole('img', { name: 'Cover photo of Kanha' })).toHaveAttribute(
-      'src',
-      `/api/heroes/${HASH}`
-    );
+    expect(await findSharp()).toHaveAttribute('src', 'blob:hero-1');
+    expect(createObjectURL).toHaveBeenCalledWith(IMAGE);
+    expect(liveUrls()).toEqual(['blob:hero-1']);
+  });
+
+  it('revokes the object URL when it unmounts', async () => {
+    vi.mocked(loadHero).mockResolvedValue(IMAGE);
+    const { unmount } = renderHero();
+    await findSharp();
+    unmount();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:hero-1');
+    expect(liveUrls()).toEqual([]);
   });
 
   it('keeps the blurred thumbnail, with no error text, when there is no hero', async () => {
@@ -84,48 +121,62 @@ describe('AlbumHero', () => {
     expect(sharp()).not.toBeInTheDocument();
     expect(blurred(container)).toBeInTheDocument();
     expect(screen.queryByText(/error|could not|failed/i)).not.toBeInTheDocument();
+    expect(createObjectURL).not.toHaveBeenCalled();
   });
 
-  it.each([true, false])('asks for the hero once, with canCreate %s', async (canCreate) => {
+  it('asks for the hero once while it stays on screen', async () => {
     vi.mocked(loadHero).mockResolvedValue(null);
-    const { update } = renderHero({ canCreate });
-    await waitFor(() => expect(loadHero).toHaveBeenCalledWith(HASH, 'ph1', canCreate));
-    update({ canCreate, photoCount: 129 });
+    const { update } = renderHero();
+    await waitFor(() => expect(loadHero).toHaveBeenCalledWith('Kanha', HASH, 'ph1'));
+    update({ photoCount: 129 });
     expect(await screen.findByText('129 photos')).toBeInTheDocument();
     expect(loadHero).toHaveBeenCalledTimes(1);
   });
 
-  it('never shows the old hero after the cover changes, and loads the new one', async () => {
-    vi.mocked(loadHero).mockImplementation((hash) =>
-      hash === HASH ? Promise.resolve(`/api/heroes/${HASH}`) : new Promise(() => {})
+  it('asks again on the next visit, with the same query client', async () => {
+    vi.mocked(loadHero).mockResolvedValueOnce(null).mockResolvedValue(IMAGE);
+    const { show } = renderHero();
+    await waitFor(() => expect(loadHero).toHaveBeenCalledTimes(1));
+    await expect(vi.mocked(loadHero).mock.results[0].value).resolves.toBeNull();
+    show(false);
+    // Leaving the page and coming back are separate tasks; the unused query is dropped in between.
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 10)));
+    show(true);
+    expect(await findSharp()).toBeInTheDocument();
+    expect(loadHero).toHaveBeenCalledTimes(2);
+  });
+
+  it('never shows the old hero after the cover changes, revokes it and loads the new one', async () => {
+    vi.mocked(loadHero).mockImplementation((_album, hash) =>
+      hash === HASH ? Promise.resolve(IMAGE) : new Promise(() => {})
     );
     const { container, update } = renderHero();
-    await screen.findByRole('img', { name: 'Cover photo of Kanha' });
+    await findSharp();
     update({ coverPhotoId: 'ph2', coverThumbnailUrl: `/thumbnails/${OTHER}` });
     expect(sharp()).not.toBeInTheDocument();
+    expect(liveUrls()).toEqual([]);
     expect(blurred(container)).toHaveAttribute('src', `/api/thumbnails/${OTHER}`);
-    await waitFor(() => expect(loadHero).toHaveBeenLastCalledWith(OTHER, 'ph2', true));
+    await waitFor(() => expect(loadHero).toHaveBeenLastCalledWith('Kanha', OTHER, 'ph2'));
   });
 
   it('hides a hero that fails to load, leaving the blurred thumbnail', async () => {
-    vi.mocked(loadHero).mockResolvedValue(`/api/heroes/${HASH}`);
+    vi.mocked(loadHero).mockResolvedValue(IMAGE);
     const { container, update } = renderHero();
-    fireEvent.error(await screen.findByRole('img', { name: 'Cover photo of Kanha' }));
+    fireEvent.error(await findSharp());
     expect(container.querySelector('img.pdx-hero-img')).not.toBeInTheDocument();
     expect(blurred(container)).toBeInTheDocument();
+    expect(liveUrls()).toEqual([]);
     update({ photoCount: 129 });
     expect(await screen.findByText('129 photos')).toBeInTheDocument();
     expect(sharp()).not.toBeInTheDocument();
   });
 
   it("shows a new cover's hero after an earlier one failed to load", async () => {
-    vi.mocked(loadHero).mockImplementation((hash) => Promise.resolve(`/api/heroes/${hash}`));
+    vi.mocked(loadHero).mockImplementation((_album, hash) => Promise.resolve(hash === HASH ? IMAGE : OTHER_IMAGE));
     const { update } = renderHero();
-    fireEvent.error(await screen.findByRole('img', { name: 'Cover photo of Kanha' }));
+    fireEvent.error(await findSharp());
     update({ coverPhotoId: 'ph2', coverThumbnailUrl: `/thumbnails/${OTHER}` });
-    expect(await screen.findByRole('img', { name: 'Cover photo of Kanha' })).toHaveAttribute(
-      'src',
-      `/api/heroes/${OTHER}`
-    );
+    expect(await findSharp()).toHaveAttribute('src', 'blob:hero-2');
+    expect(createObjectURL).toHaveBeenLastCalledWith(OTHER_IMAGE);
   });
 });

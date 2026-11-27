@@ -1,45 +1,43 @@
+// @vitest-environment node
+// Node's Blob survives the structured clone fake-indexeddb makes; jsdom's does not. Image decoding is stubbed.
+import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fitWithin, heroHash, loadHero, resizeToJpeg } from '../heroImage';
+import { heroHash, loadHero } from '../heroImage';
+import { readHero, writeHero, type HeroRecord } from '../heroStore';
 
 const HASH = 'a'.repeat(32);
-const HERO_URL = `/api/heroes/${HASH}`;
-const MB = 1024 * 1024;
+const OTHER = 'b'.repeat(32);
+const BYTES = new Uint8Array([0xff, 0xd8, 0, 1, 2, 3, 0xff, 0xd9]);
 
 const fetchMock = vi.fn<typeof fetch>();
-const createImageBitmapMock = vi.fn();
-const drawImage = vi.fn();
-const close = vi.fn();
-const fillRect = vi.fn();
-const bitmap = { width: 6000, height: 4000, close };
-const context = { drawImage, fillRect, fillStyle: '#000000', imageSmoothingQuality: 'low' };
+const decode = vi.fn<(src: string) => Promise<void>>();
 
-/** Encoded size in bytes for each requested quality. */
-let sizeFor: (quality: number) => number;
-let encodes: { type: string | undefined; quality: number; width: number; height: number; blob: Blob }[];
+class ImageStub {
+  src = '';
+  decode() {
+    return decode(this.src);
+  }
+}
+
+const imageResponse = (type = 'image/jpeg') =>
+  new Response(BYTES, { status: 200, headers: { 'Content-Type': type } });
+const urls = () => fetchMock.mock.calls.map(([url]) => String(url));
+const bytesOf = async (blob: Blob | null | undefined) => (blob ? new Uint8Array(await blob.arrayBuffer()) : blob);
+const stored = (over: Partial<HeroRecord>): HeroRecord => ({
+  album: 'Kanha',
+  contentHash: HASH,
+  status: 'ready',
+  updatedAt: 1,
+  ...over,
+});
+const load = () => loadHero('Kanha', HASH, 'ph1');
 
 beforeEach(() => {
-  sizeFor = () => 1000;
-  encodes = [];
-  context.imageSmoothingQuality = 'low';
-  context.fillStyle = '#000000';
-  fillRect.mockReset();
+  vi.stubGlobal('indexedDB', new IDBFactory());
   fetchMock.mockReset();
-  drawImage.mockReset();
-  close.mockReset();
-  createImageBitmapMock.mockReset().mockResolvedValue(bitmap);
+  decode.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal('fetch', fetchMock);
-  vi.stubGlobal('createImageBitmap', createImageBitmapMock);
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as never);
-  vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (
-    this: HTMLCanvasElement,
-    callback,
-    type,
-    quality
-  ) {
-    const blob = new Blob([new Uint8Array(sizeFor(quality as number))], { type });
-    encodes.push({ type, quality: quality as number, width: this.width, height: this.height, blob });
-    callback(blob);
-  });
+  vi.stubGlobal('Image', ImageStub);
 });
 
 afterEach(() => {
@@ -60,163 +58,184 @@ describe('heroHash', () => {
   });
 });
 
-describe('fitWithin', () => {
-  it('scales the long side down to the maximum', () => {
-    expect(fitWithin(6000, 4000, 2048)).toEqual({ width: 2048, height: 1365 });
-    expect(fitWithin(3000, 6000, 2048)).toEqual({ width: 1024, height: 2048 });
+describe('loadHero from the store', () => {
+  it('returns a stored image for this cover without a request', async () => {
+    await writeHero(stored({ image: new Blob([BYTES], { type: 'image/jpeg' }) }));
+
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('never enlarges', () => {
-    expect(fitWithin(800, 600, 2048)).toEqual({ width: 800, height: 600 });
-  });
-});
+  it('tries an unavailable original again and stores it once it arrives', async () => {
+    await writeHero(stored({ status: 'unavailable' }));
+    fetchMock.mockResolvedValueOnce(imageResponse());
 
-describe('resizeToJpeg', () => {
-  const original = new Blob(['original']);
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
 
-  it('applies the EXIF orientation, draws at the fitted size and encodes at 0.85', async () => {
-    const out = await resizeToJpeg(original);
-
-    expect(createImageBitmapMock).toHaveBeenCalledWith(original, { imageOrientation: 'from-image' });
-    expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 2048, 1365);
-    expect(context.imageSmoothingQuality).toBe('high');
-    expect(encodes).toHaveLength(1);
-    expect(encodes[0]).toMatchObject({ type: 'image/jpeg', quality: 0.85, width: 2048, height: 1365 });
-    expect(out).toBe(encodes[0].blob);
-    expect(close).toHaveBeenCalledTimes(1);
+    expect(urls()).toEqual(['/api/originals/ph1']);
+    await expect(readHero('Kanha')).resolves.toMatchObject({ contentHash: HASH, status: 'ready' });
   });
 
-  it('fills the canvas white before drawing, so transparent areas do not encode as black', async () => {
-    let fillStyle: string | undefined;
-    fillRect.mockImplementation(() => {
-      fillStyle = context.fillStyle;
-    });
+  it('does not try an undecodable original again', async () => {
+    await writeHero(stored({ status: 'undecodable' }));
 
-    await resizeToJpeg(original);
+    await expect(load()).resolves.toBeNull();
 
-    expect(fillStyle).toBe('#fff');
-    expect(fillRect).toHaveBeenCalledWith(0, 0, 2048, 1365);
-    expect(fillRect.mock.invocationCallOrder[0]).toBeLessThan(drawImage.mock.invocationCallOrder[0]);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('lowers the quality until the image fits in 2 MB', async () => {
-    sizeFor = (quality) => (quality > 0.7 ? 2 * MB + 1 : 2 * MB);
+  it.each(['ready', 'unavailable', 'undecodable'] as const)("replaces another cover's %s record", async (status) => {
+    await writeHero(stored({ contentHash: OTHER, status, image: new Blob(['old'], { type: 'image/jpeg' }) }));
+    fetchMock.mockResolvedValueOnce(imageResponse());
 
-    const out = await resizeToJpeg(original);
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
 
-    expect(encodes.map((e) => e.quality)).toEqual([0.85, 0.75, 0.65]);
-    expect(out).toBe(encodes[2].blob);
-    expect(close).toHaveBeenCalledTimes(1);
+    expect(urls()).toEqual(['/api/originals/ph1']);
+    await expect(readHero('Kanha')).resolves.toMatchObject({ contentHash: HASH, status: 'ready' });
   });
 
-  it('throws and closes the bitmap when no quality fits', async () => {
-    sizeFor = () => 2 * MB + 1;
+  it('fetches again when a ready record has lost its image', async () => {
+    await writeHero(stored({}));
+    fetchMock.mockResolvedValueOnce(imageResponse());
 
-    await expect(resizeToJpeg(original)).rejects.toThrow();
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
 
-    expect(encodes.map((e) => e.quality)).toEqual([0.85, 0.75, 0.65, 0.5]);
-    expect(close).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws and closes the bitmap when there is no 2d context', async () => {
-    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue(null);
-
-    await expect(resizeToJpeg(original)).rejects.toThrow();
-
-    expect(close).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws when the canvas cannot encode', async () => {
-    vi.mocked(HTMLCanvasElement.prototype.toBlob).mockImplementation((callback) => callback(null));
-
-    await expect(resizeToJpeg(original)).rejects.toThrow();
-
-    expect(close).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('loadHero', () => {
-  const status = (code: number) => new Response('body', { status: code });
-  const requests = () => fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${String(url)}`);
+describe('loadHero from the original', () => {
+  it('stores the response bytes and type unchanged', async () => {
+    fetchMock.mockResolvedValueOnce(imageResponse('image/png'));
 
-  it('returns the URL of an existing hero after reading its body', async () => {
-    const response = status(200);
-    fetchMock.mockResolvedValueOnce(response);
+    const blob = await load();
 
-    await expect(loadHero(HASH, 'ph1', true)).resolves.toBe(HERO_URL);
-
-    expect(requests()).toEqual([`GET ${HERO_URL}`]);
-    expect(response.bodyUsed).toBe(true);
-  });
-
-  it('does not create a missing hero for a viewer', async () => {
-    fetchMock.mockResolvedValueOnce(status(404));
-
-    await expect(loadHero(HASH, 'ph1', false)).resolves.toBeNull();
-
-    expect(requests()).toEqual([`GET ${HERO_URL}`]);
-  });
-
-  it.each([201, 200])('creates a missing hero for the owner (PUT %i)', async (putStatus) => {
-    fetchMock
-      .mockResolvedValueOnce(status(404))
-      .mockResolvedValueOnce(status(200))
-      .mockResolvedValueOnce(status(putStatus));
-
-    await expect(loadHero(HASH, 'ph1', true)).resolves.toBe(HERO_URL);
-
-    expect(requests()).toEqual([`GET ${HERO_URL}`, 'GET /api/originals/ph1', `PUT ${HERO_URL}`]);
-    const init = fetchMock.mock.calls[2][1];
-    expect(init?.headers).toEqual({ 'Content-Type': 'image/jpeg' });
-    expect(init?.body).toBe(encodes[0].blob);
+    expect(blob?.type).toBe('image/png');
+    await expect(bytesOf(blob)).resolves.toEqual(BYTES);
+    const record = await readHero('Kanha');
+    expect(record).toMatchObject({ album: 'Kanha', contentHash: HASH, status: 'ready' });
+    expect(record?.updatedAt).toEqual(expect.any(Number));
+    expect(record?.image?.type).toBe('image/png');
+    await expect(bytesOf(record?.image)).resolves.toEqual(BYTES);
   });
 
   it('encodes the photo id in the original URL', async () => {
-    fetchMock.mockResolvedValueOnce(status(404)).mockResolvedValueOnce(status(502));
+    fetchMock.mockResolvedValueOnce(imageResponse());
 
-    await loadHero(HASH, 'a b', true);
+    await loadHero('Kanha', HASH, 'a b');
 
-    expect(requests()[1]).toBe('GET /api/originals/a%20b');
+    expect(urls()).toEqual(['/api/originals/a%20b']);
+  });
+
+  it('decodes through an object URL and revokes it', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:check');
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    fetchMock.mockResolvedValueOnce(imageResponse());
+
+    const blob = await load();
+
+    expect(create).toHaveBeenCalledWith(blob);
+    expect(decode).toHaveBeenCalledWith('blob:check');
+    expect(revoke).toHaveBeenCalledWith('blob:check');
   });
 
   it.each([
-    ['the hero GET fails with 500', () => fetchMock.mockResolvedValueOnce(status(500))],
-    ['the hero GET rejects', () => fetchMock.mockRejectedValueOnce(new TypeError('offline'))],
-    ['the original is unavailable', () => fetchMock.mockResolvedValueOnce(status(404)).mockResolvedValueOnce(status(502))],
+    ['the request rejects', () => fetchMock.mockRejectedValueOnce(new TypeError('offline'))],
+    ['the tunnel answers 502', () => fetchMock.mockResolvedValueOnce(new Response('down', { status: 502 }))],
     [
-      'the original request rejects',
-      () => fetchMock.mockResolvedValueOnce(status(404)).mockRejectedValueOnce(new TypeError('offline')),
+      'a failing status carries an image type',
+      () =>
+        fetchMock.mockResolvedValueOnce(
+          new Response(BYTES, { status: 500, headers: { 'Content-Type': 'image/jpeg' } })
+        ),
     ],
+    ['a 200 is an HTML page', () => fetchMock.mockResolvedValueOnce(imageResponse('text/html; charset=utf-8'))],
+    ['a 200 has no content type', () => fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }))],
     [
-      'the browser cannot decode the original',
+      'the body cannot be read',
       () => {
-        fetchMock.mockResolvedValueOnce(status(404)).mockResolvedValueOnce(status(200));
-        createImageBitmapMock.mockRejectedValueOnce(new Error('unsupported format'));
+        const response = imageResponse();
+        vi.spyOn(response, 'blob').mockRejectedValue(new TypeError('connection reset'));
+        fetchMock.mockResolvedValueOnce(response);
       },
     ],
-    [
-      'no size fits',
-      () => {
-        fetchMock.mockResolvedValueOnce(status(404)).mockResolvedValueOnce(status(200));
-        sizeFor = () => 2 * MB + 1;
-      },
-    ],
-  ])('returns null and uploads nothing when %s', async (_name, arrange) => {
+  ])('records unavailable and returns null when %s', async (_name, arrange) => {
     arrange();
 
-    await expect(loadHero(HASH, 'ph1', true)).resolves.toBeNull();
+    await expect(load()).resolves.toBeNull();
 
-    expect(requests().filter((r) => r.startsWith('PUT'))).toEqual([]);
+    const record = await readHero('Kanha');
+    expect(record).toMatchObject({ album: 'Kanha', contentHash: HASH, status: 'unavailable' });
+    expect(record?.image).toBeUndefined();
+    expect(decode).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['is refused', () => Promise.resolve(status(403))],
-    ['rejects', () => Promise.reject(new TypeError('offline'))],
-  ])('returns null when the upload %s', async (_name, upload) => {
-    fetchMock.mockResolvedValueOnce(status(404)).mockResolvedValueOnce(status(200)).mockImplementationOnce(upload);
+  it('records undecodable and revokes the object URL when the browser cannot decode the image', async () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    decode.mockRejectedValueOnce(new Error('EncodingError'));
+    fetchMock.mockResolvedValueOnce(imageResponse('image/heic'));
 
-    await expect(loadHero(HASH, 'ph1', true)).resolves.toBeNull();
+    await expect(load()).resolves.toBeNull();
 
-    expect(requests()).toHaveLength(3);
+    const record = await readHero('Kanha');
+    expect(record).toMatchObject({ contentHash: HASH, status: 'undecodable' });
+    expect(record?.image).toBeUndefined();
+    expect(revoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the image when it cannot be stored', async () => {
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    fetchMock.mockResolvedValueOnce(imageResponse());
+
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
+  });
+
+  it('returns the image when there is no IndexedDB', async () => {
+    vi.stubGlobal('indexedDB', undefined);
+    fetchMock.mockResolvedValueOnce(imageResponse());
+
+    await expect(bytesOf(await load())).resolves.toEqual(BYTES);
+  });
+
+  it('resolves null rather than rejecting when decoding cannot even start', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+      throw new Error('no object URLs');
+    });
+    fetchMock.mockResolvedValueOnce(imageResponse());
+
+    await expect(load()).resolves.toBeNull();
+  });
+});
+
+describe('loadHero calls at the same time', () => {
+  it('share one fetch', async () => {
+    fetchMock.mockImplementation(async () => imageResponse());
+
+    const [first, second] = await Promise.all([load(), load()]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(first).not.toBeNull();
+    expect(second).toBe(first);
+  });
+
+  it('do not share across albums or covers', async () => {
+    fetchMock.mockImplementation(async () => imageResponse());
+
+    await Promise.all([load(), loadHero('Hampi', HASH, 'ph1'), loadHero('Kanha', OTHER, 'ph2')]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('try again after a shared attempt ended unavailable', async () => {
+    fetchMock.mockImplementation(async () => new Response('down', { status: 502 }));
+
+    await expect(Promise.all([load(), load()])).resolves.toEqual([null, null]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await expect(load()).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

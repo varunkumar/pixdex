@@ -123,7 +123,6 @@ const AlbumPhotos = () => {
           photoCount={summary.photoCount}
           coverPhotoId={summary.coverPhotoId}
           coverThumbnailUrl={heroCover}
-          canCreate={isOwner}
         />
       )}
       <Group justify="space-between" align={heroCover ? 'center' : 'baseline'}>

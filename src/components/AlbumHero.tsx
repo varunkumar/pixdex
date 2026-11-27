@@ -1,6 +1,6 @@
 import { Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { heroHash, loadHero } from '../services/heroImage';
 
@@ -9,37 +9,46 @@ interface Props {
   photoCount: number;
   coverPhotoId: string;
   coverThumbnailUrl: string;
-  /** Album owner: a missing hero is made from the original and uploaded. */
-  canCreate: boolean;
 }
 
 /** The album cover as a banner with the album name; the blurred thumbnail stands in until (or unless) the hero loads. */
-const AlbumHero = ({ name, photoCount, coverPhotoId, coverThumbnailUrl, canCreate }: Props) => {
+const AlbumHero = ({ name, photoCount, coverPhotoId, coverThumbnailUrl }: Props) => {
   const hash = heroHash(coverThumbnailUrl);
-  // Once per cover per page session (loadHero may download the original): never refetched, retried or dropped.
-  const { data: heroUrl } = useQuery({
-    queryKey: ['album-hero', hash],
-    queryFn: () => loadHero(hash ?? '', coverPhotoId, canCreate),
+  // Once per visit: never refetched or retried while on screen, and dropped on leaving, so the next visit asks
+  // again (an unavailable original is retried then) and the image is not held in memory meanwhile.
+  const { data: image } = useQuery({
+    queryKey: ['album-hero', name, hash],
+    queryFn: () => loadHero(name, hash ?? '', coverPhotoId),
     enabled: hash !== null,
     staleTime: Infinity,
-    gcTime: Infinity,
+    gcTime: 0,
     retry: false,
   });
-  // A hero that will not load is hidden; remembered by URL, so another cover's hero still shows.
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  // An image that will not show is hidden; remembered by blob, so another cover's hero still shows.
+  const [failedImage, setFailedImage] = useState<Blob | null>(null);
+  // The object URL lives exactly as long as the <img> showing this blob.
+  const showImage = useCallback(
+    (element: HTMLImageElement | null) => {
+      if (!element || !image) return;
+      const url = URL.createObjectURL(image);
+      element.src = url;
+      return () => URL.revokeObjectURL(url);
+    },
+    [image]
+  );
   const thumbnail = workerApiClient.thumbnailUrl({ thumbnailUrl: coverThumbnailUrl });
 
   return (
     <div className="pdx-hero">
       {/* Keyed by source, so a new cover never shows the old picture while it loads. */}
       <img key={thumbnail} className="pdx-hero-blur" src={thumbnail} alt="" />
-      {heroUrl && heroUrl !== failedUrl && (
+      {image && image !== failedImage && (
         <img
-          key={heroUrl}
+          key={hash}
+          ref={showImage}
           className="pdx-hero-img"
-          src={heroUrl}
           alt={`Cover photo of ${name}`}
-          onError={() => setFailedUrl(heroUrl)}
+          onError={() => setFailedImage(image)}
         />
       )}
       <div className="pdx-hero-text">

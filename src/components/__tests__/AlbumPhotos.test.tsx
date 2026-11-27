@@ -355,13 +355,10 @@ describe('AlbumPhotos hero', () => {
     expect(screen.getByRole('button', { name: 'Alphabetical' })).toBeInTheDocument();
   });
 
-  it.each([
-    ['owner', true],
-    ['viewer', false],
-  ] as const)('lets only the owner create the hero (%s)', async (role, canCreate) => {
+  it.each(['owner', 'viewer'] as const)('loads the hero for the album cover (%s)', async (role) => {
     withCover(role);
     renderAlbum();
-    await waitFor(() => expect(loadHero).toHaveBeenCalledWith(HASH, 'cov', canCreate));
+    await waitFor(() => expect(loadHero).toHaveBeenCalledWith('Kanha', HASH, 'cov'));
   });
 
   it('keeps the filtered total in the row while a filter is active', async () => {

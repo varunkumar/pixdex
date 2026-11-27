@@ -1,11 +1,8 @@
-// Album hero banners: a copy of the cover photo resized to a 2048px long side, made once by the album
-// owner's browser from the original and stored in R2 behind /api/heroes/<content hash>.
+// Album hero banners show the cover photo's original file, unmodified. Each browser keeps one copy per
+// album (heroStore.ts), made from /api/originals by whoever opens the album page.
+import { readHero, writeHero, type HeroRecord } from './heroStore';
 
 const THUMBNAIL_PREFIX = '/thumbnails/';
-const MAX_SIDE = 2048;
-// The Worker refuses a larger upload.
-const MAX_BYTES = 2 * 1024 * 1024;
-const QUALITIES = [0.85, 0.75, 0.65, 0.5];
 
 /** The cover photo's content hash, taken from its thumbnail URL. */
 export function heroHash(coverThumbnailUrl: string | null | undefined): string | null {
@@ -13,66 +10,73 @@ export function heroHash(coverThumbnailUrl: string | null | undefined): string |
   return coverThumbnailUrl.slice(THUMBNAIL_PREFIX.length) || null;
 }
 
-/** The size with its long side at most `max`, keeping the shape. Never enlarges. */
-export function fitWithin(width: number, height: number, max: number): { width: number; height: number } {
-  const scale = Math.min(1, max / Math.max(width, height));
-  return { width: Math.round(width * scale), height: Math.round(height * scale) };
-}
-
-function encodeJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-}
-
-/**
- * An upright JPEG of the original with a long side of at most 2048px, at the best quality that fits in
- * 2 MB. Throws when the browser cannot decode or encode it, or no quality fits.
- */
-export async function resizeToJpeg(original: Blob): Promise<Blob> {
-  const bitmap = await createImageBitmap(original, { imageOrientation: 'from-image' });
-  const canvas = document.createElement('canvas');
+/** The original file as served, or null when it cannot be had now (offline, tunnel or agent down, no access). */
+async function fetchOriginal(photoId: string): Promise<Blob | null> {
   try {
-    const { width, height } = fitWithin(bitmap.width, bitmap.height, MAX_SIDE);
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Canvas is not available');
-    // JPEG has no transparency: without a white ground, transparent pixels encode as black.
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, width, height);
-    context.imageSmoothingQuality = 'high';
-    context.drawImage(bitmap, 0, 0, width, height);
-  } finally {
-    // The decoded original is large; free it before encoding.
-    bitmap.close();
-  }
-  for (const quality of QUALITIES) {
-    const jpeg = await encodeJpeg(canvas, quality);
-    if (jpeg && jpeg.size <= MAX_BYTES) return jpeg;
-  }
-  throw new Error('Could not encode the image within the size limit');
-}
-
-/**
- * The URL of the album hero, or null when there is none to show. A missing hero is created from the
- * original when `canCreate` (album owner). Never rejects: the caller keeps its placeholder on null.
- */
-export async function loadHero(contentHash: string, photoId: string, canCreate: boolean): Promise<string | null> {
-  const url = `/api/heroes/${contentHash}`;
-  try {
-    const existing = await fetch(url);
-    if (existing.ok) {
-      // Read the body so the browser cache serves the <img> that follows.
-      await existing.blob();
-      return url;
-    }
-    if (existing.status !== 404 || !canCreate) return null;
-
-    const original = await fetch(`/api/originals/${encodeURIComponent(photoId)}`);
-    if (!original.ok) return null;
-    const body = await resizeToJpeg(await original.blob());
-    const upload = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'image/jpeg' }, body });
-    return upload.ok ? url : null;
+    const response = await fetch(`/api/originals/${encodeURIComponent(photoId)}`);
+    // A sign-in or error page can arrive with status 200.
+    const type = response.headers.get('Content-Type')?.toLowerCase();
+    if (!response.ok || !type?.startsWith('image/')) return null;
+    return await response.blob();
   } catch {
     return null;
   }
+}
+
+/** Whether this browser can show the image (HEIC, for one, only in some). */
+async function canDecode(image: Blob): Promise<boolean> {
+  const url = URL.createObjectURL(image);
+  try {
+    const element = new Image();
+    element.src = url;
+    await element.decode();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function load(album: string, contentHash: string, photoId: string): Promise<Blob | null> {
+  const stored = await readHero(album);
+  if (stored?.contentHash === contentHash) {
+    if (stored.status === 'ready' && stored.image) return stored.image;
+    if (stored.status === 'undecodable') return null;
+  }
+
+  const save = (status: HeroRecord['status'], image?: Blob) =>
+    writeHero({ album, contentHash, status, ...(image && { image }), updatedAt: Date.now() });
+
+  const original = await fetchOriginal(photoId);
+  if (!original) {
+    await save('unavailable');
+    return null;
+  }
+  if (!(await canDecode(original))) {
+    await save('undecodable');
+    return null;
+  }
+  await save('ready', original);
+  return original;
+}
+
+/** Attempts under way, so two mounts at once share one download. */
+const inFlight = new Map<string, Promise<Blob | null>>();
+
+/**
+ * The album hero image, or null when there is none to show. Comes from the browser store when it holds this
+ * cover, otherwise from the original, and the outcome is stored. Never rejects: the caller keeps its
+ * placeholder on null.
+ */
+export function loadHero(album: string, contentHash: string, photoId: string): Promise<Blob | null> {
+  const key = JSON.stringify([album, contentHash]);
+  let attempt = inFlight.get(key);
+  if (!attempt) {
+    attempt = load(album, contentHash, photoId)
+      .catch(() => null)
+      .finally(() => inFlight.delete(key));
+    inFlight.set(key, attempt);
+  }
+  return attempt;
 }
