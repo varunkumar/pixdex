@@ -170,9 +170,9 @@ export const onRequestGet = async ({ request, env }: Context): Promise<Response>
 // a hero upload (PUT HERO_PATH), which is image/jpeg only. Neither type can be sent
 // by a cross-origin form post (it would need a CORS preflight).
 const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
-  // Choosing an album's cover; sharing an album (owner-only, enforced by the Worker); a viewer's own name for a person;
-  // uploading an album hero (owner-only, enforced by the Worker).
-  PUT: [/^albums\/cover$/, /^albums\/shares$/, /^people\/[^/]+\/label$/, HERO_PATH],
+  // Choosing an album's cover; sharing an album and framing its cover (both owner-only, enforced by the Worker); a
+  // viewer's own name for a person; uploading an album hero (owner-only, enforced by the Worker).
+  PUT: [/^albums\/cover$/, /^albums\/shares$/, /^albums\/framing$/, /^people\/[^/]+\/label$/, HERO_PATH],
   // Creating people, assigning faces to people, and face review.
   POST: [
     /^people$/,

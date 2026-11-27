@@ -34,6 +34,7 @@ import { searchRoute } from './routes/search';
 import { bucketsRoute, timelineRoute } from './routes/timeline';
 import { dailyPickRoute } from './routes/daily-pick';
 import { accessPhotoRoute, meRoute, putAlbumSharesRoute } from './routes/shares';
+import { putAlbumFramingRoute } from './routes/framing';
 import type { Env } from './types';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -125,6 +126,9 @@ guardedWrite('PUT', '/albums/cover', putAlbumCoverRoute);
 
 app.use('/albums/shares', requireReadToken);
 guardedWrite('PUT', '/albums/shares', putAlbumSharesRoute);
+
+app.use('/albums/framing', requireReadToken);
+guardedWrite('PUT', '/albums/framing', putAlbumFramingRoute);
 
 app.use('/access/*', requireReadToken);
 app.get('/access/photo/:id', accessPhotoRoute);

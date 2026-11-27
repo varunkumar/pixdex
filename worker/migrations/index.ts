@@ -241,6 +241,8 @@ BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
   // Mirrors 0020_species.sql.
   "ALTER TABLE photos ADD COLUMN species TEXT NOT NULL DEFAULT '[]';",
   'ALTER TABLE photos ADD COLUMN species_model TEXT;',
+  // Mirrors 0021_album_framing.sql. Owner-edited, so the albums.ts upsert never names it.
+  'ALTER TABLE albums ADD COLUMN cover_framing TEXT;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

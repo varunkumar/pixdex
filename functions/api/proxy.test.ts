@@ -115,6 +115,32 @@ describe('Pages Function identity', () => {
     expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
   });
 
+  it('forwards PUT albums/framing as JSON with the verified email', async () => {
+    const body = '{"album":"A","contentHash":"h","x":20,"y":70,"zoom":1.5}';
+    const res = await onRequestPut({
+      request: new Request('https://pixdex.example.dev/api/albums/framing', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
+          'X-Viewer-Email': 'owner@example.com',
+        },
+        body,
+      }),
+      env,
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const [[url, init]] = upstreamCalls();
+    expect(String(url)).toBe('https://worker.example.dev/albums/framing');
+    expect(init.method).toBe('PUT');
+    expect(init.body).toBe(body);
+    const h = new Headers(init.headers);
+    expect(h.get('content-type')).toBe('application/json');
+    expect(h.get('x-viewer-email')).toBe('friend@example.com');
+    expect(h.get('authorization')).toBe('Bearer secret-token');
+  });
+
   it('forwards GET albums/contents with the read token and verified email, but not ingest', async () => {
     const res = await get('/api/albums/contents?name=A', ' Friend@Example.com');
     expect(res.status).toBe(200);
