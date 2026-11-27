@@ -315,7 +315,11 @@ fraction of the image) are matchable. A score `>= AUTO_THRESHOLD` (0.5) attaches
 the face as `auto`; `>= SUGGEST_THRESHOLD` (0.4) only surfaces it as a suggestion
 to review. Matching runs automatically at ingest (`autoMatch.ts`) and when a
 group or face is named, and can be re-run from the person's page
-(`POST people/:id/match`). Unnamed faces are grouped by centroid clustering
+(`POST people/:id/match`). In the UI those calls run in a background queue
+(`src/services/matchQueue.ts`, one per query client; progress card
+`components/MatchStatus.tsx` in the layout): the save returns at once, people are
+matched one at a time (a person already waiting is not queued twice), page
+changes do not stop it, and closing the tab does (the browser asks first). Unnamed faces are grouped by centroid clustering
 (`clusterFaces`) for the People page.
 
 `POST /ingest/faces` answers with `faceIds` (the id each posted face was stored under; a kept confirmed face keeps
@@ -343,7 +347,11 @@ Limits, chosen for the Workers Free plan (CPU time and about 50 D1 queries per
 invocation):
 
 - Work is paged: `FACE_PAGE_SIZE` 100 faces for matching, `GROUPS_PAGE_SIZE` 50
-  for groups. `apply` and ingest-time matching write with one set-based
+  for groups. The match page query (`MATCH_CANDIDATES_SQL`) walks `faces` by rowid
+  from the cursor and stops at the page size; it deliberately avoids the
+  `assign_status` index, which made every page read and sort all remaining
+  candidates (on the real database, with about 14,000 candidates, the first page
+  went from 80,952 rows read to 540). `apply` and ingest-time matching write with one set-based
   `UPDATE ... json_each` statement; bulk assign/create use two.
 - Ingest-time matching spends at most `MAX_AUTO_MATCH_MACS` (1,500,000
   multiply-adds, faces x reference vectors x 512) per request. Faces beyond the

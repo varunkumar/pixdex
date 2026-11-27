@@ -206,6 +206,12 @@ export interface FaceGroup {
   faces: SerializedFace[];
 }
 
+export interface FaceGroupsResponse {
+  groups: FaceGroup[];
+  scanned: number;
+  nextCursor: string | null;
+}
+
 export interface MatchResponse {
   auto: SerializedFace[];
   suggestions: SerializedFace[];

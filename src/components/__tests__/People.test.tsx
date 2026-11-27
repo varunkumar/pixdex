@@ -210,6 +210,27 @@ describe("People", () => {
     );
   });
 
+  it("closes the named group without waiting for matching to finish", async () => {
+    vi.mocked(workerApiClient.createPerson).mockResolvedValue({
+      id: "pe9",
+      name: "Meera",
+    });
+    vi.mocked(workerApiClient.matchPersonAll).mockReturnValue(
+      new Promise(() => {}),
+    );
+    show();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Name this group" }),
+    );
+    fireEvent.change(screen.getByLabelText("Person name"), {
+      target: { value: "Meera" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Person name")).toBeNull(),
+    );
+  });
+
   it("keeps naming successful when matching fails", async () => {
     vi.mocked(workerApiClient.createPerson).mockResolvedValue({
       id: "pe9",

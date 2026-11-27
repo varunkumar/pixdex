@@ -1,12 +1,17 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { screen } from '@testing-library/react';
+import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPromptApiStatus } from '../../services/aiSearch/promptApi';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
+import { matchQueueFor } from '../../services/matchQueue';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import Layout from '../Layout';
 
 vi.mock('../../services/aiSearch/promptApi', () => ({ getPromptApiStatus: vi.fn() }));
-vi.mock('../../services/api/WorkerApiClient', () => ({ workerApiClient: { getMe: vi.fn() } }));
+vi.mock('../../services/api/WorkerApiClient', () => ({
+  workerApiClient: { getMe: vi.fn(), matchPersonAll: vi.fn() },
+}));
 
 describe('Layout', () => {
   beforeEach(() => {
@@ -41,6 +46,22 @@ describe('Layout', () => {
       '/cdn-cgi/access/logout'
     );
     expect(screen.getByRole('button', { name: /toggle navigation/i })).toBeInTheDocument();
+  });
+
+  it('shows background matching progress on every page', async () => {
+    vi.mocked(workerApiClient.matchPersonAll).mockReturnValue(new Promise(() => {}));
+    const Start = () => {
+      const client = useQueryClient();
+      useEffect(() => matchQueueFor(client).enqueue('a'), [client]);
+      return null;
+    };
+    renderWithProviders(
+      <>
+        <Layout />
+        <Start />
+      </>
+    );
+    expect(await screen.findByRole('status')).toHaveTextContent('Looking for more matches');
   });
 
   it('has a colour scheme toggle', () => {

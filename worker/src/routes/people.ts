@@ -289,6 +289,19 @@ export async function groupsRoute(c: Ctx) {
   });
 }
 
+/**
+ * One page of match candidates: unassigned faces, plus auto faces of other people (only taken on a higher score),
+ * in rowid order. Binds: cursor rowid, owner email, person id, person id. The unary `+` keeps SQLite off the
+ * assign_status index and the CROSS JOINs keep faces outermost, so it walks rowids from the cursor and stops at the
+ * page size. With the index it read and sorted every remaining candidate on every page.
+ */
+export const MATCH_CANDIDATES_SQL = `SELECT f.rowid AS rid, f.id, f.embedding, f.assign_status, f.match_score FROM faces f
+  CROSS JOIN photos ph ON ph.id = f.photo_id CROSS JOIN albums a ON a.name = ph.album
+  WHERE ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ?
+    AND (+f.assign_status = 'unassigned' OR (+f.assign_status = 'auto' AND f.person_id != ?))
+    AND NOT EXISTS (SELECT 1 FROM face_rejections r WHERE r.face_id = f.id AND r.person_id = ?)
+  ORDER BY f.rowid LIMIT ${FACE_PAGE_SIZE}`;
+
 export async function matchPersonRoute(c: Ctx) {
   const parsed = matchBody.safeParse((await c.req.json().catch(() => ({}))) ?? {});
   if (!parsed.success) return c.json({ error: z.flattenError(parsed.error) }, 400);
@@ -301,15 +314,7 @@ export async function matchPersonRoute(c: Ctx) {
   const [refs] = await loadReferences(c.env.DB, { personId: id });
   if (!refs) return c.json(empty);
 
-  // Unassigned faces, plus auto faces of other people (only taken on a higher score).
-  const { results } = await c.env.DB.prepare(
-    `SELECT f.rowid AS rid, f.id, f.embedding, f.assign_status, f.match_score FROM faces f
-     JOIN photos ph ON ph.id = f.photo_id JOIN albums a ON a.name = ph.album
-     WHERE ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ?
-       AND (f.assign_status = 'unassigned' OR (f.assign_status = 'auto' AND f.person_id != ?))
-       AND NOT EXISTS (SELECT 1 FROM face_rejections r WHERE r.face_id = f.id AND r.person_id = ?)
-     ORDER BY f.rowid LIMIT ${FACE_PAGE_SIZE}`
-  )
+  const { results } = await c.env.DB.prepare(MATCH_CANDIDATES_SQL)
     .bind(Number(parsed.data.cursor ?? '0'), owner, id, id)
     .all<CandidateRow & { assign_status: string; match_score: number | null }>();
 

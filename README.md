@@ -56,7 +56,8 @@ machine. Originals stay on local disk or Google Drive.
 - **Rate and correct the AI.** Add 1-5 stars and fix the title, species and tags.
   Your edits survive re-indexing.
 - **Find people.** Faces are detected locally, grouped, and matched to the names
-  you give them.
+  you give them. Naming faces saves at once; the search for more of that person runs
+  in the background (keep the tab open until its progress card disappears).
 - **Browse by photo.** Photo grids are masonry layouts that keep every photo's own
   shape. On a mouse device the caption, date and tags appear over a photo on hover; on
   a phone or tablet each photo has one caption line under it, two columns by default

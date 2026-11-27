@@ -201,8 +201,19 @@ describe('PhotoFaces', () => {
     show();
     fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
     fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
-    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2'));
+    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function)));
     expect(await screen.findByText('Matched 4 more faces')).toBeInTheDocument();
+  });
+
+  it('closes the new person form while matching is still running', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face()]);
+    vi.mocked(workerApiClient.createPerson).mockResolvedValue({ id: 'pe9', name: 'Meera' });
+    vi.mocked(workerApiClient.matchPersonAll).mockReturnValue(new Promise(() => {}));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'New person' }));
+    fireEvent.change(screen.getByLabelText('Person name'), { target: { value: 'Meera' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+    await waitFor(() => expect(screen.queryByLabelText('Person name')).toBeNull());
   });
 
   it('still closes the new person form when matching fails after naming', async () => {
@@ -213,7 +224,7 @@ describe('PhotoFaces', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New person' }));
     fireEvent.change(screen.getByLabelText('Person name'), { target: { value: 'Meera' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
-    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe9'));
+    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe9', expect.any(Function)));
     await waitFor(() => expect(screen.queryByLabelText('Person name')).toBeNull());
     expect(screen.queryByText('Could not save the name')).toBeNull();
     expect(await screen.findByText('Named, but could not look for more matches')).toBeInTheDocument();

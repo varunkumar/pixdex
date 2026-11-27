@@ -6,6 +6,7 @@ import { knownFilterSql } from '../src/db/known';
 import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
+import { MATCH_CANDIDATES_SQL } from '../src/routes/people';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
 const U = { email: 'owner@example.com' };
@@ -76,6 +77,17 @@ describe('query plans (no unbounded scans on the new owner paths)', () => {
       U.email
     );
     expect(refs).toMatch(/SEARCH p USING INDEX idx_persons_owner_name_lower \(owner_email=\?\)/);
+  });
+});
+
+describe('match candidates page', () => {
+  it('walks faces in rowid order and stops at the page size, with no sort of all candidates', async () => {
+    const p = await plan(MATCH_CANDIDATES_SQL, 0, U.email, 'p', 'p');
+    expect(p).toMatch(/SEARCH f USING INTEGER PRIMARY KEY \(rowid>\?\)/);
+    expect(p).not.toMatch(/TEMP B-TREE|MULTI-INDEX|idx_faces_assign_status/);
+    expect(p).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
+    // One key lookup either way: by primary key or by the owner index with the name.
+    expect(p).toMatch(/SEARCH a USING (PRIMARY KEY \(name=\?\)|COVERING INDEX idx_albums_owner_email \(owner_email=\? AND name=\?\))/);
   });
 });
 
