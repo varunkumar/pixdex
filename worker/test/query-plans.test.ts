@@ -6,7 +6,8 @@ import { knownFilterSql } from '../src/db/known';
 import { speciesFilterSql } from '../src/db/species';
 import { photoAccess, scopeFor, visibleAlbumsSql } from '../src/db/visibility';
 import { KNOWN_COUNTS_ALBUM_SQL, KNOWN_COVERS_SQL, PEOPLE_COUNTS_SQL, PEOPLE_COVERS_SQL, SPECIES_SQL } from '../src/routes/album-contents';
-import { MATCH_CANDIDATES_SQL } from '../src/routes/people';
+import { MATCH_CANDIDATES_SQL, ignoredFacesSql } from '../src/routes/people';
+import { IGNORE_FACES_SQL, RESTORE_FACES_SQL } from '../src/routes/faces';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
 const U = { email: 'owner@example.com' };
@@ -39,11 +40,11 @@ describe('query plans (no unbounded scans on the new owner paths)', () => {
   it('groups and match candidates', async () => {
     const g = await plan(
       `SELECT f.rowid AS rid, f.id, f.embedding FROM faces f JOIN photos ph ON ph.id = f.photo_id JOIN albums a ON a.name = ph.album
-       WHERE f.assign_status = 'unassigned' AND ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ? ORDER BY f.rowid LIMIT 50`,
+       WHERE f.assign_status = 'unassigned' AND f.ignored_at IS NULL AND ${MATCHABLE_SQL} AND f.rowid > ? AND a.owner_email = ? ORDER BY f.rowid LIMIT 50`,
       0,
       U.email
     );
-    expect(g).toMatch(/SEARCH f USING INDEX idx_faces_assign_status \(assign_status=\? AND rowid>\?\)/);
+    expect(g).toMatch(/SEARCH f USING INDEX idx_faces_open_status \(assign_status=\? AND rowid>\?\)/);
     expect(g).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
     expect(g).toMatch(/SEARCH a USING COVERING INDEX idx_albums_owner_email/);
     const s = scopeFor(U, 'ph.album');
@@ -84,10 +85,39 @@ describe('match candidates page', () => {
   it('walks faces in rowid order and stops at the page size, with no sort of all candidates', async () => {
     const p = await plan(MATCH_CANDIDATES_SQL, 0, U.email, 'p', 'p');
     expect(p).toMatch(/SEARCH f USING INTEGER PRIMARY KEY \(rowid>\?\)/);
-    expect(p).not.toMatch(/TEMP B-TREE|MULTI-INDEX|idx_faces_assign_status/);
+    expect(p).not.toMatch(/TEMP B-TREE|MULTI-INDEX|idx_faces_open_status/);
     expect(p).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
     // One key lookup either way: by primary key or by the owner index with the name.
     expect(p).toMatch(/SEARCH a USING (PRIMARY KEY \(name=\?\)|COVERING INDEX idx_albums_owner_email \(owner_email=\? AND name=\?\))/);
+  });
+});
+
+describe('ignored faces list', () => {
+  it.each([false, true])('walks the ignored index newest first with no sort (after cursor: %s)', async (after) => {
+    const p = await plan(ignoredFacesSql(after), U.email, U.email, ...(after ? ['t', 1] : []), U.email);
+    expect(p).toMatch(/(SEARCH|SCAN) f USING INDEX idx_faces_ignored/);
+    expect(p).not.toMatch(/TEMP B-TREE/);
+    expect(p).toMatch(/SEARCH ph USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
+  });
+});
+
+describe('ignore and restore', () => {
+  it.each([
+    ['ignore', IGNORE_FACES_SQL, ['t', '[]']],
+    ['restore', RESTORE_FACES_SQL, ['[]']],
+  ])('%s updates faces by primary key only', async (_label, sql, params) => {
+    const p = await plan(sql, ...params);
+    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX sqlite_autoindex_faces_1 \(id=\?\)/);
+    expect(p).not.toMatch(/SCAN faces/);
+  });
+
+  it('rescan statements stay on idx_faces_photo_id', async () => {
+    for (const sql of [
+      "SELECT id FROM faces WHERE photo_id = ? AND (+assign_status = 'confirmed' OR ignored_at IS NOT NULL)",
+      "DELETE FROM faces WHERE photo_id = ? AND +assign_status IN ('unassigned', 'auto') AND ignored_at IS NULL",
+    ]) {
+      expect(await plan(sql, 'p')).toMatch(/SEARCH faces USING INDEX idx_faces_photo_id \(photo_id=\?\)/);
+    }
   });
 });
 
@@ -122,8 +152,8 @@ describe('person label resolution', () => {
     expect(p).not.toMatch(/SCAN photos/);
   });
   it('the known-person photo filter uses the partial index', async () => {
-    const p = await plan('SELECT photo_id FROM faces WHERE known_id IN (?,?) GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?', 'Q1', 'Q2', 2);
-    expect(p).toMatch(/idx_faces_known_photo/);
+    const p = await plan('SELECT photo_id FROM faces WHERE known_id IN (?,?) AND ignored_at IS NULL GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?', 'Q1', 'Q2', 2);
+    expect(p).toMatch(/idx_faces_known_shown/);
     expect(p).not.toMatch(/SCAN faces/);
   });
   it('the real known filter, combined with people and scope, is an indexed lookup', async () => {
@@ -139,7 +169,7 @@ describe('person label resolution', () => {
       20,
       0
     );
-    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX idx_faces_known_photo \(known_id=\?\)/);
+    expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX idx_faces_known_shown \(known_id=\?\)/);
     expect(p).toMatch(/SEARCH faces USING (COVERING )?INDEX idx_faces_person_status_created/);
     expect(p).not.toMatch(/SCAN faces/);
   });
@@ -151,10 +181,10 @@ describe('person label resolution', () => {
     expect(p).not.toMatch(/SCAN faces|TEMP B-TREE/);
   });
 
-  it('known-people list walks idx_faces_known_photo with a photos primary-key lookup', async () => {
+  it('known-people list walks idx_faces_known_shown with a photos primary-key lookup', async () => {
     const s = scopeFor(U, 'p.album');
     const k = await plan(`${KNOWN_COUNTS_SQL}${s.sql} GROUP BY f.known_id`, ...s.params);
-    expect(k).toMatch(/SEARCH f USING COVERING INDEX idx_faces_known_photo \(known_id>\?\)/);
+    expect(k).toMatch(/SEARCH f USING COVERING INDEX idx_faces_known_shown \(known_id>\?\)/);
     expect(k).toMatch(/SEARCH p USING INDEX sqlite_autoindex_photos_1 \(id=\?\)/);
     const n = await plan('SELECT k.id, k.name, k.aliases FROM json_each(?) j JOIN known_people k ON k.id = j.value', '[]');
     expect(n).toMatch(/SEARCH k USING INDEX sqlite_autoindex_known_people_1 \(id=\?\)/);

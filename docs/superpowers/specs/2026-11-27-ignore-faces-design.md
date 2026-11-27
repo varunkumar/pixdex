@@ -42,8 +42,8 @@ Migration `0021_face_ignore.sql` (mirrored in `worker/migrations/index.ts`):
 - Replace `idx_faces_assign_status` with
   `idx_faces_open_status ON faces (assign_status) WHERE ignored_at IS NULL`
 - Replace `idx_faces_known_photo` with
-  `idx_faces_known_shown ON faces (known_id, photo_id) WHERE known_id IS NOT NULL AND ignored_at IS NULL`
-  (add `ignored_at` as a trailing column if the plan test shows the known list is no longer covering)
+  `idx_faces_known_shown ON faces (known_id, photo_id, ignored_at) WHERE known_id IS NOT NULL AND ignored_at IS NULL`
+  (the trailing column keeps the known list covering)
 
 The two indexes are replaced, not added beside the old ones, so a face insert writes the same number of rows
 as today. No data is lost. Between the migration and the Worker deploy (seconds), the old known-list and

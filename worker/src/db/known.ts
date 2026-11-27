@@ -15,11 +15,11 @@ export function parseKnown(raw: string | undefined, taken: number): string[] {
   ].slice(0, room);
 }
 
-/** AND clause on photos.id; walks idx_faces_known_photo (known_id, photo_id). A face counts with or without a person. */
+/** AND clause on photos.id; walks idx_faces_known_shown (known_id, photo_id). A face counts with or without a person, unless ignored. */
 export function knownFilterSql(known: string[]): { sql: string; params: unknown[] } {
   if (known.length === 0) return { sql: '', params: [] };
   return {
-    sql: ` AND photos.id IN (SELECT photo_id FROM faces WHERE known_id IN (${known.map(() => '?').join(',')}) GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?)`,
+    sql: ` AND photos.id IN (SELECT photo_id FROM faces WHERE known_id IN (${known.map(() => '?').join(',')}) AND ignored_at IS NULL GROUP BY photo_id HAVING COUNT(DISTINCT known_id) = ?)`,
     params: [...known, known.length],
   };
 }

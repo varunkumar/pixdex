@@ -4,8 +4,8 @@ import { loadReferencesCached, type PersonReferences } from './references';
 
 /**
  * Attaches each given `unassigned` face to the best-scoring named person when
- * the score clears the auto threshold and the pair was not rejected. Confirmed
- * and auto faces are never touched. Work is capped at MAX_AUTO_MATCH_MACS
+ * the score clears the auto threshold and the pair was not rejected. Confirmed,
+ * auto and ignored faces are never touched. Work is capped at MAX_AUTO_MATCH_MACS
  * multiply-adds per call (faces x total reference vectors x 512); matchable
  * faces beyond the budget are skipped (they stay unassigned) and counted.
  * At least one face is always scored so a large roster still makes progress.
@@ -25,7 +25,7 @@ export async function autoMatchFaces(
        CROSS JOIN faces f ON f.id = j.value
        JOIN photos ph ON ph.id = f.photo_id
        JOIN albums a ON a.name = ph.album
-       WHERE f.assign_status = 'unassigned' AND a.owner_email IS NOT NULL`
+       WHERE f.assign_status = 'unassigned' AND f.ignored_at IS NULL AND a.owner_email IS NOT NULL`
     )
     .bind(ids)
     .all<{ id: string; embedding: ArrayBuffer; det_score: number; bbox_w: number; bbox_h: number; owner: string }>();
@@ -82,7 +82,7 @@ export async function autoMatchFaces(
         `UPDATE faces SET assign_status = 'auto',
            person_id = (SELECT json_extract(value, '$.personId') FROM json_each(?) WHERE json_extract(value, '$.id') = faces.id),
            match_score = (SELECT json_extract(value, '$.score') FROM json_each(?) WHERE json_extract(value, '$.id') = faces.id)
-         WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?)) AND +assign_status = 'unassigned'`
+         WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(?)) AND +assign_status = 'unassigned' AND ignored_at IS NULL`
       )
       .bind(payload, payload, payload)
       .run();
