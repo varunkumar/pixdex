@@ -23,6 +23,7 @@ import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 import { getDriveUrl, getOriginalImageUrl, getOriginalUrl } from '../services/originals';
+import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
 import FaceOverlay from './FaceOverlay';
 import Lightbox from './Lightbox';
 import PhotoFaces from './PhotoFaces';
@@ -75,6 +76,9 @@ const PhotoDetail = () => {
   });
 
   const [showFaces, setShowFaces] = useState(false);
+  // Tied to a photo id, so moving to another photo closes the hidden face sections again.
+  const [opened, setOpened] = useState<{ id: string; sections: OpenFaceSections } | null>(null);
+  const sections = opened?.id === id ? opened.sections : CLOSED_SECTIONS;
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', id],
     queryFn: () => workerApiClient.getPhotoFaces(id),
@@ -137,6 +141,8 @@ const PhotoDetail = () => {
   const albumHref = photo.album ? `/albums/${encodeURIComponent(photo.album)}` : null;
   const thumbnail = workerApiClient.thumbnailUrl(photo);
   const alt = photo.filename ?? photo.id;
+  // The boxes follow the People card: the same faces in the same order, so the numbers match.
+  const boxedFaces = splitFaces(faces, photo.canEdit, sections).shown;
 
   return (
     <Stack gap="lg">
@@ -169,10 +175,10 @@ const PhotoDetail = () => {
                   maw="100%"
                   bg="var(--mantine-color-default-hover)"
                 />
-                {showFaces && <FaceOverlay faces={faces} />}
+                {showFaces && <FaceOverlay faces={boxedFaces} />}
               </Box>
             </UnstyledButton>
-            {faces.length > 0 && (
+            {boxedFaces.length > 0 && (
               <Switch
                 size="xs"
                 label="Show people on photo"
@@ -262,7 +268,12 @@ const PhotoDetail = () => {
         </Stack>
       </Card>
 
-      <PhotoFaces photoId={photo.id} canEdit={photo.canEdit} />
+      <PhotoFaces
+        photoId={photo.id}
+        canEdit={photo.canEdit}
+        open={sections}
+        onOpenChange={(next) => setOpened({ id, sections: next })}
+      />
 
       {(photo.suggestedCaption || photo.suggestedHashtags.length > 0) && (
         <Card withBorder>

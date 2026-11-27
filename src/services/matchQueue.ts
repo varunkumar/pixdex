@@ -11,8 +11,11 @@ export interface MatchSnapshot {
 }
 
 export interface MatchQueue {
-  /** `manual` is the Re-run matching button: it also reports a run that found nothing. */
-  enqueue(personId: string, opts?: { manual?: boolean }): void;
+  /**
+   * `manual` is the Re-run matching button: it checks every candidate and also reports a run that found nothing.
+   * Otherwise the run checks unnamed faces and the auto matches of the people in `from`.
+   */
+  enqueue(personId: string, opts?: { manual?: boolean; from?: string[] }): void;
   subscribe(listener: () => void): () => void;
   getSnapshot(): MatchSnapshot;
 }
@@ -64,13 +67,22 @@ export function refreshAfterRestoring(client: QueryClient) {
   invalidate(client, [...IGNORE_KEYS, ...SEARCH_KEYS]);
 }
 
+/** The Worker's limit on `from`. */
+const MAX_FROM = 50;
+
+interface Job {
+  personId: string;
+  manual: boolean;
+  from: Set<string>;
+}
+
 /**
  * Matches people against the unnamed faces in the background, one person at a time (parallel runs would only
  * compete for the same faces and multiply the load on the Worker). It lives outside React so it carries on when
  * the user changes page; closing the tab stops it.
  */
 function createMatchQueue(client: QueryClient): MatchQueue {
-  const pending: { personId: string; manual: boolean }[] = [];
+  const pending: Job[] = [];
   const listeners = new Set<() => void>();
   let current: MatchSnapshot['current'] = null;
   let snapshot: MatchSnapshot = { current: null, waiting: [] };
@@ -80,12 +92,16 @@ function createMatchQueue(client: QueryClient): MatchQueue {
     for (const listener of listeners) listener();
   };
 
-  const run = async (job: { personId: string; manual: boolean }) => {
+  const run = async (job: Job) => {
     try {
-      const { matched, truncated } = await workerApiClient.matchPersonAll(job.personId, (scanned, found) => {
-        current = { personId: job.personId, scanned, matched: found };
-        emit();
-      });
+      const { matched, truncated } = await workerApiClient.matchPersonAll(
+        job.personId,
+        (scanned, found) => {
+          current = { personId: job.personId, scanned, matched: found };
+          emit();
+        },
+        job.manual ? undefined : [...job.from].slice(0, MAX_FROM)
+      );
       if (matched > 0) {
         notifications.show({ message: matchedMessage(matched) });
         refreshAfterMatching(client);
@@ -115,14 +131,15 @@ function createMatchQueue(client: QueryClient): MatchQueue {
   };
 
   return {
-    enqueue(personId, { manual = false } = {}) {
+    enqueue(personId, { manual = false, from = [] } = {}) {
       // A waiting run will already see the newest confirmed faces. A started one may not, so queue another.
       const waiting = pending.find((j) => j.personId === personId);
       if (waiting) {
         waiting.manual ||= manual;
+        for (const id of from) waiting.from.add(id);
         return;
       }
-      pending.push({ personId, manual });
+      pending.push({ personId, manual, from: new Set(from) });
       if (current) emit();
       else void drain();
     },
@@ -143,4 +160,26 @@ export function matchQueueFor(client: QueryClient): MatchQueue {
     queues.set(client, queue);
   }
   return queue;
+}
+
+/** Face id to the people it was removed from, until it is named again. Lost on a page reload. */
+const removedNames = new WeakMap<QueryClient, Map<string, Set<string>>>();
+
+/** "Not X" or "Remove name": remembered so that naming the face next also re-checks X's automatic matches. */
+export function noteRemovedName(client: QueryClient, faceId: string, personId: string) {
+  const faces = removedNames.get(client) ?? new Map<string, Set<string>>();
+  removedNames.set(client, faces);
+  faces.set(faceId, (faces.get(faceId) ?? new Set<string>()).add(personId));
+}
+
+/** After faces are named: look for more of that person in the background. */
+export function matchAfterNaming(client: QueryClient, personId: string, faceIds: string[]) {
+  const faces = removedNames.get(client);
+  const from = new Set<string>();
+  for (const faceId of faceIds) {
+    for (const id of faces?.get(faceId) ?? []) from.add(id);
+    faces?.delete(faceId);
+  }
+  from.delete(personId);
+  matchQueueFor(client).enqueue(personId, { from: [...from] });
 }

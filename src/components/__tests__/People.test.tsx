@@ -203,7 +203,7 @@ describe("People", () => {
     await waitFor(() =>
       expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith(
         "pe9",
-        expect.any(Function),
+        expect.any(Function), []
       ),
     );
     await waitFor(() =>
@@ -293,7 +293,7 @@ describe("People", () => {
     await waitFor(() =>
       expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith(
         "pe2",
-        expect.any(Function),
+        expect.any(Function), []
       ),
     );
   });

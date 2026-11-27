@@ -147,6 +147,32 @@ describe('PhotoDetail', () => {
     expect(screen.getAllByTestId('face-box')).toHaveLength(1);
   });
 
+  it('draws hidden face boxes only while their section is shown', async () => {
+    const found = (id: string, ignored: boolean) => ({
+      id,
+      photoId: 'p1',
+      thumbnailUrl: '/thumbnails/h1',
+      bbox: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
+      detScore: 0.99,
+      personId: null,
+      personName: null,
+      status: 'unassigned' as const,
+      matchScore: null,
+      ignored,
+    });
+    vi.mocked(workerApiClient.getPhoto).mockResolvedValue({ ...tiger, canEdit: true });
+    const tiny = { ...found('t', false), detScore: 0.5 };
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([found('x', true), found('u', false), tiny]);
+    renderWithRouter(routes, ['/photos/p1']);
+
+    fireEvent.click(await screen.findByRole('switch', { name: 'Show people on photo' }));
+    expect(screen.getAllByTestId('face-box')).toHaveLength(1);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ignored faces (1)' }));
+    expect(screen.getAllByTestId('face-box')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Other faces (1)' }));
+    expect(screen.getAllByTestId('face-box')).toHaveLength(3);
+  });
+
   it('has no face toggle when the photo has no faces', async () => {
     renderWithRouter(routes, ['/photos/p1']);
     await screen.findByText('NIKON Z 8');

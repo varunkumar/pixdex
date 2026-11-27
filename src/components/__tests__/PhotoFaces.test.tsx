@@ -203,8 +203,27 @@ describe('PhotoFaces', () => {
     show();
     fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
     fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
-    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function)));
+    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function), []));
     expect(await screen.findByText('Matched 4 more faces')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['Not Asha', 'auto' as const],
+    ['Remove name', 'confirmed' as const],
+  ])('after "%s", naming the face also checks the previous person', async (button, status) => {
+    vi.mocked(workerApiClient.getPhotoFaces)
+      .mockResolvedValueOnce([face({ personId: 'pe1', personName: 'Asha', status })])
+      .mockResolvedValue([face()]);
+    vi.mocked(workerApiClient.rejectFace).mockResolvedValue(face());
+    vi.mocked(workerApiClient.unassignFace).mockResolvedValue(face());
+    vi.mocked(workerApiClient.assignFace).mockResolvedValue(face({ personId: 'pe2', status: 'confirmed' }));
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: button }));
+    fireEvent.click(await screen.findByPlaceholderText('Choose a person'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Ravi' }));
+    await waitFor(() =>
+      expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe2', expect.any(Function), ['pe1'])
+    );
   });
 
   it('closes the new person form while matching is still running', async () => {
@@ -226,7 +245,7 @@ describe('PhotoFaces', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New person' }));
     fireEvent.change(screen.getByLabelText('Person name'), { target: { value: 'Meera' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
-    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe9', expect.any(Function)));
+    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe9', expect.any(Function), []));
     await waitFor(() => expect(screen.queryByLabelText('Person name')).toBeNull());
     expect(screen.queryByText('Could not save the name')).toBeNull();
     expect(await screen.findByText('Named, but could not look for more matches')).toBeInTheDocument();
@@ -289,10 +308,32 @@ describe('PhotoFaces: ignoring faces', () => {
     await waitFor(() => expect(workerApiClient.getPhotoFaces).toHaveBeenCalledTimes(2));
   });
 
+  it('keeps ignored faces behind a link, numbered after the others', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face({ id: 'x', ignored: true }), face({ id: 'u' })]);
+    show();
+    const link = await screen.findByRole('button', { name: 'Ignored faces (1)' });
+    expect(link).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getAllByTestId('face-row')).toHaveLength(1);
+    expect(screen.queryByText('Ignored')).toBeNull();
+    fireEvent.click(link);
+    expect(screen.getAllByTestId('face-row')).toHaveLength(2);
+    expect(screen.getByRole('img', { name: 'Face 2' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ignored faces (1)' }));
+    expect(screen.getAllByTestId('face-row')).toHaveLength(1);
+  });
+
+  it('has no link when nothing is ignored', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face()]);
+    show();
+    await screen.findByTestId('face-row');
+    expect(screen.queryByRole('button', { name: /Ignored faces/ })).toBeNull();
+  });
+
   it('offers only Restore on an ignored face', async () => {
     vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([face({ ignored: true })]);
     show();
-    expect(await screen.findByText('Ignored')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ignored faces (1)' }));
+    expect(screen.getByText('Ignored')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ignore' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'New person' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
@@ -312,5 +353,47 @@ describe('PhotoFaces: ignoring faces', () => {
     expect(await screen.findByText('Unnamed')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Restore' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ignore' })).toBeNull();
+  });
+});
+
+describe('PhotoFaces: other faces', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(workerApiClient.getPeople).mockResolvedValue(people);
+  });
+  const sized = (id: string, o: Partial<SerializedFace>) => face({ id, ...o });
+  const small = { bbox: { x: 0.1, y: 0.1, w: 0.049, h: 0.2 } };
+
+  it('keeps unnamed faces that are too small or unsure for People behind a link, with their controls', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      sized('narrow', small),
+      sized('short', { bbox: { x: 0.2, y: 0.1, w: 0.2, h: 0.049 } }),
+      sized('unsure', { detScore: 0.69 }),
+      sized('edge', { detScore: 0.7, bbox: { x: 0.3, y: 0.1, w: 0.05, h: 0.05 } }),
+    ]);
+    show();
+    const link = await screen.findByRole('button', { name: 'Other faces (3)' });
+    expect(screen.getAllByTestId('face-row')).toHaveLength(1);
+    fireEvent.click(link);
+    expect(screen.getAllByTestId('face-row')).toHaveLength(4);
+    expect(screen.getAllByRole('button', { name: 'Ignore' })).toHaveLength(4);
+  });
+
+  it('lists a small face normally once it has a name, and counts an ignored one as ignored only', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([
+      sized('named', { ...small, status: 'confirmed', personId: 'pe1', personName: 'Asha' }),
+      sized('gone', { ...small, ignored: true }),
+    ]);
+    show();
+    expect(await screen.findByRole('button', { name: 'Ignored faces (1)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Other faces/ })).toBeNull();
+    expect(screen.getAllByTestId('face-row')).toHaveLength(1);
+  });
+
+  it('shows a viewer every face with no links', async () => {
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([sized('narrow', small), sized('gone', { ignored: true })]);
+    show(false);
+    expect(await screen.findAllByTestId('face-row')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /faces \(/i })).toBeNull();
   });
 });

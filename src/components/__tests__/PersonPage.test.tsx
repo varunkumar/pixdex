@@ -4,7 +4,13 @@ import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { makePhoto } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import type { SerializedFace } from '../../types/api';
+import { noteRemovedName } from '../../services/matchQueue';
 import PersonPage from '../PersonPage';
+
+vi.mock('../../services/matchQueue', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/matchQueue')>();
+  return { ...actual, noteRemovedName: vi.fn() };
+});
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: {
@@ -110,6 +116,8 @@ describe('PersonPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Not Asha' }));
     await waitFor(() => expect(workerApiClient.rejectFace).toHaveBeenCalledWith('a1', 'pe1'));
+    // Naming this face next will also check this person's other automatic matches.
+    await waitFor(() => expect(noteRemovedName).toHaveBeenCalledWith(expect.anything(), 'a1', 'pe1'));
   });
 
   it('shows a failed Not action as a notification even though the menu closes', async () => {
@@ -190,7 +198,7 @@ describe('PersonPage', () => {
   it('Re-run matching calls matchPersonAll', async () => {
     show();
     fireEvent.click(await screen.findByRole('button', { name: 'Re-run matching' }));
-    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe1', expect.any(Function)));
+    await waitFor(() => expect(workerApiClient.matchPersonAll).toHaveBeenCalledWith('pe1', expect.any(Function), undefined));
   });
 
   it('Re-run matching says when there is nothing new', async () => {

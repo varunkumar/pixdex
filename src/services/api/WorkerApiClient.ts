@@ -332,22 +332,26 @@ export class WorkerApiClient {
     return this.getJson(`/people/ignored${suffix}`);
   }
 
-  async matchPerson(personId: string, opts: { apply?: boolean; cursor?: string } = {}): Promise<MatchResponse> {
+  async matchPerson(personId: string, opts: { apply?: boolean; cursor?: string; from?: string[] } = {}): Promise<MatchResponse> {
     const response = await this.sendJson('POST', `/people/${encodeURIComponent(personId)}/match`, opts);
     return (await response.json()) as MatchResponse;
   }
 
-  /** Applies auto matches page by page until the worker reports no more pages. */
+  /**
+   * Applies auto matches page by page until the worker reports no more pages. Without `from` every candidate is
+   * checked; with it, only unnamed faces and the auto matches of those people.
+   */
   async matchPersonAll(
     personId: string,
-    onPage?: (scanned: number, matched: number) => void
+    onPage?: (scanned: number, matched: number) => void,
+    from?: string[]
   ): Promise<{ matched: number; truncated: boolean }> {
     let cursor: string | undefined;
     let scanned = 0;
     let matched = 0;
     let truncated = false;
     for (let page = 0; page < MATCH_ALL_MAX_PAGES; page++) {
-      const res = await this.matchPerson(personId, cursor ? { apply: true, cursor } : { apply: true });
+      const res = await this.matchPerson(personId, { apply: true, ...(from && { from }), ...(cursor && { cursor }) });
       scanned += res.scanned;
       matched += res.auto.length;
       onPage?.(scanned, matched);

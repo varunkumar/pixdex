@@ -2,7 +2,7 @@ import { notifications } from '@mantine/notifications';
 import { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../api/WorkerApiClient';
-import { matchQueueFor, refreshAfterNaming } from '../matchQueue';
+import { matchAfterNaming, matchQueueFor, noteRemovedName, refreshAfterNaming } from '../matchQueue';
 
 vi.mock('../api/WorkerApiClient', () => ({ workerApiClient: { matchPersonAll: vi.fn() } }));
 vi.mock('@mantine/notifications', () => ({ notifications: { show: vi.fn() } }));
@@ -146,5 +146,57 @@ describe('matchQueue', () => {
   it('refreshAfterNaming is fine when no groups are cached', () => {
     refreshAfterNaming(client, ['f1']);
     expect(client.getQueryData(['people-groups'])).toBeUndefined();
+  });
+});
+
+describe('what a run checks', () => {
+  let client: QueryClient;
+  beforeEach(() => {
+    vi.resetAllMocks();
+    client = new QueryClient();
+    vi.mocked(workerApiClient.matchPersonAll).mockResolvedValue({ matched: 0, truncated: false });
+  });
+  const froms = () => vi.mocked(workerApiClient.matchPersonAll).mock.calls.map((c) => [c[0], c[2]]);
+
+  it('checks unnamed faces only after naming a face that had no name', () => {
+    matchAfterNaming(client, 'b', ['f1']);
+    expect(froms()).toEqual([['b', []]]);
+  });
+
+  it('also checks the people the named faces were removed from, once, and never the new person', async () => {
+    noteRemovedName(client, 'f1', 'a');
+    noteRemovedName(client, 'f1', 'b');
+    noteRemovedName(client, 'f2', 'c');
+    noteRemovedName(client, 'f2', 'a');
+    matchAfterNaming(client, 'b', ['f1', 'f2']);
+    await flush();
+    matchAfterNaming(client, 'b', ['f1', 'f2']);
+    expect(froms()).toEqual([
+      ['b', ['a', 'c']],
+      ['b', []],
+    ]);
+  });
+
+  it('merges the removed names into a waiting run', async () => {
+    const runs = deferredRuns();
+    matchAfterNaming(client, 'x', ['f0']);
+    noteRemovedName(client, 'f1', 'a');
+    matchAfterNaming(client, 'b', ['f1']);
+    noteRemovedName(client, 'f2', 'c');
+    matchAfterNaming(client, 'b', ['f2']);
+    runs[0].resolve(done);
+    await flush();
+    expect(froms()[1]).toEqual(['b', ['a', 'c']]);
+  });
+
+  it('checks everything on Re-run matching, even when merged with an automatic run', async () => {
+    const runs = deferredRuns();
+    const queue = matchQueueFor(client);
+    matchAfterNaming(client, 'x', ['f0']);
+    matchAfterNaming(client, 'b', ['f1']);
+    queue.enqueue('b', { manual: true });
+    runs[0].resolve(done);
+    await flush();
+    expect(froms()[1]).toEqual(['b', undefined]);
   });
 });

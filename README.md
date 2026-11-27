@@ -369,7 +369,9 @@ For local development, set `DEV_VIEWER_EMAIL` in `.env` to preview the app as a 
 The People page (`/people`) lists named people and groups of similar unnamed
 faces. Name a group or add it to an existing person, and the app then looks for
 that person's other faces; once someone is named, new faces are matched to them
-automatically at ingest. The "People" card on each photo's page names or corrects
+automatically at ingest. That search covers unnamed faces only, plus, when you moved a face from one person to another
+("Not X" or "Remove name", then the new name), the first person's automatic matches. "Re-run matching" on a person's page
+also checks everyone's automatic matches (it takes longer). Confirmed faces are never changed by matching. The "People" card on each photo's page names or corrects
 its faces, and "Show people on photo" draws numbered boxes over the photo.
 People are listed alphabetically everywhere (the page, the Search filter, the
 naming picker). A person's page sorts their photos by newest first (default),
@@ -379,7 +381,9 @@ best rated or alphabetical.
   face in an unnamed group, or "Ignore" on an unnamed face in a photo's People card. Ignored faces leave the unnamed
   groups, are never matched to anyone, and no longer show as a known personality (for people you share the album with
   too). They stay ignored when the photo is re-scanned. Undo under "Ignored faces" at the bottom of the People page,
-  or with "Restore" on the photo. Only the album owner can do this. It applies to those faces only: a new photo of the
+  or on the photo: its People card keeps them behind a small "Ignored faces (N)" link, with "Restore" on each. Unnamed
+  faces too small or uncertain for the People page (under 70% detection confidence, or under 5% of the photo's width or
+  height) sit behind a similar "Other faces (N)" link there, where they can still be named or ignored. Only the album owner can do this. It applies to those faces only: a new photo of the
   same person shows up as a new unnamed face. Merging this applies migration `0021` (nothing is ignored by it).
 - Lower-confidence matches (score 0.4 to 0.5) land in a "Review suggestions" queue
   on the person's page. "Not X" on a face rejects that match permanently. "Remove

@@ -1,8 +1,15 @@
-import { Badge, Button, Card, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Anchor, Badge, Button, Card, Group, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { workerApiClient } from '../services/api/WorkerApiClient';
-import { matchQueueFor, refreshAfterIgnoring, refreshAfterNaming, refreshAfterRestoring } from '../services/matchQueue';
+import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
+import {
+  matchAfterNaming,
+  noteRemovedName,
+  refreshAfterIgnoring,
+  refreshAfterNaming,
+  refreshAfterRestoring,
+} from '../services/matchQueue';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { PersonSummary, SerializedFace } from '../types/api';
 import FaceTile from './FaceTile';
@@ -51,10 +58,16 @@ const FaceRow = ({
   });
   const reject = useMutation({
     mutationFn: (personId: string) => workerApiClient.rejectFace(face.id, personId),
-    onSuccess: onChanged,
+    onSuccess: (_r, personId) => {
+      noteRemovedName(queryClient, face.id, personId);
+      onChanged();
+    },
   });
   const unassign = useMutation({
-    mutationFn: () => workerApiClient.unassignFace(face.id),
+    mutationFn: async (personId: string) => {
+      await workerApiClient.unassignFace(face.id);
+      noteRemovedName(queryClient, face.id, personId);
+    },
     onSuccess: onChanged,
   });
 
@@ -136,7 +149,7 @@ const FaceRow = ({
             )}
             {/* Soft: an auto face is already corrected with "Not X"; Remove name is for confirmed faces. */}
             {face.status === 'confirmed' && (
-              <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate()}>
+              <Button size="xs" variant="subtle" disabled={busy} onClick={() => unassign.mutate(face.personId as string)}>
                 Remove name
               </Button>
             )}
@@ -193,9 +206,30 @@ const FaceRow = ({
   );
 };
 
+const SectionLink = ({ label, count, open, onClick }: { label: string; count: number; open: boolean; onClick: () => void }) =>
+  count === 0 ? null : (
+    <Anchor component="button" type="button" size="xs" c="dimmed" w="fit-content" aria-expanded={open} onClick={onClick}>
+      {label} ({count})
+    </Anchor>
+  );
+
 /** People found in a photo, with controls to name them and correct automatic matches. */
-const PhotoFaces = ({ photoId, canEdit }: { photoId: string; canEdit: boolean }) => {
+const PhotoFaces = ({
+  photoId,
+  canEdit,
+  open,
+  onOpenChange,
+}: {
+  photoId: string;
+  canEdit: boolean;
+  /** Controlled by the page so the boxes on the photo follow; kept here when the page passes nothing. */
+  open?: OpenFaceSections;
+  onOpenChange?: (open: OpenFaceSections) => void;
+}) => {
   const queryClient = useQueryClient();
+  const [ownOpen, setOwnOpen] = useState(CLOSED_SECTIONS);
+  const sections = open ?? ownOpen;
+  const setSections = onOpenChange ?? setOwnOpen;
   const { data: faces = [] } = useQuery({
     queryKey: ['photo-faces', photoId],
     queryFn: () => workerApiClient.getPhotoFaces(photoId),
@@ -216,17 +250,18 @@ const PhotoFaces = ({ photoId, canEdit }: { photoId: string; canEdit: boolean })
   // After naming a face, look for the person's other unnamed faces in the background.
   const onNamed = (personId: string, faceId: string) => {
     refreshAfterNaming(queryClient, [faceId]);
-    matchQueueFor(queryClient).enqueue(personId);
+    matchAfterNaming(queryClient, personId, [faceId]);
   };
 
   if (faces.length === 0) return null;
+  const { other, ignored, shown } = splitFaces(faces, canEdit, sections);
 
   return (
     <Card withBorder data-testid="photo-faces">
       <Stack gap="md">
         <Title order={5}>People</Title>
         <Stack gap="md">
-          {faces.map((f, i) => (
+          {shown.map((f, i) => (
             <FaceRow
               key={f.id}
               face={f}
@@ -238,6 +273,18 @@ const PhotoFaces = ({ photoId, canEdit }: { photoId: string; canEdit: boolean })
             />
           ))}
         </Stack>
+        <SectionLink
+          label="Other faces"
+          count={other.length}
+          open={sections.other}
+          onClick={() => setSections({ ...sections, other: !sections.other })}
+        />
+        <SectionLink
+          label="Ignored faces"
+          count={ignored.length}
+          open={sections.ignored}
+          onClick={() => setSections({ ...sections, ignored: !sections.ignored })}
+        />
       </Stack>
     </Card>
   );

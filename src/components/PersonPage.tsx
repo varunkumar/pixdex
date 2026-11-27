@@ -8,6 +8,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useListParams } from '../hooks/useListParams';
 import { useMatchQueue } from '../hooks/useMatchQueue';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
+import { noteRemovedName } from '../services/matchQueue';
 import { photoCaption } from '../services/text';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
@@ -70,9 +71,13 @@ const PersonFaceActions = ({
   const { auto, candidate, isCover } = usePersonFaces(photoId, personId, coverFaceId);
   // The menu closes on click, so a failure is reported as a notification, not inside the dropdown.
   const onError = (error: unknown) => notifications.show({ color: 'red', message: errorMessage(error, false) });
+  const queryClient = useQueryClient();
   const reject = useMutation({
     mutationFn: (faceId: string) => workerApiClient.rejectFace(faceId, personId),
-    onSuccess: onChanged,
+    onSuccess: (_r, faceId) => {
+      noteRemovedName(queryClient, faceId, personId);
+      onChanged();
+    },
     onError,
   });
   const setCover = useMutation({
