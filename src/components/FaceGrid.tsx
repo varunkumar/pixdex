@@ -3,26 +3,9 @@ import { TbSparkles } from 'react-icons/tb';
 import { Link } from 'react-router-dom';
 import { workerApiClient } from '../services/api/WorkerApiClient';
 import { formatPhotoDate } from '../services/exif';
+import type { FaceItem } from '../services/faces';
 import { photoCaption } from '../services/text';
-import type { SerializedFace, SerializedPhoto } from '../types/api';
-
-export interface FaceItem {
-  face: SerializedFace;
-  photo: SerializedPhoto;
-  /** The photo's caption, numbered when the photo has more than one face here, so each control has its own name. */
-  label: string;
-}
-
-/** This person's confirmed and auto faces, in photo order, then left to right. */
-export function faceItems(faces: SerializedFace[], photos: SerializedPhoto[], personId: string): FaceItem[] {
-  return photos.flatMap((photo) => {
-    const mine = faces
-      .filter((f) => f.photoId === photo.id && f.personId === personId && f.status !== 'unassigned')
-      .sort((a, b) => a.bbox.x - b.bbox.x || a.id.localeCompare(b.id));
-    const caption = photoCaption(photo);
-    return mine.map((face, i) => ({ face, photo, label: mine.length > 1 ? `${caption}, face ${i + 1}` : caption }));
-  });
-}
+import type { SerializedFace } from '../types/api';
 
 /** CSS percentage that puts a box starting at `start` and `length` long (both 0 to 1) in view. */
 const position = (start: number, length: number) =>

@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { makePhoto } from '../../test/fixtures';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import type { SerializedFace } from '../../types/api';
-import FaceGrid, { faceItems } from '../FaceGrid';
+import { faceItems } from '../../services/faces';
+import FaceGrid from '../FaceGrid';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
   workerApiClient: { thumbnailUrl: vi.fn((f: { thumbnailUrl: string }) => `/api${f.thumbnailUrl}`) },

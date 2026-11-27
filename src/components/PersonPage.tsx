@@ -1,5 +1,5 @@
 import { usePageTitle } from '../hooks/usePageTitle';
-import { ActionIcon, Button, Group, Menu, Stack, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Button, Group, Menu, Stack, Tabs, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -12,12 +12,14 @@ import { useListParams } from '../hooks/useListParams';
 import { useMatchQueue } from '../hooks/useMatchQueue';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { markReviewQueueStale, noteRemovedName } from '../services/matchQueue';
+import { faceItems, type FaceItem } from '../services/faces';
 import { photoCaption } from '../services/text';
 import { errorMessage, SEARCH_KEYS, UNNAMED_PERSON } from '../services/peopleKeys';
 import type { SerializedFace } from '../types/api';
 import BackLink from './BackLink';
 import ColumnsToggle from './ColumnsToggle';
 import CoverBadge from './CoverBadge';
+import FaceGrid from './FaceGrid';
 import FaceTile from './FaceTile';
 import InlineConfirm from './InlineConfirm';
 import ListPagination from './ListPagination';
@@ -52,7 +54,7 @@ const AutoMark = () => (
   </Tooltip>
 );
 
-/** Per photo: set the person's cover, and for an automatic match a menu to confirm or reject it. */
+/** Per photo or face tile: set the person's cover, and for an automatic match a menu to confirm or reject it. */
 const PersonFaceActions = ({
   personId,
   auto,
@@ -127,6 +129,17 @@ const PersonFaceActions = ({
   );
 };
 
+const FacesError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
+  <Group gap="xs">
+    <Text size="sm" c="red">
+      {message}
+    </Text>
+    <Button size="xs" variant="light" onClick={onRetry}>
+      Try again
+    </Button>
+  </Group>
+);
+
 interface Found {
   /** Null until "Review suggestions" has answered. */
   suggestions: SerializedFace[] | null;
@@ -149,12 +162,19 @@ const PersonPage = () => {
   // Kept with the history entry: opening a suggestion's photo and going back must not lose the list.
   const [{ suggestions, cursor }, setFound] = useHistoryState<Found>(`suggestions:${id}`, NOTHING_FOUND);
 
-  const { data: people = [], isSuccess: peopleLoaded } = useQuery({
+  const {
+    data: people = [],
+    isSuccess: peopleLoaded,
+    isPending: peoplePending,
+  } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
   });
   const person = people.find((p) => p.id === id);
   usePageTitle(person ? (person.name ?? UNNAMED_PERSON) : undefined);
+  // Until the people list answers, an address that asks for Faces keeps it; an unknown or empty person shows Photos.
+  const showFaces = params.get('tab') === 'faces' && (person ? person.photoCount > 0 : peoplePending);
+  const tab = showFaces ? 'faces' : 'photos';
 
   const {
     data: photoPage,
@@ -173,11 +193,14 @@ const PersonPage = () => {
   const faces = useQuery({
     queryKey: ['person-faces', id, photoIds],
     queryFn: () => workerApiClient.getPersonFaces(id, photoIds),
-    enabled: person?.canEdit === true && photoIds.length > 0,
+    // The creator needs the faces for the photo controls; anyone else only to see the Faces tab.
+    enabled: person !== undefined && (person.canEdit || tab === 'faces') && photoIds.length > 0,
     placeholderData: (previous, query) => (query?.queryKey[1] === id ? previous : undefined),
   });
   const on = (photoId: string) => facesOn(faces.data ?? [], photoId, id);
   const isCover = (photoId: string) => person?.cover?.photoId === photoId;
+  const tiles = faceItems(faces.data ?? [], photos ?? [], id);
+  const isCoverFace = ({ face }: FaceItem) => person?.cover?.id === face.id;
   const onPage = useCallback(
     (p: number, replace?: boolean) => update({ page: p }, { replace }),
     [update]
@@ -376,39 +399,74 @@ const PersonPage = () => {
             value={sort}
             onChange={(value) => update({ sort: value === 'date' ? null : value }, { resetPage: true })}
           />
-          <ColumnsToggle />
+          {tab === 'photos' && <ColumnsToggle />}
         </Group>
       )}
-      {faces.isError && (
-        <Group gap="xs">
-          <Text size="sm" c="red">
-            Could not load photo actions
-          </Text>
-          <Button size="xs" variant="light" onClick={() => void faces.refetch()}>
-            Try again
-          </Button>
-        </Group>
-      )}
-      {photos && photos.length > 0 && (
-        <PhotoGrid
-          photos={photos}
-          showAlbum
-          badges={(photo) => (person?.canEdit && isCover(photo.id) ? <CoverBadge /> : null)}
-          mark={(photo) => (person?.canEdit && on(photo.id).auto ? <AutoMark /> : null)}
-          actions={(photo) =>
-            person?.canEdit ? (
-              <PersonFaceActions
-                personId={id}
-                {...on(photo.id)}
-                isCover={isCover(photo.id)}
-                label={photoCaption(photo)}
-                canConfirm={photo.canEdit}
-                onChanged={refresh}
+      <Tabs value={tab} keepMounted={false} onChange={(v) => update({ tab: v === 'faces' ? 'faces' : null })}>
+        {person && person.photoCount > 0 && (
+          <Tabs.List mb="lg">
+            <Tabs.Tab value="photos">Photos</Tabs.Tab>
+            <Tabs.Tab value="faces">Faces ({person.faceCount})</Tabs.Tab>
+          </Tabs.List>
+        )}
+        <Tabs.Panel value="photos">
+          <Stack gap="lg">
+            {faces.isError && <FacesError message="Could not load photo actions" onRetry={() => void faces.refetch()} />}
+            {photos && photos.length > 0 && (
+              <PhotoGrid
+                photos={photos}
+                showAlbum
+                badges={(photo) => (person?.canEdit && isCover(photo.id) ? <CoverBadge /> : null)}
+                mark={(photo) => (person?.canEdit && on(photo.id).auto ? <AutoMark /> : null)}
+                actions={(photo) =>
+                  person?.canEdit ? (
+                    <PersonFaceActions
+                      personId={id}
+                      {...on(photo.id)}
+                      isCover={isCover(photo.id)}
+                      label={photoCaption(photo)}
+                      canConfirm={photo.canEdit}
+                      onChanged={refresh}
+                    />
+                  ) : null
+                }
               />
-            ) : null
-          }
-        />
-      )}
+            )}
+          </Stack>
+        </Tabs.Panel>
+        <Tabs.Panel value="faces">
+          <Stack gap="lg">
+            {faces.isError && <FacesError message="Could not load faces" onRetry={() => void faces.refetch()} />}
+            {/* An earlier page's answer has no faces for these photos, so it counts as still loading. */}
+            {photos && photos.length > 0 && tiles.length === 0 && !faces.isError ? (
+              faces.isPending || faces.isPlaceholderData ? (
+                <PageLoading label="Loading faces" />
+              ) : (
+                <Text c="dimmed">No faces on this page.</Text>
+              )
+            ) : (
+              <FaceGrid
+                items={tiles}
+                badges={(item) => (person?.canEdit && isCoverFace(item) ? <CoverBadge /> : null)}
+                mark={(item) => (person?.canEdit && item.face.status === 'auto' ? <AutoMark /> : null)}
+                actions={(item) =>
+                  person?.canEdit ? (
+                    <PersonFaceActions
+                      personId={id}
+                      auto={item.face.status === 'auto' ? item.face : undefined}
+                      candidate={item.face}
+                      isCover={isCoverFace(item)}
+                      label={item.label}
+                      canConfirm={item.photo.canEdit}
+                      onChanged={refresh}
+                    />
+                  ) : null
+                }
+              />
+            )}
+          </Stack>
+        </Tabs.Panel>
+      </Tabs>
       {photoPage && (
         <ListPagination
           page={page}
