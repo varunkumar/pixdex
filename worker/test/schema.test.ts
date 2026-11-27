@@ -131,6 +131,13 @@ describe('ignored faces schema', () => {
   });
 });
 
+describe('album framing schema', () => {
+  it('albums.cover_framing is a nullable TEXT column', async () => {
+    const cols = await env.DB.prepare('PRAGMA table_info(albums)').all<{ name: string; type: string; notnull: number }>();
+    expect(cols.results.find((c) => c.name === 'cover_framing')).toMatchObject({ type: 'TEXT', notnull: 0 });
+  });
+});
+
 describe('access_requests schema', () => {
   it('rejects a non-lowercase access_requests email', async () => {
     await expect(

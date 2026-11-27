@@ -14,7 +14,6 @@ import { ingestSpeciesRoute, pendingSpeciesRoute, speciesSummaryRoute } from './
 import { ingestPhotoRoute } from './routes/ingest-photo';
 import { ingestRelocateRoute } from './routes/ingest-relocate';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
-import { getHeroRoute, putHeroRoute } from './routes/heroes';
 import { albumContentsRoute } from './routes/album-contents';
 import { getAlbumsRoute, getPhotoRoute, patchPhotoRoute, putAlbumCoverRoute } from './routes/photos';
 import { assignFaceRoute, faceCropRoute, photoFacesRoute, rejectFaceRoute, unassignFaceRoute, ignoreFacesRoute, restoreFacesRoute } from './routes/faces';
@@ -35,6 +34,7 @@ import { searchRoute } from './routes/search';
 import { bucketsRoute, timelineRoute } from './routes/timeline';
 import { dailyPickRoute } from './routes/daily-pick';
 import { accessPhotoRoute, meRoute, putAlbumSharesRoute } from './routes/shares';
+import { putAlbumFramingRoute } from './routes/framing';
 import type { Env } from './types';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -77,10 +77,6 @@ app.put('/ingest/thumbnail/:contentHash', putThumbnailRoute);
 
 app.use('/thumbnails/*', requireReadToken);
 app.get('/thumbnails/:contentHash', getThumbnailRoute);
-
-app.use('/heroes/*', requireReadToken);
-app.get('/heroes/:contentHash', getHeroRoute);
-guardedWrite('PUT', '/heroes/:contentHash', putHeroRoute);
 
 app.use('/search', requireReadToken);
 app.get('/search', searchRoute);
@@ -129,6 +125,9 @@ guardedWrite('PUT', '/albums/cover', putAlbumCoverRoute);
 
 app.use('/albums/shares', requireReadToken);
 guardedWrite('PUT', '/albums/shares', putAlbumSharesRoute);
+
+app.use('/albums/framing', requireReadToken);
+guardedWrite('PUT', '/albums/framing', putAlbumFramingRoute);
 
 app.use('/access/*', requireReadToken);
 app.get('/access/photo/:id', accessPhotoRoute);

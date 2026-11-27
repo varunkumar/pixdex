@@ -17,6 +17,7 @@ import type {
   SerializedFace,
   SerializedPhoto,
 } from '../src/types/api.ts';
+import type { Framing } from '../src/services/framing.ts';
 
 /** Dummy photo shapes (portrait, square, 4:3, 3:2, panorama) so the masonry grid has something to lay out. */
 const MOCK_SIZES: [number, number][] = [
@@ -83,6 +84,9 @@ const FACES: SerializedFace[] = FACE_GROUPS.flatMap((size, g) =>
 );
 
 const NEXT_STATUS = { approve: 'approved', deny: 'denied', revoke: 'revoked' } as const;
+
+/** Saved cover framing per album, kept until the dev server restarts. */
+const FRAMINGS = new Map<string, Framing & { hash: string }>();
 
 /** Dummy species, keyed by scientific name (what `species=` filters on). */
 const SPECIES = [
@@ -291,7 +295,7 @@ function search(params: URLSearchParams): { results: SerializedPhoto[]; total: n
 }
 
 /** A themed placeholder in the photo's own shape: album colours, a soft sun, a dark hill and the subject as a label. */
-function thumbnailSvg(id: string, longSide?: number): string {
+function thumbnailSvg(id: string): string {
   const index = Number(/(\d+)$/.exec(id)?.[1] ?? 0);
   const { width: w, height: ht } = mockSize(index);
   const photo = LIBRARY.find((m) => m.photo.id === id)?.photo;
@@ -304,10 +308,8 @@ function thumbnailSvg(id: string, longSide?: number): string {
   const sx = 0.2 + ((index * 37) % 60) / 100;
   const sy = 0.2 + ((index * 17) % 25) / 100;
   const hill = H * (0.78 + ((index * 7) % 8) / 100);
-  // The same drawing at a larger rendered size (album heroes).
-  const scale = longSide ? longSide / Math.max(W, H) : 1;
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(W * scale)}" height="${Math.round(H * scale)}" viewBox="0 0 ${W} ${H}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
     `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
     `<stop offset="0" stop-color="${theme.from}"/><stop offset="1" stop-color="${theme.to}"/></linearGradient>` +
     `<radialGradient id="s"><stop offset="0" stop-color="#fff" stop-opacity="0.95"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>` +
@@ -319,6 +321,45 @@ function thumbnailSvg(id: string, longSide?: number): string {
       : '') +
     `</svg>`
   );
+}
+
+/** The newest dated photo is the album's cover (undated last), so the card date matches the album name. */
+function coverOf(album: string): SerializedPhoto | undefined {
+  return LIBRARY.filter((m) => m.photo.album === album)
+    .map((m) => m.photo)
+    .sort((x, y) => (y.dateTime ?? '').localeCompare(x.dateTime ?? ''))[0];
+}
+
+// One shared-with-you album, to show the viewer state.
+const viewerOnly = (album: string) => ALBUMS.indexOf(album) === 2;
+
+/** PUT /albums/framing, answering like the Worker (200, 400, 403, 404, 409). */
+function putFraming(req: IncomingMessage, res: ServerResponse): true {
+  let raw = '';
+  req.on('data', (chunk) => (raw += chunk));
+  req.on('end', () => {
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(raw) ?? {};
+    } catch {
+      body = {};
+    }
+    const { album, contentHash, x, y, zoom } = body;
+    const within = (v: unknown, min: number, max: number): v is number => typeof v === 'number' && v >= min && v <= max;
+    const named = typeof album === 'string' && typeof contentHash === 'string';
+    if (!named || !within(x, 0, 100) || !within(y, 0, 100) || !within(zoom, 1, 3))
+      return sendJson(res, 400, { error: 'Invalid framing' });
+    const cover = coverOf(album);
+    if (!cover) return sendJson(res, 404, { error: 'Not found' });
+    if (viewerOnly(album)) return sendJson(res, 403, { error: 'Forbidden' });
+    if (cover.thumbnailUrl !== `/thumbnails/${contentHash}`)
+      return sendJson(res, 409, { error: 'The album cover has changed' });
+    const coverFraming = x === 50 && y === 50 && zoom === 1 ? null : { x, y, zoom };
+    if (coverFraming) FRAMINGS.set(album, { hash: contentHash, ...coverFraming });
+    else FRAMINGS.delete(album);
+    return sendJson(res, 200, { album, coverFraming });
+  });
+  return true;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): true {
@@ -343,6 +384,7 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     found.decidedAt = new Date().toISOString();
     return sendJson(res, 200, { request: found });
   }
+  if (method === 'PUT' && path === '/albums/framing') return putFraming(req, res);
   const flip = /^\/faces\/(ignore|restore)$/.exec(path);
   if (method === 'POST' && flip) {
     let raw = '';
@@ -356,7 +398,10 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     });
     return true;
   }
-  if (method !== 'GET') return sendJson(res, 405, { error: 'The dev mock is read-only apart from admin decisions and ignoring faces' });
+  if (method !== 'GET')
+    return sendJson(res, 405, {
+      error: 'The dev mock is read-only apart from admin decisions, cover framing and ignoring faces',
+    });
   if (path === '/me') return sendJson(res, 200, { email: EMAIL, admin: true });
   if (path === '/admin/requests') {
     const wanted = url.searchParams.get('status');
@@ -376,18 +421,18 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   if (path === '/albums' && !url.searchParams.has('limit')) return sendJson(res, 200, { albums: ALBUMS });
   if (path === '/albums') {
     const albums = ALBUMS.map((name, i) => {
-      // The cover is the newest dated photo (undated last), so the card date matches the album name.
-      const photos = LIBRARY.filter((m) => m.photo.album === name)
-        .map((m) => m.photo)
-        .sort((x, y) => (y.dateTime ?? '').localeCompare(x.dateTime ?? ''));
+      const cover = coverOf(name)!;
+      const saved = FRAMINGS.get(name);
       return {
         name,
-        photoCount: photos.length,
-        coverPhotoId: photos[0].id,
-        coverThumbnailUrl: photos[0].thumbnailUrl ?? null,
-        latestDate: photos[0].dateTime,
+        photoCount: LIBRARY.filter((m) => m.photo.album === name).length,
+        coverPhotoId: cover.id,
+        coverThumbnailUrl: cover.thumbnailUrl ?? null,
+        coverFraming:
+          saved && cover.thumbnailUrl === `/thumbnails/${saved.hash}` ? { x: saved.x, y: saved.y, zoom: saved.zoom } : null,
+        latestDate: cover.dateTime,
         // One shared-out album (avatar stack with +N) and one shared-with-you album, to show both states.
-        ...(i === 2
+        ...(viewerOnly(name)
           ? { role: 'viewer' as const, ownerEmail: 'priya.nair@example.com' }
           : {
               role: 'owner' as const,
@@ -437,13 +482,12 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   if (path === '/search') return sendJson(res, 200, search(url.searchParams));
   if (path === '/timeline') return sendJson(res, 200, { groups: [], nextCursor: null });
   if (path === '/timeline/buckets') return sendJson(res, 200, { buckets: [], undated: 0 });
-  // A hero is always "already made" here (a mock photo's content hash is its id), so the mock never gets an upload.
-  const isHero = path.startsWith('/heroes/');
-  if (isHero || path.startsWith('/thumbnails/') || path.startsWith('/originals/')) {
+  // The same SVG stands in for the original, so the album hero has an image every browser can decode.
+  if (path.startsWith('/thumbnails/') || path.startsWith('/originals/')) {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'image/svg+xml');
     res.setHeader('Cache-Control', 'no-store');
-    res.end(thumbnailSvg(decodeURIComponent(path.split('/').pop() ?? ''), isHero ? 2048 : undefined));
+    res.end(thumbnailSvg(decodeURIComponent(path.split('/').pop() ?? '')));
     return true;
   }
   const photo = /^\/photos\/([^/]+)$/.exec(path);

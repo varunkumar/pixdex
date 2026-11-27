@@ -1,8 +1,9 @@
 # Architecture
 
 PixdeX is a browse and search UI for a personal photo collection. Original
-photos never leave local disk or Google Drive; only derived data (metadata,
-captions, ratings, thumbnails and a 2048px copy of each album cover) lives in the cloud.
+photos are never stored on Cloudflare: they stay on local disk or Google Drive and
+are fetched on demand (viewers' browsers keep a copy of album cover originals).
+Only derived data (metadata, captions, ratings and thumbnails) is stored in the cloud.
 
 ```
 Your Mac
@@ -14,7 +15,7 @@ Your Mac
 Cloudflare
   ├─ worker/    Hono Worker: ingest + read API
   ├─ D1         photo metadata + FTS5 search index
-  ├─ R2         thumbnails, album hero images (2048px cover copies), face crops, known gallery backup
+  ├─ R2         thumbnails, face crops, known gallery backup
   └─ Pages      src/ (React UI) + functions/api (same-origin proxy)
 ```
 
@@ -54,7 +55,19 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   kept, the keyword score is normalised to the best of those (`renormalize`), and, if "leave room for text" is on, each thumbnail is measured in a canvas for calm empty space
   (`textSpace.ts`); (6) final score = 1.0 x keyword + 0.6 x empty space (when enabled) + 0.15 x rating/10,
   and the top 48 are shown (`pipeline.ts`).
-- `services/api/WorkerApiClient.ts` - the only place that talks to the backend.
+- Album hero (`components/AlbumHero.tsx`, `HeroFraming.tsx`, `services/heroImage.ts`, `heroStore.ts`, `framing.ts`): the
+  album page banner shows the cover's original file, unmodified, with a blurred thumbnail until (or unless) it can. Each
+  browser keeps one record per album in IndexedDB (database `pixdex`, store `heroes`, key: album name; content hash,
+  status, image). `ready` for the current cover needs no request; `unavailable` (network error, non-OK status, non-image
+  content type, or 30 s without a byte) is retried on every album page visit; `undecodable` (such as HEIC in Chrome) is not
+  retried until the cover changes. A stored image that fails to show is rewritten as `unavailable`, so the next visit
+  fetches it again. A missing record or another cover's means one `GET /api/originals/:coverId`
+  (`cache: 'no-store'`), for owners and viewers. Each IndexedDB operation is bounded at 3 s and a failing, full or cleared
+  store only means fetching again. No size cap; storage grows by about one original per album visited, and a stored copy
+  outlives revoked access in that browser (the album page, which alone shows it, no longer loads). The owner can reposition
+  and zoom (drag, pinch, slider, keys; `{ x, y, zoom }`, x and y 0 to 100, zoom 1 to 3), saved for everyone (see
+  `PUT /albums/framing`) and rendered with `object-fit: cover`, `object-position`, `transform-origin` and `scale`.
+- `services/api/WorkerApiClient.ts` - the only place that talks to the backend (the hero download above is the exception).
   It calls same-origin `/api/*`.
 - `hooks/useListParams.ts` - sort/page state kept in the URL so listings are
   linkable and "back" returns to the same sort and page. Its `update` is
@@ -115,15 +128,15 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
-`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `heroes/:hash`, `faces/:id/crop`, `people`,
+`daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
 `people/groups`, `people/ignored`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
-Thumbnails and album heroes are cached immutably (content-hash addressed); other routes use
-`no-cache`. The only writes the browser can make are `PUT albums/cover`, `PUT heroes/:hash`,
-`PUT albums/shares`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`,
-`people/:id/faces`, `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign` and
-`admin/requests/:id/approve|deny|revoke` (bodies JSON only, except the hero upload, which is `image/jpeg` only; DELETE has none), all forwarded with the read token through
+Thumbnails are cached immutably (content-hash addressed); originals and face crops are cached
+privately for a while, other routes use `no-cache`. The only writes the browser can make are `PUT albums/cover`,
+`PUT albums/shares`, `PUT albums/framing`, `PATCH photos/:id`, `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`,
+and `POST` to `people`, `people/:id/faces`, `people/:id/match`, `people/:id/cover`, `faces/:id/assign|reject|unassign` and
+`admin/requests/:id/approve|deny|revoke` (bodies JSON only; DELETE has none), all forwarded with the read token through
 one shared helper with per-method allowlists.
 
 ### Human review (HITL)
@@ -148,14 +161,16 @@ candidate). It returns 404 if no photo qualifies.
 
 - Routes in `src/index.ts`. Ingest routes (`/ingest/*`) require `INGEST_TOKEN`;
   read routes require `READ_TOKEN` (`src/auth.ts`).
-- `routes/heroes.ts` - album hero banners, R2 key `hero/<contentHash>.jpg` in the thumbnails bucket. `GET /heroes/:contentHash`
-  has thumbnail visibility (404 if not visible or not made yet; private, immutable). `PUT /heroes/:contentHash` is the album
-  owner's upload (404 not visible, 403 viewer, 400 bad hash or not a JPEG, 413 over 2 MB; conditional put: 201 stored, 200 kept).
-  The Worker does no image work: the owner's browser makes the 2048px JPEG from the original (`src/services/heroImage.ts`, transparent areas filled white) when the
-  album page (`AlbumHero`) finds none. Cost: 1 D1 read and 1 R2 get per view (then browser cached); creation once per cover adds the
-  original access check, 1 D1 read, 1 conditional R2 put and one more GET; no migration.
-  A stored hero is never overwritten: replace a bad one by deleting the R2 object by hand (browsers that already loaded it keep
-  it for up to a year, the immutable cache, until their site data is cleared).
+- `routes/framing.ts` - `PUT /albums/framing` `{ album, contentHash, x, y, zoom }` saves how the album cover sits in
+  the banner. Guarded write, owner only (404 not visible, 403 viewer), 400 invalid or out of range (x and y 0 to 100,
+  zoom 1 to 3), 409 if `contentHash` is not the current cover (checked in the `UPDATE` itself). Stored in
+  `albums.cover_framing` (migration `0022_album_framing.sql`, additive, nullable JSON `{ hash, x, y, zoom }`; the centre
+  at 1x is NULL), an owner-edited column the triggers do not touch; it is lost if the album empties and its row is
+  removed. The paged `GET /albums` returns `coverFraming: { x, y, zoom } | null` to owners and viewers, only while
+  `hash` equals the current cover (`db/framing.ts`), so a new cover shows centred and going back restores the old framing
+  unless another cover was framed in between. Cost (not measured on real D1): `GET /albums` reads one more column, no
+  extra rows, plus a small JSON parse per album row with framing (at most 48); saving is one `albums` primary-key read
+  and one row written. The Worker stores and serves no hero image.
 - `routes/album-contents.ts` - `GET /albums/contents?name=` returns `{ people, known, species }` for one album the viewer can
   see (404 otherwise, 400 without `name`): per-list tiles with `photoCount` (distinct photos), at most 200 each, sorted by
   count then name; people use only `auto` and `confirmed` faces and carry the viewer's own label or `null` for people they
@@ -258,7 +273,8 @@ candidate). It returns 404 if no photo qualifies.
 
 1. `agent` indexes: files -> hash -> Ollama analysis -> `POST /ingest/*` on the Worker.
 2. Worker stores rows in D1 (with FTS5 text) and thumbnails in R2.
-2b. Album hero (once per cover): owner's browser -> `/api/originals/:id` -> resize in the browser -> `PUT /api/heroes/:hash` -> R2.
+2b. Album hero (once per browser and cover): browser -> `/api/originals/:id` -> IndexedDB. A stored hero makes no request;
+while the original is unavailable, each album page visit tries again (one access check, and one Drive call for a Drive photo).
 3. Browser -> Pages `/api/*` -> Pages Function adds token -> Worker read route.
 3b. Request access (signed out): browser -> `/enroll` -> `POST /api/enroll` (Turnstile) -> Worker `POST /enroll` -> `access_requests`;
    the admin approves on `/admin/access` -> Worker -> Cloudflare Access API (group edit, session revoke).

@@ -115,6 +115,32 @@ describe('Pages Function identity', () => {
     expect(new Headers(init.headers).get('x-viewer-email')).toBe('friend@example.com');
   });
 
+  it('forwards PUT albums/framing as JSON with the verified email', async () => {
+    const body = '{"album":"A","contentHash":"h","x":20,"y":70,"zoom":1.5}';
+    const res = await onRequestPut({
+      request: new Request('https://pixdex.example.dev/api/albums/framing', {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
+          'X-Viewer-Email': 'owner@example.com',
+        },
+        body,
+      }),
+      env,
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const [[url, init]] = upstreamCalls();
+    expect(String(url)).toBe('https://worker.example.dev/albums/framing');
+    expect(init.method).toBe('PUT');
+    expect(init.body).toBe(body);
+    const h = new Headers(init.headers);
+    expect(h.get('content-type')).toBe('application/json');
+    expect(h.get('x-viewer-email')).toBe('friend@example.com');
+    expect(h.get('authorization')).toBe('Bearer secret-token');
+  });
+
   it('forwards GET albums/contents with the read token and verified email, but not ingest', async () => {
     const res = await get('/api/albums/contents?name=A', ' Friend@Example.com');
     expect(res.status).toBe(200);
@@ -282,71 +308,36 @@ describe('Pages Function identity', () => {
     });
   });
 
-  describe('album heroes', () => {
-    const HASH = 'a'.repeat(32);
-    const BYTES = [0xff, 0xd8, 0xff, 0x00, 0x80];
+  // Album heroes are kept in the browser; nothing about them goes through the proxy.
+  describe('no stored hero routes', () => {
+    const path = `/api/heroes/${'a'.repeat(64)}`;
 
-    async function put(path: string, contentType: string) {
+    async function put(target: string, contentType: string) {
       return onRequestPut({
-        request: new Request(`https://pixdex.example.dev${path}`, {
+        request: new Request(`https://pixdex.example.dev${target}`, {
           method: 'PUT',
           headers: {
             'content-type': contentType,
-            'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'Friend@Example.com' })),
-            'X-Viewer-Email': 'owner@example.com',
+            'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })),
           },
-          body: new Uint8Array(BYTES),
+          body: new Uint8Array([0xff, 0xd8, 0xff]),
         }),
         env,
       });
     }
 
-    it('GET is proxied and cached for a year', async () => {
-      const res = await get(`/api/heroes/${HASH}`, 'friend@example.com');
-      expect(res.status).toBe(200);
-      expect(res.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
-      expect(String(upstreamCalls()[0][0])).toBe(`https://worker.example.dev/heroes/${HASH}`);
-    });
-
-    it('a missing hero is not cached', async () => {
-      fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
-        String(input) === CERTS_URL ? certsResponse([key]) : new Response('Not Found', { status: 404 }),
-      );
-      const res = await get(`/api/heroes/${HASH}`, 'friend@example.com');
-      expect(res.status).toBe(404);
-      expect(res.headers.get('cache-control')).toBe('no-store');
-      expect(upstreamCalls()).toHaveLength(1);
-    });
-
-    it('PUT forwards the bytes unchanged', async () => {
-      const res = await put(`/api/heroes/${HASH}`, 'image/jpeg');
-      expect(res.status).toBe(200);
-      expect(res.headers.get('cache-control')).toBe('no-store');
-      const [[url, init]] = upstreamCalls();
-      expect(String(url)).toBe(`https://worker.example.dev/heroes/${HASH}`);
-      expect(init.method).toBe('PUT');
-      expect([...new Uint8Array(await new Response(init.body).arrayBuffer())]).toEqual(BYTES);
-      const h = new Headers(init.headers);
-      expect(h.get('content-type')).toBe('image/jpeg');
-      expect(h.get('x-viewer-email')).toBe('friend@example.com');
-      expect(h.get('authorization')).toBe('Bearer secret-token');
-    });
-
-    it('PUT needs image/jpeg', async () => {
-      const res = await put(`/api/heroes/${HASH}`, 'application/json');
-      expect(res.status).toBe(415);
+    it('GET heroes is 404 without an upstream call', async () => {
+      expect((await get(path, 'friend@example.com')).status).toBe(404);
       expect(upstreamCalls()).toHaveLength(0);
     });
 
-    it('image/jpeg is refused on other writes', async () => {
-      const res = await put('/api/albums/cover', 'image/jpeg');
-      expect(res.status).toBe(415);
+    it('PUT heroes is 404 without an upstream call', async () => {
+      expect((await put(path, 'image/jpeg')).status).toBe(404);
       expect(upstreamCalls()).toHaveLength(0);
     });
 
-    it('a malformed hash is 404', async () => {
-      expect((await put('/api/heroes/a/b', 'image/jpeg')).status).toBe(404);
-      expect((await get('/api/heroes/a/b', 'friend@example.com')).status).toBe(404);
+    it('image/jpeg on PUT albums/framing is 415', async () => {
+      expect((await put('/api/albums/framing', 'image/jpeg')).status).toBe(415);
       expect(upstreamCalls()).toHaveLength(0);
     });
   });

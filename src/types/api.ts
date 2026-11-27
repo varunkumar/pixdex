@@ -1,3 +1,5 @@
+import type { Framing } from '../services/framing';
+
 export interface SerializedPhoto {
   id: string;
   /** True when the current user may edit this photo (owns its album). */
@@ -91,6 +93,8 @@ export interface AlbumSummary {
   photoCount: number;
   coverPhotoId: string;
   coverThumbnailUrl: string | null;
+  /** How the owner placed the current cover in the album banner; null or absent is the centre at 1x. */
+  coverFraming?: Framing | null;
   /** Capture date of the cover (newest) photo; null when the photo has no date. */
   latestDate: string | null;
   role: 'owner' | 'viewer';
