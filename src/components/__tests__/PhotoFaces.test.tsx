@@ -113,7 +113,9 @@ describe('PhotoFaces', () => {
     ]);
     vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
     show();
-    fireEvent.click(await screen.findByRole('button', { name: 'Set as cover' }));
+    const button = await screen.findByRole('button', { name: 'Set as cover' });
+    expect(button.querySelector('svg')).not.toBeNull(); // the same icon as the photo tiles
+    fireEvent.click(button);
     await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'f1'));
   });
 

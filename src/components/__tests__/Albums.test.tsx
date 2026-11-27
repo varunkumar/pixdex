@@ -42,6 +42,16 @@ describe('Albums', () => {
     expect(screen.getByText('Showing 1-12 of 30')).toBeInTheDocument();
   });
 
+  it('loads the first four covers at once and the rest as they come into view', async () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: ['a', 'b', 'c', 'd', 'e'].map((n) => album(n)),
+      total: 5,
+    });
+    renderWithProviders(<Albums />, { route: '/albums' });
+    await screen.findByText('e');
+    expect(screen.getAllByRole('img').map((i) => i.getAttribute('loading'))).toEqual([null, null, null, null, 'lazy']);
+  });
+
   it('links each album to its own page with the name encoded', async () => {
     renderWithProviders(<Albums />, { route: '/albums' });
     const link = await screen.findByRole('link', { name: /kanha 2026/i });
@@ -57,7 +67,7 @@ describe('Albums', () => {
 
   it('pages through the URL', async () => {
     const { router } = renderWithRouter([{ path: '/albums', element: <Albums /> }], ['/albums']);
-    fireEvent.click(await screen.findByRole('button', { name: '2' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Page 2' }));
     await waitFor(() => expect(router.state.location.search).toBe('?page=2'));
     await waitFor(() =>
       expect(workerApiClient.getAlbumsPage).toHaveBeenLastCalledWith({ limit: 12, offset: 12, sort: 'date' })
@@ -71,6 +81,12 @@ describe('Albums', () => {
     await waitFor(() =>
       expect(workerApiClient.getAlbumsPage).toHaveBeenLastCalledWith({ limit: 12, offset: 0, sort: 'rating' })
     );
+  });
+
+  it('shows a named spinner while the albums load', () => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockReturnValue(new Promise(() => {}));
+    renderWithProviders(<Albums />, { route: '/albums' });
+    expect(screen.getByRole('progressbar', { name: 'Loading albums' })).toBeInTheDocument();
   });
 
   it('shows an empty state for an empty library', async () => {

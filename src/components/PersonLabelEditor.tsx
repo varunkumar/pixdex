@@ -32,6 +32,7 @@ const PersonLabelEditor = ({
       setEditing(false);
       void queryClient.invalidateQueries({ queryKey: ["people"] });
       void queryClient.invalidateQueries({ queryKey: ["photo-faces"] });
+      void queryClient.invalidateQueries({ queryKey: ["person-faces"] });
       for (const key of SEARCH_KEYS)
         void queryClient.invalidateQueries({ queryKey: [key] });
     },

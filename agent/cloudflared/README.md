@@ -59,6 +59,6 @@ npm run dev -- serve-originals
 cloudflared tunnel --config agent/cloudflared/config.yml run pixdex-originals
 ```
 
-If either one isn't running, "View Original" links for local-disk photos in
+If either one isn't running, "View original" links for local-disk photos in
 the web UI simply fail to load — this is expected, not a bug to chase; see
 the spec's Global Constraints on this.

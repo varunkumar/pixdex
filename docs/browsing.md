@@ -22,6 +22,9 @@ The timeline has the same people filter as [Search](search.md).
 - The album list shows the cover, name, photo count, date, average rating and
   sharing.
 - You can sort by date, name, size or rating.
+- "← All albums" returns to the same page and sort of the list.
+- The owner selects a cover with the "Set as cover" icon on a photo. The current
+  cover has a blue "Cover" badge.
 - Each album page has Photos, People and Species tabs.
 - Select a person, known personality or species to see only those photos. Only one
   filter is active at a time. Remove its chip to clear it.
@@ -61,7 +64,7 @@ sequence.
 ## Photo details
 
 The photo page shows the camera, lens, focal length, aperture, shutter, ISO and
-GPS, if the file has them. "View Original" opens the full file.
+GPS, if the file has them. "View original" opens the full file.
 
 ## Rate and correct
 

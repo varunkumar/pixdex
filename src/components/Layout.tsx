@@ -33,7 +33,7 @@ const LINKS: NavItem[] = [
   { to: '/timeline', label: 'Timeline', icon: MdTimeline, end: false },
   { to: '/search', label: 'Search', icon: MdSearch, end: false },
   { to: '/people', label: 'People', icon: MdPeople, end: false },
-  { to: '/daily', label: 'Daily Pick', icon: MdPhoto, end: false },
+  { to: '/daily', label: 'Daily pick', icon: MdPhoto, end: false },
 ];
 
 /** Shown (never disabled) only to the admin. */
@@ -84,6 +84,17 @@ const Layout = () => {
       navbar={{ width: 260, breakpoint: 'sm', collapsed: { desktop: true, mobile: !opened } }}
       padding="md"
     >
+      <a
+        href="#main"
+        className="pdx-skip"
+        onClick={(e) => {
+          // Focus only: a hash in the address would be a navigation to the router.
+          e.preventDefault();
+          document.getElementById('main')?.focus();
+        }}
+      >
+        Skip to main content
+      </a>
       <AppShell.Header style={{ background: HEADER_GRADIENT, border: 'none' }}>
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap="md" wrap="nowrap">
@@ -160,7 +171,8 @@ const Layout = () => {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="md">
+      {/* Closed, the drawer is only moved off screen: `inert` keeps its links out of the tab order too. */}
+      <AppShell.Navbar p="md" inert={!opened}>
         {links.map((item) => (
           <DrawerLink key={item.to} {...item} onNavigate={close} />
         ))}
@@ -175,7 +187,7 @@ const Layout = () => {
         <NavLink component="a" href="/cdn-cgi/access/logout" label="Log out" leftSection={<MdLogout />} />
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main id="main" tabIndex={-1}>
         <Container size="xl" py="md">
           <Outlet />
         </Container>

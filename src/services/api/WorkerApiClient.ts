@@ -265,6 +265,12 @@ export class WorkerApiClient {
     return (await this.getJson<{ faces: SerializedFace[] }>(`/photos/${encodeURIComponent(photoId)}/faces`)).faces;
   }
 
+  /** One person's confirmed and auto faces on a page of photos (at most 48), in one request. */
+  async getPersonFaces(personId: string, photoIds: string[]): Promise<SerializedFace[]> {
+    const path = `/people/${encodeURIComponent(personId)}/faces?photos=${photoIds.map(encodeURIComponent).join(',')}`;
+    return (await this.getJson<{ faces: SerializedFace[] }>(path)).faces;
+  }
+
   async createPerson(name: string, faceIds?: string[]): Promise<{ id: string; name: string }> {
     const response = await this.sendJson('POST', '/people', { name, faceIds });
     return (await response.json()) as { id: string; name: string };

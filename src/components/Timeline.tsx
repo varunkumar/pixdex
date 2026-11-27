@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Box, Button, Card, Group, Loader, SegmentedControl, Select, Stack, Text, Title } from '@mantine/core';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -50,6 +51,7 @@ const pinchDistance = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, 
 
 const Timeline = () => {
   const { zoom, album, people, known, to, setZoom, setFilters, jumpTo } = useTimelineParams();
+  usePageTitle('Timeline');
   const peopleKey = people.join(',');
   const knownKey = known.join(',');
 
@@ -221,7 +223,7 @@ const Timeline = () => {
     // Right padding at md and up keeps photos clear of the fixed scrubber rail.
     <Stack gap="lg" data-testid="timeline-content" pr={{ base: 0, md: SCRUBBER_GUTTER }}>
       <Group justify="space-between" align="flex-end">
-        <Title order={2}>Timeline</Title>
+        <Title order={1} size="h2">Timeline</Title>
         <Group gap="xs">
           <SegmentedControl
             aria-label="Timeline zoom"
@@ -285,7 +287,7 @@ const Timeline = () => {
                   mb="sm"
                   style={{ position: 'sticky', top: 60, zIndex: 5, background: 'var(--mantine-color-body)' }}
                 >
-                  <Title order={4}>{groupHeading(group.key)}</Title>
+                  <Title order={2} size="h4">{groupHeading(group.key)}</Title>
                   <Text size="sm" c="dimmed">
                     {groupCount(group)}
                   </Text>

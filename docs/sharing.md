@@ -49,7 +49,7 @@ access" in the [Development guide](development.md).
 
 ## Originals
 
-Pages show thumbnails. "View Original" and the cover banner need the originals
+Pages show thumbnails. "View original" and the cover banner need the originals
 server.
 
 1. Obey the steps in [agent/cloudflared](../agent/cloudflared/README.md).

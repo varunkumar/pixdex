@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import { Anchor, Box, Button, Group, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
@@ -11,7 +12,9 @@ import { noteRemovedName, refreshAfterReview } from '../services/matchQueue';
 import { errorMessage, UNNAMED_PERSON } from '../services/peopleKeys';
 import { finishedReviews, noteReviewFinished } from '../services/reviewVisit';
 import type { PersonSummary, SerializedFace } from '../types/api';
+import BackLink from './BackLink';
 import FaceTile from './FaceTile';
+import PageLoading from './PageLoading';
 
 const TILE = 96;
 
@@ -76,6 +79,7 @@ const ReviewTile = ({
       to={`/photos/${face.photoId}`}
       target="_blank"
       size="xs"
+      className="pdx-target"
       aria-label={`Open the photo of face ${number}`}
     >
       Open photo
@@ -246,7 +250,7 @@ const Review = ({ personId, name }: { personId: string; name: string }) => {
           </Button>
         </Group>
       )}
-      {query.isLoading && <Text c="dimmed">Loading…</Text>}
+      {query.isLoading && <PageLoading label="Loading matches" />}
       {finished ? (
         <Group gap="xs">
           <Text c="dimmed">No more auto matches.</Text>
@@ -295,31 +299,35 @@ const ReviewAutoFaces = () => {
   const { id = '' } = useParams();
   const { key } = useLocation();
   const personPage = useLastAddress(`/people/${id}`);
-  const { data: people = [], isSuccess } = useQuery({
+  const { data: people = [], isSuccess, isPending } = useQuery({
     queryKey: ['people'],
     queryFn: () => workerApiClient.getPeople(),
   });
   const person = people.find((p) => p.id === id);
   const name = person?.name ?? UNNAMED_PERSON;
+  usePageTitle(person ? `Review ${name}` : undefined);
 
   return (
     <Stack gap="lg">
       <Group gap="lg">
-        <Anchor component={Link} to={personPage} size="sm">
-          ← Back to the person
-        </Anchor>
-        {person?.canEdit && (
-          <Anchor component={Link} to="/review" size="sm">
-            All to review
-          </Anchor>
-        )}
+        <BackLink to={personPage}>{person ? name : 'Person'}</BackLink>
+        {person?.canEdit && <BackLink to="/review">To review</BackLink>}
       </Group>
-      {isSuccess && !person && <Text c="dimmed">This person was not found.</Text>}
-      {person && !person.canEdit && <Text c="dimmed">Only the owner of this person can review their matches.</Text>}
+      {isPending && <PageLoading label="Loading matches" />}
+      {isSuccess && !person && (
+        <Title order={1} fz="md" fw={400} c="dimmed">
+          This person was not found.
+        </Title>
+      )}
+      {person && !person.canEdit && (
+        <Title order={1} fz="md" fw={400} c="dimmed">
+          Only the owner of this person can review their matches.
+        </Title>
+      )}
       {person?.canEdit && (
         <>
           <Stack gap={4}>
-            <Title order={2}>Review auto matches: {name}</Title>
+            <Title order={1} size="h2">Review auto matches: {name}</Title>
             <Text size="sm" c="dimmed">
               Weakest matches first. Untick any face that is not {name}. Confirmed faces are never moved by matching.
             </Text>

@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccessRequest, AccessRequestsResponse } from '../../types/api';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
-import { renderWithProviders } from '../../test/renderWithProviders';
+import { renderWithProviders, renderWithRouter } from '../../test/renderWithProviders';
 import AdminAccess from '../AdminAccess';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
@@ -39,6 +39,21 @@ describe('AdminAccess', () => {
       list([row(1, 'a@example.com', 'pending', 'Hello there'), row(2, 'b@example.com')])
     );
     vi.mocked(workerApiClient.decideAccessRequest).mockResolvedValue(row(1, 'a@example.com', 'approved'));
+  });
+
+  it('opens the tab named in the address and drops the name again for Pending', async () => {
+    const { router } = renderWithRouter([{ path: '/admin/access', element: <AdminAccess /> }], ['/admin/access?status=revoked']);
+    await waitFor(() => expect(workerApiClient.listAccessRequests).toHaveBeenCalledWith('revoked'));
+    expect(screen.getByRole('tab', { name: 'Revoked' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Approved' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?status=approved'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Pending' }));
+    await waitFor(() => expect(router.state.location.search).toBe(''));
+  });
+
+  it('treats an unknown tab name as Pending', async () => {
+    renderWithProviders(<AdminAccess />, { route: '/admin/access?status=nonsense' });
+    await waitFor(() => expect(workerApiClient.listAccessRequests).toHaveBeenCalledWith('pending'));
   });
 
   it('lists pending rows with email, note and date, and Approve and Deny buttons', async () => {
@@ -112,6 +127,45 @@ describe('AdminAccess', () => {
     const { container } = show();
     expect(await screen.findByText('<b>x</b>')).toBeInTheDocument();
     expect(container.querySelector('b')).toBeNull();
+  });
+
+  const approved = () =>
+    vi.mocked(workerApiClient.listAccessRequests).mockImplementation(async (s) =>
+      s === 'approved' ? list([row(3, 'c@example.com', 'approved')]) : list([])
+    );
+
+  it('asks before revoking, with focus on Cancel, and revokes only on confirm', async () => {
+    approved();
+    renderWithProviders(<AdminAccess />, { route: '/admin/access?status=approved' });
+    const revoke = await screen.findByRole('button', { name: 'Revoke c@example.com' });
+    revoke.focus();
+    fireEvent.click(revoke);
+    expect(workerApiClient.decideAccessRequest).not.toHaveBeenCalled();
+    expect(screen.getByText('Revoke c@example.com? They are signed out at once.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText(/signed out at once/)).toBeNull();
+    expect(revoke).toHaveFocus();
+    fireEvent.click(revoke);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm revoke' }));
+    await waitFor(() => expect(workerApiClient.decideAccessRequest).toHaveBeenCalledWith(3, 'revoke'));
+  });
+
+  it('drops an open confirmation when the tab changes', async () => {
+    approved();
+    renderWithProviders(<AdminAccess />, { route: '/admin/access?status=approved' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke c@example.com' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Pending' }));
+    await screen.findByText('No pending requests.');
+    fireEvent.click(screen.getByRole('tab', { name: 'Approved' }));
+    await screen.findByRole('button', { name: 'Revoke c@example.com' });
+    expect(screen.queryByText(/signed out at once/)).toBeNull();
+  });
+
+  it('shows a named spinner while the requests load', async () => {
+    vi.mocked(workerApiClient.listAccessRequests).mockReturnValue(new Promise(() => {}));
+    show();
+    expect(await screen.findByRole('progressbar', { name: 'Loading requests' })).toBeInTheDocument();
   });
 
   it('switches tabs and offers Revoke on Approved and Approve on Denied and Revoked', async () => {

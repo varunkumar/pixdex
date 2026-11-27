@@ -63,7 +63,7 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   conflict retry), revoke 3 (2 if not a member, 5 with a retry), deny none; `/me` still reads no D1 (one env var); the browse hot path is unchanged, and strangers now cost nothing because Access stops them
   at the edge. Turnstile, the Access API, the bypass behaviour and the rate-limit binding cannot be measured locally.
 - `functions/api/` - Cloudflare Pages Function: token-adding read proxy (reads
-  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET people/review-queue`, `GET people/:id/auto-faces`, `GET albums/contents` and `GET me`; also forwards the
+  include `GET timeline`, `GET timeline/buckets`, `GET people/known`, `GET people/review-queue`, `GET people/:id/auto-faces`, `GET people/:id/faces`, `GET albums/contents` and `GET me`; also forwards the
   browser writes (JSON bodies only): `PUT albums/cover`, `PUT albums/shares`, `PUT albums/framing`, `PATCH photos/:id`,
   `PATCH`/`DELETE people/:id`, `PUT`/`DELETE people/:id/label`, and `POST` to `people`, `people/:id/faces`,
   `people/:id/match`, `people/:id/cover`, `people/:id/auto-faces/review`, `faces/:id/assign|reject|unassign`; admin: `GET admin/requests` and

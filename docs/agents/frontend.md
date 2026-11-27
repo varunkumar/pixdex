@@ -22,9 +22,21 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   number or filter (`useListParams`; People unnamed groups use `groups` and `groupSize`, with `keepScroll`), otherwise
   in `useHistoryState` (per history entry, browser memory: review grid page and ticks, "Ignored faces" open, person
   suggestions). Never plain `useState` for these. In-page back links return to the last shown address of the target
-  (`useRememberAddress` / `useLastAddress`; People and person pages). Performance (local D1): the list reads about 5 rows per auto face of the
-  person on every page (first page 2.8K rows at 530 faces, 15K at 3,000; paging through 3,000 without changes 577K); a
-  review of 48 reads 432 to 672 rows and writes 192 to 336; no embeddings read, at most 48 rows mapped in the Worker.
+  (`useRememberAddress` / `useLastAddress`; Albums, People and person pages). Use `BackLink` for these links. Its text names
+  the destination ("← All albums", "← All people", the person's name, "← To review"). The Access tab is in the URL
+  (`?status=`).
+- UI patterns (use these, and do not add a second variant):
+  - Cover: use `CoverBadge` (blue `#2563EB`) and `SetCoverButton` on album tiles and person tiles.
+  - A face row on the photo page keeps a text button with the same icon.
+  - A person tile shows the "Photo actions" menu only for an automatic match ("Confirm X", "Not X").
+  - Confirm a destructive action with `InlineConfirm` (delete a person, revoke access). Focus starts on Cancel.
+  - Show loading with `PageLoading` and a label. The photo page and Daily pick keep skeletons. Dashboard counts show "-".
+  - Copy text with `copyText` (`services/copy.ts`). Write labels in sentence case.
+  - Each page calls `usePageTitle` and has exactly one `h1`. To change a heading level, set `order`. Keep the look with `size`.
+  - Give a text link that is a control the class `pdx-target`. Controls are at least 24px by 24px.
+  - The Timeline month rail is the known exception to that size.
+  - Name each pagination control ("Previous page", "Page N"). Load list images lazily after the first four.
+  - The closed phone drawer is `inert`. `Layout` starts with a skip link.
 - Search omnibox (`src/components/omnibox/`): the bar shows album, own-people (blue), known (violet, "known" marker) and date chips; typed words
   become suggestions through the shared matcher (`src/services/omnibox/matcher.ts`: debounce 150 ms, from 3 characters per span, each word
   matches anywhere inside a name or alias word, case and accent insensitive, no fuzzy matching, longest span wins, a person never used twice,

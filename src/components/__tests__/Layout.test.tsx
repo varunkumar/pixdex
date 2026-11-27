@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getPromptApiStatus } from '../../services/aiSearch/promptApi';
@@ -27,6 +27,23 @@ describe('Layout', () => {
     expect(brand).toHaveAttribute('href', '/');
   });
 
+  it('starts with a skip link that moves focus to the main area without changing the address', () => {
+    renderWithProviders(<Layout />);
+    const skip = screen.getAllByRole('link')[0];
+    expect(skip).toHaveAccessibleName('Skip to main content');
+    // fireEvent returns false when the default (a hash navigation) was prevented.
+    expect(fireEvent.click(skip)).toBe(false);
+    expect(screen.getByRole('main')).toHaveFocus();
+  });
+
+  it('keeps the closed drawer out of reach of the keyboard and screen readers', () => {
+    renderWithProviders(<Layout />);
+    const drawer = document.querySelector('.mantine-AppShell-navbar')!;
+    expect(drawer).toHaveAttribute('inert');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle navigation' }));
+    expect(drawer).not.toHaveAttribute('inert');
+  });
+
   it('links to every section', () => {
     renderWithProviders(<Layout />);
     const hrefFor = (name: string) =>
@@ -36,7 +53,7 @@ describe('Layout', () => {
     expect(hrefFor('Timeline')).toContain('/timeline');
     expect(hrefFor('Search')).toContain('/search');
     expect(hrefFor('People')).toContain('/people');
-    expect(hrefFor('Daily Pick')).toContain('/daily');
+    expect(hrefFor('Daily pick')).toContain('/daily');
   });
 
   it('offers log out and a burger for narrow screens', () => {

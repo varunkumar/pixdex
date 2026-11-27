@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import { makePhoto } from '../../test/fixtures';
@@ -91,7 +91,7 @@ describe('PhotoDetail', () => {
       'href',
       'https://www.google.com/maps?q=11.67,76.63'
     );
-    expect(screen.getByRole('link', { name: /view original/i })).toHaveAttribute('href', '/api/originals/p1');
+    expect(screen.getByRole('link', { name: 'View original' })).toHaveAttribute('href', '/api/originals/p1');
     expect(workerApiClient.getPhoto).toHaveBeenCalledWith('p1');
   });
 
@@ -211,12 +211,12 @@ describe('PhotoDetail', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
-  it('falls back to the thumbnail and an Open original link when the original fails', async () => {
+  it('falls back to the thumbnail and a View original link when the original fails', async () => {
     renderWithRouter(routes, ['/photos/p1?lightbox=1']);
     await screen.findByRole('dialog');
     FakeImage.instances.forEach((i) => i.onerror?.());
     expect(await screen.findByText(/original is unavailable/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open original' })).toHaveAttribute('href', '/api/originals/p1');
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'View original' })).toHaveAttribute('href', '/api/originals/p1');
   });
 
   it('shows an extra Open in Google Drive link for Drive photos', async () => {
@@ -229,7 +229,7 @@ describe('PhotoDetail', () => {
       'href',
       'https://drive.google.com/file/d/x/view'
     );
-    expect(screen.getByRole('link', { name: 'View Original' })).toHaveAttribute('href', '/api/originals/p1');
+    expect(screen.getByRole('link', { name: 'View original' })).toHaveAttribute('href', '/api/originals/p1');
   });
 
   it('does not prefetch when there is no original image URL and the lightbox still opens safely', async () => {
@@ -241,7 +241,7 @@ describe('PhotoDetail', () => {
     renderWithRouter(routes, ['/photos/p1?lightbox=1']);
     await screen.findByRole('dialog');
     expect(FakeImage.instances).toHaveLength(0);
-    expect(screen.getByRole('link', { name: 'Open original' })).toHaveAttribute(
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'View original' })).toHaveAttribute(
       'href',
       'https://drive.google.com/file/d/x/view'
     );
@@ -297,5 +297,26 @@ describe('PhotoDetail', () => {
     expect(await screen.findByText('Your session has expired.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /back to search/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('PhotoDetail copy', () => {
+  const copy = async (writeText: () => Promise<void>) => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(writeText) } });
+    vi.mocked(workerApiClient.getPhoto).mockResolvedValue(makePhoto({ suggestedCaption: 'Golden coat.' }));
+    vi.mocked(workerApiClient.getPhotoFaces).mockResolvedValue([]);
+    renderWithRouter(routes, ['/photos/p1']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy to clipboard' }));
+  };
+
+  it('says the caption was copied', async () => {
+    await copy(() => Promise.resolve());
+    expect(await screen.findByText('Copied to clipboard')).toBeInTheDocument();
+  });
+
+  it('says when the caption could not be copied', async () => {
+    await copy(() => Promise.reject(new Error('Clipboard blocked')));
+    expect(await screen.findByText('Failed to copy')).toBeInTheDocument();
+    expect(screen.getByText('Clipboard blocked')).toBeInTheDocument();
   });
 });

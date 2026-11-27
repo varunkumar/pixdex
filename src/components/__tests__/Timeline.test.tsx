@@ -140,7 +140,7 @@ describe('Timeline', () => {
   // Pins the heading tops, as layout would after scrolling, and fires a scroll.
   const placeHeadings = (nov: number, oct: number) => {
     const october = screen.getByText('October 2026').closest('[data-group-key]') as HTMLElement;
-    const november = screen.getByText('November 2026', { selector: 'h4' }).closest('[data-group-key]') as HTMLElement;
+    const november = screen.getByText('November 2026', { selector: 'h2' }).closest('[data-group-key]') as HTMLElement;
     november.getBoundingClientRect = () => ({ top: nov }) as DOMRect;
     october.getBoundingClientRect = () => ({ top: oct }) as DOMRect;
     fireEvent.scroll(window);
@@ -351,7 +351,7 @@ describe('Timeline', () => {
     await screen.findByText('November 2026');
     await screen.findByRole('button', { name: 'November 2026' });
     const october = screen.getByText('October 2026').closest('[data-group-key]') as HTMLElement;
-    const november = screen.getByText('November 2026', { selector: 'h4' }).closest('[data-group-key]') as HTMLElement;
+    const november = screen.getByText('November 2026', { selector: 'h2' }).closest('[data-group-key]') as HTMLElement;
     const place = (nov: number, oct: number) => {
       november.getBoundingClientRect = () => ({ top: nov }) as DOMRect;
       october.getBoundingClientRect = () => ({ top: oct }) as DOMRect;

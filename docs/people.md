@@ -11,8 +11,9 @@ photo" shows numbered boxes. Lists are in alphabetical order.
   tab open until the progress card goes away.
 - The index process also matches new faces to named people.
 - A person page sorts photos by date, rating or name.
-- "Set as cover" selects a person's picture. If you remove that face, the default
-  returns (the largest confirmed face).
+- The "Set as cover" icon on a photo selects a person's picture. The current cover
+  has a blue "Cover" badge.
+- If you remove the cover face, the default returns (the largest confirmed face).
 
 ## Matching
 
@@ -33,7 +34,8 @@ photo" shows numbered boxes. Lists are in alphabetical order.
 - "Not X" rejects a match permanently.
 - "Remove name" removes the name from a confirmed face.
 - "Review suggestions" shows weak matches (score 0.4 to 0.5).
-- "Confirm X" in a photo menu confirms one automatic match.
+- "Confirm X" confirms one automatic match. It is in the menu of that photo on the
+  person page.
 - "Review auto matches" shows 48 faces, weakest first, all selected. Clear the
   wrong or unclear faces. Then select "Confirm N" or "Confirm N, mark M as Not X".
 - Only faces on the screen change. A face that changed after the page loaded, or
@@ -47,8 +49,9 @@ The People page shows "N matches to review". The list shows each person with a
 count. "Next: <name>" goes to the next person with the most matches. Unnamed
 groups are not counted. The count can be 5 minutes old.
 
-Back returns to the same page and sort. It also keeps review selections and open
-sections. A page reload clears these.
+Back returns to the same page and sort. A "← ..." link does the same, and its text
+names the destination. Back also keeps review selections and open sections. A page
+reload clears these.
 
 ## Ignore faces
 

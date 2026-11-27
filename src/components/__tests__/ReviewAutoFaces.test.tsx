@@ -67,6 +67,12 @@ describe('ReviewAutoFaces', () => {
     }));
   });
 
+  it('shows a named spinner while loading', async () => {
+    vi.mocked(workerApiClient.getAutoFaces).mockReturnValue(new Promise(() => {}));
+    show();
+    expect(await screen.findByRole('progressbar', { name: 'Loading matches' })).toBeInTheDocument();
+  });
+
   it('starts with every face ticked and links each to its photo in a new tab', async () => {
     await showPage();
     for (const n of [1, 2, 3]) expect(tile(n)).toHaveAttribute('aria-pressed', 'true');
@@ -197,7 +203,7 @@ describe('ReviewAutoFaces', () => {
 
   it('links back to the list and asks for it only once the pages are finished', async () => {
     await showPage();
-    expect(screen.getByRole('link', { name: 'All to review' })).toHaveAttribute('href', '/review');
+    expect(screen.getByRole('link', { name: '← To review' })).toHaveAttribute('href', '/review');
     expect(workerApiClient.getReviewQueue).not.toHaveBeenCalled();
   });
 

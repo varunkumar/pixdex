@@ -32,7 +32,7 @@ export function markReviewQueueStale(client: QueryClient) {
 /** After matching has written faces: everything that shows people or faces is out of date. */
 const refreshAfterMatching = (client: QueryClient) => {
   markReviewQueueStale(client);
-  invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS]);
+  invalidate(client, ['photo-faces', 'person-faces', 'people', ...SEARCH_KEYS]);
 };
 
 /**
@@ -60,11 +60,11 @@ const SEARCH_KEYS_BUT_GROUPS = SEARCH_KEYS.filter((k) => k !== 'people-groups');
 export function refreshAfterNaming(client: QueryClient, faceIds: string[]) {
   dropFromGroups(client, faceIds);
   markReviewQueueStale(client);
-  invalidate(client, ['photo-faces', 'people', ...SEARCH_KEYS_BUT_GROUPS]);
+  invalidate(client, ['photo-faces', 'person-faces', 'people', ...SEARCH_KEYS_BUT_GROUPS]);
 }
 
 /** Ignoring also hides a face's known-personality match, so known lists and searches change too. */
-const IGNORE_KEYS = ['ignored-faces', 'photo-faces', 'known-people', 'album-contents'];
+const IGNORE_KEYS = ['ignored-faces', 'photo-faces', 'person-faces', 'known-people', 'album-contents'];
 
 export function refreshAfterIgnoring(client: QueryClient, faceIds: string[]) {
   dropFromGroups(client, faceIds);
@@ -79,7 +79,7 @@ export function refreshAfterRestoring(client: QueryClient) {
 /** After auto matches were confirmed or rejected: rejected faces also leave counts and rejoin the unnamed groups. */
 export function refreshAfterReview(client: QueryClient) {
   markReviewQueueStale(client);
-  invalidate(client, ['photo-faces', 'people', 'album-contents', ...SEARCH_KEYS]);
+  invalidate(client, ['photo-faces', 'person-faces', 'people', 'album-contents', ...SEARCH_KEYS]);
 }
 
 /** The Worker's limit on `from`. */

@@ -142,7 +142,7 @@ describe('Search (plain mode)', () => {
 
   it('paging updates the URL', async () => {
     const { router } = go('/search?q=lion');
-    fireEvent.click(await screen.findByRole('button', { name: '2' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Page 2' }));
     await waitFor(() => expect(router.state.location.search).toBe('?q=lion&page=2'));
   });
 

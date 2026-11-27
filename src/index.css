@@ -292,3 +292,26 @@ body {
     font-size: 23px;
   }
 }
+
+/* A text link that is a control of its own: at least 24px high (WCAG 2.5.8). */
+.pdx-target {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+/* "Skip to main content": off screen until a keyboard user tabs to it. */
+.pdx-skip {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  padding: 8px 12px;
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-text);
+  transform: translateY(-200%);
+}
+.pdx-skip:focus {
+  transform: none;
+}

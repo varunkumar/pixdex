@@ -16,6 +16,7 @@ import type {
   PersonSummary,
   SerializedFace,
   SerializedPhoto,
+  TimelineGroup,
 } from '../src/types/api.ts';
 import type { Framing } from '../src/services/framing.ts';
 
@@ -108,6 +109,35 @@ function autoFacesOf(personId: string): SerializedFace[] {
       matchScore: 0.5 + i / 200,
       ignored: false,
     }));
+}
+
+/** One dummy face of the person on each asked photo that shows them; every second one is still an auto match. */
+function personFacesOf(personId: string, photoIds: string[]): SerializedFace[] {
+  const person = OWN.find((p) => p.id === personId);
+  return LIBRARY.filter((m) => m.people.includes(personId) && photoIds.includes(m.photo.id)).map((m, i) => ({
+    id: `person-${personId}-${m.photo.id}`,
+    photoId: m.photo.id,
+    thumbnailUrl: `/thumbnails/${m.photo.id}`,
+    cropUrl: null,
+    bbox: { x: 0.2, y: 0.2, w: 0.3, h: 0.45 },
+    detScore: 0.99,
+    personId,
+    personName: person?.name ?? null,
+    status: i % 2 === 0 ? ('auto' as const) : ('confirmed' as const),
+    matchScore: i % 2 === 0 ? 0.6 : null,
+    ignored: false,
+  }));
+}
+
+/** The dummy library by month, newest first, at most 8 photos shown per month. */
+function timelineMonths(): TimelineGroup[] {
+  const months = new Map<string, SerializedPhoto[]>();
+  const dated = LIBRARY.map((m) => m.photo).filter((p) => p.dateTime);
+  for (const p of dated.sort((a, b) => b.dateTime!.localeCompare(a.dateTime!))) {
+    const key = p.dateTime!.slice(0, 7);
+    months.set(key, [...(months.get(key) ?? []), p]);
+  }
+  return [...months].map(([key, all]) => ({ key, total: all.length, shown: Math.min(all.length, 8), photos: all.slice(0, 8) }));
 }
 
 /** Saved cover framing per album, kept until the dev server restarts. */
@@ -278,6 +308,11 @@ function buildLibrary(): MockPhoto[] {
 const LIBRARY = buildLibrary();
 // photoCount matches the dummy library, so a list count and a search total agree.
 for (const p of OWN) p.photoCount = LIBRARY.filter((m) => m.people.includes(p.id)).length;
+// One person has a cover (their newest photo), so the Cover badge shows on their page.
+const newestOfAsha = LIBRARY.filter((m) => m.people.includes('own-asha'))
+  .map((m) => m.photo)
+  .sort((a, b) => (b.dateTime ?? '').localeCompare(a.dateTime ?? ''))[0];
+if (newestOfAsha) OWN[0].cover = personFacesOf('own-asha', [newestOfAsha.id])[0];
 for (const k of KNOWN) k.photoCount = LIBRARY.filter((m) => m.known.includes(k.id)).length;
 
 function list(v: string | null): string[] {
@@ -461,6 +496,11 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     const requests = REQUESTS.filter((r) => !wanted || r.status === wanted).sort((a, b) => b.id - a.id);
     return sendJson(res, 200, { requests, pendingCount, queueFull: pendingCount >= 3 });
   }
+  const personFaces = /^\/people\/([^/]+)\/faces$/.exec(path);
+  if (personFaces) {
+    const personId = decodeURIComponent(personFaces[1]);
+    return sendJson(res, 200, { faces: personFacesOf(personId, list(url.searchParams.get('photos'))) });
+  }
   if (path === '/people') return sendJson(res, 200, { people: OWN });
   if (path === '/people/known') return sendJson(res, 200, { known: KNOWN });
   if (path === '/people/groups') {
@@ -532,8 +572,10 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     return sendJson(res, 200, { people, known, species });
   }
   if (path === '/search') return sendJson(res, 200, search(url.searchParams));
-  if (path === '/timeline') return sendJson(res, 200, { groups: [], nextCursor: null });
-  if (path === '/timeline/buckets') return sendJson(res, 200, { buckets: [], undated: 0 });
+  // One page of month groups from the dummy library, whatever the zoom, so the Timeline has something to lay out.
+  if (path === '/timeline') return sendJson(res, 200, { groups: timelineMonths().slice(0, 6), nextCursor: null });
+  if (path === '/timeline/buckets')
+    return sendJson(res, 200, { buckets: timelineMonths().map((g) => ({ month: g.key, total: g.total })), undated: 0 });
   // The same SVG stands in for the original, so the album hero has an image every browser can decode.
   if (path.startsWith('/thumbnails/') || path.startsWith('/originals/')) {
     res.statusCode = 200;

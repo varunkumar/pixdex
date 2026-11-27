@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   ActionIcon,
   Box,
@@ -34,6 +35,7 @@ import { errorMessage, UNNAMED_PERSON } from "../services/peopleKeys";
 import type { FaceGroup, PersonSummary } from "../types/api";
 import FaceTile from "./FaceTile";
 import ListPagination from "./ListPagination";
+import PageLoading from "./PageLoading";
 import SortIcons from "./SortIcons";
 import PersonLabelEditor from "./PersonLabelEditor";
 import IgnoredFaces from "./IgnoredFaces";
@@ -102,7 +104,7 @@ const GroupCard = ({
               <Box key={f.id} pos="relative">
                 <FaceTile face={f} size={64} />
                 <ActionIcon
-                  size="xs"
+                  size={24}
                   radius="xl"
                   variant="default"
                   pos="absolute"
@@ -202,6 +204,7 @@ const GROUP_PAGE_SIZES = [6, 12, 24] as const;
 
 const People = () => {
   useRememberAddress();
+  usePageTitle('People');
   const { params, page, size, offset, update } = useListParams(
     12,
     PEOPLE_PAGE_SIZES,
@@ -215,7 +218,11 @@ const People = () => {
     GROUP_PAGE_SIZES.find((s) => s === requestedGroupSize) ??
     GROUP_PAGE_SIZES[0];
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const { data: people = [], isSuccess: peopleLoaded } = useQuery({
+  const {
+    data: people = [],
+    isSuccess: peopleLoaded,
+    isError: peopleFailed,
+  } = useQuery({
     queryKey: ["people"],
     queryFn: () => workerApiClient.getPeople(),
   });
@@ -274,7 +281,9 @@ const People = () => {
 
   return (
     <Stack gap="lg">
-      <Title order={2}>People</Title>
+      <Title order={1} size="h2">
+        People
+      </Title>
       {pending > 0 && (
         <Button component={Link} to="/review" variant="light" w="fit-content">
           {pending} {pending === 1 ? "match" : "matches"} to review
@@ -282,6 +291,10 @@ const People = () => {
       )}
       {groupsQuery.error != null && (
         <Text c="red">Could not load unnamed faces</Text>
+      )}
+
+      {!loaded && !peopleFailed && groupsQuery.error == null && (
+        <PageLoading label="Loading people" />
       )}
 
       {loaded && people.length === 0 && groups.length === 0 && (
@@ -355,7 +368,9 @@ const People = () => {
 
       {groups.length > 0 && (
         <Stack gap="md">
-          <Title order={3}>Unnamed groups</Title>
+          <Title order={2} size="h3">
+            Unnamed groups
+          </Title>
           <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
             {shownGroups.map((g) => (
               <GroupCard

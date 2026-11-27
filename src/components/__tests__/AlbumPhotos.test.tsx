@@ -78,6 +78,12 @@ beforeEach(() => {
 });
 
 describe('AlbumPhotos tabs', () => {
+  it('shows a named spinner while the photos load', () => {
+    vi.mocked(workerApiClient.searchPage).mockReturnValue(new Promise(() => {}));
+    renderAlbum();
+    expect(screen.getByRole('progressbar', { name: 'Loading photos' })).toBeInTheDocument();
+  });
+
   it('shows People and Species tabs with counts once contents load', async () => {
     renderAlbum();
     expect(await screen.findByRole('tab', { name: /People/ })).toHaveTextContent('3');
@@ -250,6 +256,13 @@ describe('AlbumPhotos', () => {
     expect(buttons[0]).toHaveAccessibleName(/leopard in a tree/i);
     fireEvent.click(buttons[0]);
     await waitFor(() => expect(workerApiClient.setAlbumCover).toHaveBeenCalledWith('Kanha', makePhoto().id));
+  });
+
+  it('reports a failed cover change as a notification', async () => {
+    vi.mocked(workerApiClient.setAlbumCover).mockRejectedValue(new Error('Cover exploded'));
+    renderAlbum();
+    fireEvent.click(await screen.findByRole('button', { name: /^set as cover/i }));
+    expect((await screen.findByText('Cover exploded')).closest('.mantine-Notification-root')).not.toBeNull();
   });
 
   it('marks the current cover photo with a Cover badge instead of a button', async () => {

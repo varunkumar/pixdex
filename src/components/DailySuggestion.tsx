@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   Anchor,
   Badge,
@@ -13,15 +14,16 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { useState } from 'react';
-import { notifications } from '@mantine/notifications';
 import { useQuery } from '@tanstack/react-query';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { copyText } from '../services/copy';
 import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import Lightbox from './Lightbox';
 import PhotoMeta from './PhotoMeta';
 
 const DailySuggestion = () => {
+  usePageTitle('Daily pick');
   const [zoomOpen, setZoomOpen] = useState(false);
   const {
     data: suggestion,
@@ -34,18 +36,8 @@ const DailySuggestion = () => {
 
   const handleCopyToClipboard = () => {
     if (!suggestion) return;
-
-    const content = `${suggestion.suggestedCaption}\n\n${suggestion.suggestedHashtags
-      .map((tag) => `#${tag}`)
-      .join(' ')}`;
-    navigator.clipboard.writeText(content).then(
-      () => {
-        notifications.show({ title: 'Copied to clipboard', message: '', color: 'green', autoClose: 2000 });
-      },
-      (err: Error) => {
-        notifications.show({ title: 'Failed to copy', message: err.message, color: 'red', autoClose: 3000 });
-      }
-    );
+    const hashtags = suggestion.suggestedHashtags.map((tag) => `#${tag}`).join(' ');
+    void copyText(`${suggestion.suggestedCaption}\n\n${hashtags}`);
   };
 
   const originalUrl = suggestion ? getOriginalUrl(suggestion.photo) : null;
@@ -57,8 +49,8 @@ const DailySuggestion = () => {
 
   return (
     <Card withBorder maw={1100} mx="auto" w="100%">
-      <Title order={3} mb="md">
-        Today's Instagram Pick
+      <Title order={1} size="h3" mb="md">
+        Today's Instagram pick
       </Title>
       {isLoading ? (
         <Stack>
@@ -80,16 +72,16 @@ const DailySuggestion = () => {
           >
             <Image src={thumbnail} alt={alt} radius="md" fit="contain" mah={500} w="100%" />
           </UnstyledButton>
-          {suggestion.photo.shortCaption && <Title order={4}>{suggestion.photo.shortCaption}</Title>}
+          {suggestion.photo.shortCaption && <Title order={2} size="h4">{suggestion.photo.shortCaption}</Title>}
           <PhotoMeta photo={suggestion.photo} />
 
-          <Text fw={700}>Why this photo?</Text>
+          <Title order={2} fz="md">Why this photo?</Title>
           <Text>{suggestion.reason}</Text>
 
-          <Text fw={700}>Suggested Caption</Text>
+          <Title order={2} fz="md">Suggested caption</Title>
           <Textarea value={suggestion.suggestedCaption} readOnly rows={4} />
 
-          <Text fw={700}>Suggested Hashtags</Text>
+          <Title order={2} fz="md">Suggested hashtags</Title>
           <Group gap="xs">
             {suggestion.suggestedHashtags.map((tag) => (
               <Badge key={tag} variant="light">
@@ -99,12 +91,12 @@ const DailySuggestion = () => {
           </Group>
 
           <Button onClick={handleCopyToClipboard} w="fit-content">
-            Copy to Clipboard
+            Copy to clipboard
           </Button>
 
           {originalUrl && (
             <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer">
-              View Original
+              View original
             </Anchor>
           )}
         </Stack>

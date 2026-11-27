@@ -67,13 +67,25 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   neither list; "Skip page"; the page query never refetches under the ticks; "Open photo" opens a new tab), and "Confirm X"
   beside "Not X" in the photo menu (needs `canEdit` on both the person and the photo). Rejected ids go to
   `noteRemovedName`. Confirming starts no match run.
-  "To review" (`/review`, `ReviewQueue.tsx`; People page link "N matches to review"; "All to review" and "Next: ..." on
+  "To review" (`/review`, `ReviewQueue.tsx`; People page link "N matches to review"; "← To review" and "Next: ..." on
   the review grid) lists the caller's people with `auto` faces in owned albums, from `GET /people/review-queue`
   (`{ people: [{ id, count }] }`, most first, `REVIEW_QUEUE_SQL`; names and covers come from `GET /people`). It reads
   about 5 rows per pending face (2,671 at 530; 14,898 at 3,000; 42,123 at 8,500; local D1), so it is requested only by
   those screens (query key `['review-queue']`, 5 minute staleTime). Binding rule: a change to auto faces calls
   `markReviewQueueStale` (`refetchType: 'none'`), never an immediate refetch, and no navigation badge or other page may
   request it. "Next" skips people already finished in this visit (`services/reviewVisit.ts`, browser memory).
+  Performance (local D1): the list reads about 5 rows per auto face of the
+  person on every page (first page 2.8K rows at 530 faces, 15K at 3,000; paging through 3,000 without changes 577K); a
+  review of 48 reads 432 to 672 rows and writes 192 to 336; no embeddings read, at most 48 rows mapped in the Worker.
+- Person page faces: the page sends one `GET /people/:id/faces?photos=` for each page of photos (1 to 48 ids).
+  - It sends the request only for a person that the user created. The query key is `['person-faces', personId, photoIds]`.
+  - While the next answer loads, the last answer for the same person stays. A face controls only the tile of its photo.
+  - Invalidate `person-faces` each time that you invalidate `photo-faces`.
+  - `personPhotoFacesSql` starts from the photo ids (`idx_faces_photo_id`). Keep the unary `+` on person and status.
+    `query-plans.test.ts` pins this plan.
+  - The route does no role check. A person or photo that is unknown or invisible matches nothing.
+  - Performance (local D1, 48 photos with 3 faces each): 1 statement reads 336 rows and writes 0.
+    Before, 48 requests ran 96 statements and read 527 rows.
 - Matching references (migration `0023_person_references.sql`, table `person_references (person_id, face_id)` plus
   `idx_person_references_face`): up to 30 confirmed faces per person, chosen by `worker/src/people/referenceSelection.ts`
   (bucket by photo year, undated is a bucket; rank by box area, then `det_score`, then rowid; take turns across buckets).

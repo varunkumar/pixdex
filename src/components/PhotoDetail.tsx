@@ -1,3 +1,4 @@
+import { usePageTitle } from '../hooks/usePageTitle';
 import {
   Anchor,
   Badge,
@@ -21,9 +22,11 @@ import { useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { usePrefetchImage } from '../hooks/usePrefetchImage';
 import { workerApiClient } from '../services/api/WorkerApiClient';
+import { copyText } from '../services/copy';
 import { exposureSummary, formatPhotoDate, mapsUrl } from '../services/exif';
 import { getDriveUrl, getOriginalImageUrl, getOriginalUrl } from '../services/originals';
 import { CLOSED_SECTIONS, splitFaces, type OpenFaceSections } from '../services/faces';
+import BackLink from './BackLink';
 import FaceOverlay from './FaceOverlay';
 import Lightbox from './Lightbox';
 import PhotoFaces from './PhotoFaces';
@@ -46,7 +49,7 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
 const Section = ({ title, items, variant }: { title: string; items: unknown[]; variant?: 'light' | 'outline' }) =>
   items.length === 0 ? null : (
     <Box>
-      <Title order={5} mb="xs">
+      <Title order={2} size="h5" mb="xs">
         {title}
       </Title>
       <Group gap="xs">
@@ -105,6 +108,7 @@ const PhotoDetail = () => {
     setSearchParams(next, { replace: true });
   };
 
+  usePageTitle(photo ? (photo.shortCaption ?? photo.filename ?? 'Photo') : undefined);
   if (isLoading) {
     return (
       <Stack>
@@ -117,7 +121,9 @@ const PhotoDetail = () => {
   if (error || !photo) {
     return (
       <Stack align="flex-start">
-        <Text c="red">{error instanceof Error ? error.message : 'Photo not found'}</Text>
+        <Title order={1} fz="md" fw={400} c="red">
+          {error instanceof Error ? error.message : 'Photo not found'}
+        </Title>
         {canGoBack ? (
           <Anchor component="button" type="button" onClick={() => navigate(-1)}>
             ← Back
@@ -151,9 +157,7 @@ const PhotoDetail = () => {
           ← Back
         </Anchor>
       ) : (
-        <Anchor component={Link} to={albumHref ?? '/search'} size="sm" w="fit-content">
-          {albumHref ? '← Back to album' : '← Back to search'}
-        </Anchor>
+        <BackLink to={albumHref ?? '/search'}>{albumHref ? 'Back to album' : 'Back to search'}</BackLink>
       )}
 
       <Card withBorder>
@@ -189,14 +193,16 @@ const PhotoDetail = () => {
           </Stack>
 
           <Stack gap="md" style={{ flex: '1 1 280px' }}>
-            <Title order={3}>{photo.shortCaption ?? photo.filename ?? 'Photo'}</Title>
+            <Title order={1} size="h3">
+              {photo.shortCaption ?? photo.filename ?? 'Photo'}
+            </Title>
 
             <SimpleGrid cols={2} spacing="sm">
               {photo.filename && <Field label="File name">{photo.filename}</Field>}
               {date && <Field label="Taken">{date}</Field>}
               {photo.album && albumHref && (
                 <Field label="Album">
-                  <Anchor component={Link} to={albumHref}>
+                  <Anchor component={Link} to={albumHref} className="pdx-target">
                     {photo.album}
                   </Anchor>
                 </Field>
@@ -206,7 +212,7 @@ const PhotoDetail = () => {
               {exposure.length > 0 && <Field label="Exposure">{exposure.join(' · ')}</Field>}
               {gps && (
                 <Field label="Location">
-                  <Anchor href={gps} target="_blank" rel="noopener noreferrer">
+                  <Anchor href={gps} target="_blank" rel="noopener noreferrer" className="pdx-target">
                     View on map
                   </Anchor>
                 </Field>
@@ -223,12 +229,12 @@ const PhotoDetail = () => {
             </SimpleGrid>
 
             {originalUrl && (
-              <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer" size="sm">
-                View Original
+              <Anchor href={originalUrl} target="_blank" rel="noopener noreferrer" size="sm" className="pdx-target">
+                View original
               </Anchor>
             )}
             {driveUrl && (
-              <Anchor href={driveUrl} target="_blank" rel="noopener noreferrer" size="sm">
+              <Anchor href={driveUrl} target="_blank" rel="noopener noreferrer" size="sm" className="pdx-target">
                 Open in Google Drive
               </Anchor>
             )}
@@ -242,7 +248,7 @@ const PhotoDetail = () => {
         <Stack gap="md">
           {photo.description && (
             <Box>
-              <Title order={5} mb="xs">
+              <Title order={2} size="h5" mb="xs">
                 Description
               </Title>
               <Text>{photo.description}</Text>
@@ -250,7 +256,7 @@ const PhotoDetail = () => {
           )}
           {photo.environment && (
             <Box>
-              <Title order={5} mb="xs">
+              <Title order={2} size="h5" mb="xs">
                 Environment
               </Title>
               <Text>{photo.environment}</Text>
@@ -278,7 +284,7 @@ const PhotoDetail = () => {
       {(photo.suggestedCaption || photo.suggestedHashtags.length > 0) && (
         <Card withBorder>
           <Stack gap="sm">
-            <Title order={5}>Suggested caption</Title>
+            <Title order={2} size="h5">Suggested caption</Title>
             <Textarea value={photo.suggestedCaption ?? ''} readOnly rows={4} />
             {photo.suggestedHashtags.length > 0 && (
               <Group gap="xs">
@@ -293,10 +299,10 @@ const PhotoDetail = () => {
               w="fit-content"
               onClick={() => {
                 const hashtags = photo.suggestedHashtags.map((t) => `#${t}`).join(' ');
-                void navigator.clipboard.writeText(`${photo.suggestedCaption ?? ''}\n\n${hashtags}`.trim());
+                void copyText(`${photo.suggestedCaption ?? ''}\n\n${hashtags}`.trim());
               }}
             >
-              Copy to Clipboard
+              Copy to clipboard
             </Button>
           </Stack>
         </Card>

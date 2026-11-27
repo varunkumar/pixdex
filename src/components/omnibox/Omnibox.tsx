@@ -213,6 +213,7 @@ export default function Omnibox(props: OmniboxProps) {
     const color = kindColor(kind);
     return (
       <Pill
+        h={26}
         key={key}
         data-chip={kind}
         withRemoveButton
@@ -229,8 +230,9 @@ export default function Omnibox(props: OmniboxProps) {
 
   return (
     <Box pos="relative">
-      <Group gap="xs" wrap="nowrap" align="flex-start">
-        <PillsInput style={{ flex: 1 }}>
+      {/* The buttons drop below the box on a narrow screen instead of squeezing their labels away. */}
+      <Group gap="xs" wrap="wrap" align="flex-start">
+        <PillsInput style={{ flex: '1 1 240px', minWidth: 0 }}>
           <Pill.Group>
             {album !== '' && chip('album', 'album', album, () => onSelection({ album: '' }))}
             {people.map((id) =>
@@ -273,20 +275,19 @@ export default function Omnibox(props: OmniboxProps) {
             />
           </Pill.Group>
         </PillsInput>
-        {onAskAi && (
-          <Button
-            variant="light"
-            leftSection={<MdAutoAwesome aria-hidden />}
-            loading={askAiBusy}
-            onClick={askAi}
-          >
-            Ask AI
-          </Button>
-        )}
-        {onAddKeywords && (
-          <Button variant="subtle" onClick={onAddKeywords}>
-            Add keywords
-          </Button>
+        {(onAskAi || onAddKeywords) && (
+          <Group gap="xs" wrap="nowrap">
+            {onAskAi && (
+              <Button variant="light" leftSection={<MdAutoAwesome aria-hidden />} loading={askAiBusy} onClick={askAi}>
+                Ask AI
+              </Button>
+            )}
+            {onAddKeywords && (
+              <Button variant="subtle" onClick={onAddKeywords}>
+                Add keywords
+              </Button>
+            )}
+          </Group>
         )}
       </Group>
       {layout !== null && (
@@ -324,6 +325,7 @@ function KeywordRow({ terms, onChange, onSearchAgain, handle }: NonNullable<Omni
     <Group gap={6} mt={6} wrap="wrap">
       {terms.map((t, i) => (
         <Pill
+          h={26}
           key={`${t}-${i}`}
           withRemoveButton
           onRemove={() => onChange(terms.filter((_, j) => j !== i))}
@@ -333,6 +335,7 @@ function KeywordRow({ terms, onChange, onSearchAgain, handle }: NonNullable<Omni
         >
           <UnstyledButton
             aria-label={`Edit keyword ${t}`}
+            mih={24}
             fz="inherit"
             c="inherit"
             onClick={() => {

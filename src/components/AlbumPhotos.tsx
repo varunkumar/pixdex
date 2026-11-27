@@ -1,19 +1,26 @@
-import { ActionIcon, Anchor, Badge, Button, Group, Stack, Tabs, Text, Title, Tooltip } from '@mantine/core';
+import { usePageTitle } from '../hooks/usePageTitle';
+import { Badge, Button, Group, Stack, Tabs, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import type { IconType } from 'react-icons';
-import { TbCalendar, TbPhotoStar, TbStar } from 'react-icons/tb';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { TbCalendar, TbStar } from 'react-icons/tb';
+import { useParams } from 'react-router-dom';
+import { useLastAddress } from '../hooks/useLastAddress';
 import { useListParams } from '../hooks/useListParams';
 import { filterPatch, parseAlbumFilter, type AlbumFilter } from '../services/albumFilter';
 import { workerApiClient, type PhotoSort } from '../services/api/WorkerApiClient';
 import { photoCaption } from '../services/text';
 import AlbumFilterChip from './AlbumFilterChip';
 import AlbumHero from './AlbumHero';
+import BackLink from './BackLink';
 import { PeopleTiles, SpeciesTiles } from './AlbumTiles';
 import ColumnsToggle from './ColumnsToggle';
+import CoverBadge from './CoverBadge';
 import ListPagination from './ListPagination';
+import PageLoading from './PageLoading';
 import PhotoGrid from './PhotoGrid';
+import SetCoverButton from './SetCoverButton';
 import ShareAlbumModal from './ShareAlbumModal';
 import SortIcons from './SortIcons';
 import { AvatarStack, UserAvatar } from './UserAvatar';
@@ -28,7 +35,8 @@ const SORT_OPTIONS: { value: PhotoSort; label: string; icon?: IconType; text?: s
 
 const AlbumPhotos = () => {
   const { name = '' } = useParams();
-  const albumsList = (useLocation().state as { albumsList?: string } | null)?.albumsList ?? '/albums';
+  const albumsList = useLastAddress('/albums');
+  usePageTitle(name);
   const { params, page, size, offset, update } = useListParams(12, ALBUM_PHOTO_SIZES);
 
   const requestedSort = params.get('sort');
@@ -104,6 +112,8 @@ const AlbumPhotos = () => {
       void queryClient.invalidateQueries({ queryKey: ['album-summary', name] });
       void queryClient.invalidateQueries({ queryKey: ['albums-page'] });
     },
+    onError: (e) =>
+      notifications.show({ color: 'red', message: e instanceof Error ? e.message : 'Could not set cover' }),
   });
 
   const onPage = useCallback(
@@ -114,9 +124,7 @@ const AlbumPhotos = () => {
 
   return (
     <Stack gap="lg">
-      <Anchor component={Link} to={albumsList} size="sm">
-        ← All albums
-      </Anchor>
+      <BackLink to={albumsList}>All albums</BackLink>
       {summary && heroCover && (
         <AlbumHero
           name={name}
@@ -129,7 +137,7 @@ const AlbumPhotos = () => {
       )}
       <Group justify="space-between" align={heroCover ? 'center' : 'baseline'}>
         <Group gap="sm" align="center">
-          {!heroCover && <Title order={2}>{name}</Title>}
+          {!heroCover && <Title order={1} size="h2">{name}</Title>}
           {isOwner && (summary?.sharedWith?.length ?? 0) > 0 && <AvatarStack emails={summary?.sharedWith ?? []} size="md" />}
           {summary?.role === 'viewer' && (
             <Badge
@@ -161,10 +169,6 @@ const AlbumPhotos = () => {
           <ColumnsToggle />
         </Group>
       </Group>
-      {setCover.error && (
-        <Text c="red">{setCover.error instanceof Error ? setCover.error.message : 'Could not set cover'}</Text>
-      )}
-
       {contentsError && <Text c="dimmed">Could not load people and species.</Text>}
       <Tabs value={tab} keepMounted={false} onChange={(v) => update({ tab: v === 'photos' ? null : v })}>
         {(peopleCount > 0 || species.length > 0) && (
@@ -191,6 +195,7 @@ const AlbumPhotos = () => {
               />
             )}
             {error && <Text c="red">{error instanceof Error ? error.message : 'An error occurred'}</Text>}
+            {!data && !error && <PageLoading label="Loading photos" />}
             {data && data.results.length === 0 && (
               <Text c="dimmed">{filter ? 'No photos in this album match this filter.' : 'This album has no photos.'}</Text>
             )}
@@ -198,26 +203,15 @@ const AlbumPhotos = () => {
               <PhotoGrid
                 photos={data.results}
                 badges={(photo) =>
-                  isOwner && photo.id === coverId ? (
-                    <Badge color="yellow" variant="filled" size="sm">
-                      Cover
-                    </Badge>
-                  ) : null
+                  isOwner && photo.id === coverId ? <CoverBadge /> : null
                 }
                 actions={(photo) =>
                   isOwner && photo.id !== coverId ? (
-                    <Tooltip label="Set as cover">
-                      <ActionIcon
-                        variant="filled"
-                        color="dark"
-                        size="md"
-                        aria-label={`Set as cover: ${photoCaption(photo)}`}
-                        loading={setCover.isPending && setCover.variables === photo.id}
-                        onClick={() => setCover.mutate(photo.id)}
-                      >
-                        <TbPhotoStar aria-hidden />
-                      </ActionIcon>
-                    </Tooltip>
+                    <SetCoverButton
+                      label={photoCaption(photo)}
+                      loading={setCover.isPending && setCover.variables === photo.id}
+                      onClick={() => setCover.mutate(photo.id)}
+                    />
                   ) : null
                 }
               />
