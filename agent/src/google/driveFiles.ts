@@ -29,10 +29,11 @@ export interface DriveFilesClient {
       nextPageToken?: string | null;
     };
   }>;
+  // gaxios 7+ hands back a fetch Headers object: read it with get(), not by property.
   get(
     params: { fileId: string; alt: 'media'; supportsAllDrives?: boolean },
     options: { responseType: 'stream' }
-  ): Promise<{ data: Readable; headers?: Record<string, unknown> }>;
+  ): Promise<{ data: Readable; headers?: Headers }>;
   get(params: {
     fileId: string;
     fields: string;
@@ -191,11 +192,10 @@ export async function openDriveFileStream(
     () => client.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'stream' }),
     options
   );
-  const type = response.headers?.['content-type'];
-  const length = Number(response.headers?.['content-length']);
+  const length = Number(response.headers?.get('content-length'));
   return {
     stream: response.data,
-    contentType: typeof type === 'string' ? type : null,
+    contentType: response.headers?.get('content-type') ?? null,
     contentLength: Number.isFinite(length) && length > 0 ? length : null,
   };
 }

@@ -7,6 +7,7 @@ import {
   downloadDriveFile,
   getDriveFolder,
   listDriveFolders,
+  openDriveFileStream,
   parseDriveFolderRef,
   withDriveRetry,
   type DriveFilesClient,
@@ -15,6 +16,28 @@ import { albumFromDrivePath, DriveScanner, isRawFile, listImagesInDriveFolder, s
 
 const FOLDER = 'application/vnd.google-apps.folder';
 const noSleep = { sleep: async () => {} };
+
+describe('openDriveFileStream', () => {
+  // The installed Google client (gaxios 7+) returns a fetch Headers object, not a plain object.
+  const opened = (headers: Headers) => {
+    const get = vi.fn().mockResolvedValue({ data: Readable.from(['abc']), headers });
+    return openDriveFileStream({ list: vi.fn(), get } as unknown as DriveFilesClient, 'file-1', noSleep);
+  };
+
+  it('reports the content type and length Drive sends', async () => {
+    const file = await opened(new Headers({ 'Content-Type': 'image/jpeg', 'Content-Length': '3' }));
+
+    expect(file.contentType).toBe('image/jpeg');
+    expect(file.contentLength).toBe(3);
+  });
+
+  it('reports null for headers Drive leaves out', async () => {
+    const file = await opened(new Headers());
+
+    expect(file.contentType).toBeNull();
+    expect(file.contentLength).toBeNull();
+  });
+});
 
 describe('listDriveFolders', () => {
   it('searches by name and returns id/name pairs, escaping quotes in the query', async () => {
