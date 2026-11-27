@@ -142,14 +142,72 @@ describe('Omnibox', () => {
     expect(onText).not.toHaveBeenCalled();
   });
 
-  it('an ambiguous span shows 3 chips and +2 more', async () => {
+  it('an ambiguous span shows 3 chips and a +2 more option', async () => {
     renderWithProviders(<Harness />);
     await loaded();
     type('kumar');
     await screen.findByRole('option', { name: /Anil Kumar/ });
-    expect(screen.getAllByRole('option')).toHaveLength(3);
-    expect(screen.getByText('+2 more')).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Matches for kumar, 2 more not shown' })).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(4);
+    expect(screen.getByRole('option', { name: '+2 more, show all matches for kumar' })).toHaveTextContent('+2 more');
+    expect(screen.getByRole('group', { name: 'Matches for kumar' })).toBeInTheDocument();
+  });
+
+  const expand = async () => {
+    await loaded();
+    type('nets kumar');
+    fireEvent.click(await screen.findByRole('option', { name: /\+2 more/ }));
+  };
+
+  it('+N more lists every match for those words, and picking one trims only those words', async () => {
+    const onSelection = vi.fn();
+    renderWithProviders(<Harness onSelection={onSelection} />);
+    await expand();
+    expect(screen.getByRole('group', { name: 'Matches for kumar (5)' })).toBeInTheDocument();
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Anil Kumar', 'Arun Kumar', 'Kiran Kumar', 'Sunil Kumar', 'Vijay Kumar',
+    ]);
+    expect(input()).toHaveFocus();
+    expect(onSelection).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('option', { name: 'Vijay Kumar' }));
+    expect(onSelection).toHaveBeenCalledTimes(1);
+    expect(onSelection).toHaveBeenCalledWith({ people: ['k5'] }, 'nets');
+  });
+
+  it('the keyboard can open +N more and pick from the full list', async () => {
+    const onSelection = vi.fn();
+    const onSubmit = vi.fn();
+    renderWithProviders(<Harness onSelection={onSelection} onSubmit={onSubmit} />);
+    await loaded();
+    type('kumar');
+    await screen.findByRole('option', { name: /\+2 more/ });
+    fireEvent.keyDown(input(), { key: 'ArrowUp' });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    fireEvent.keyDown(input(), { key: 'ArrowUp' });
+    fireEvent.keyDown(input(), { key: 'Enter' });
+    expect(onSelection).toHaveBeenCalledWith({ people: ['k5'] }, '');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['typing', () => type('nets kumar ')],
+    ['leaving the box', () => fireEvent.blur(input())],
+    ['Escape and reopening', () => {
+      fireEvent.keyDown(input(), { key: 'Escape' });
+      fireEvent.keyDown(input(), { key: 'ArrowDown' });
+    }],
+  ])('the full list goes back to chips after %s', async (_name, act) => {
+    renderWithProviders(<Harness />);
+    await expand();
+    expect(screen.getAllByRole('option')).toHaveLength(5);
+    act();
+    expect(screen.getAllByRole('option')).toHaveLength(4);
+  });
+
+  it('pressing inside the full list does not take focus from the box', async () => {
+    renderWithProviders(<Harness />);
+    await expand();
+    // fireEvent returns false when the default (moving focus) was prevented.
+    expect(fireEvent.mouseDown(screen.getByRole('listbox'))).toBe(false);
   });
 
   it('Escape closes the chips panel and typing reopens it', async () => {

@@ -40,7 +40,8 @@ machine. Originals stay on local disk or Google Drive.
 - **Search with one box.** The Search page is an omnibox: albums, people, known
   personalities and dates become removable chips. Type a name and, from 3 characters
   after a short pause (150 ms), matching names appear as suggestions
-  (at most 3 per typed phrase, then "+N more"); typing alone never filters, a pick
+  (at most 3 per typed phrase, then "+N more", which opens a scrollable list of
+  every match for those words); typing alone never filters, a pick
   turns the words into a chip. When two typed names both match, an "Add both" chip
   shows the real photo count. Enter runs a plain search. In Chrome with the Prompt
   API, "Ask AI" (or Cmd/Ctrl+Enter) turns a sentence into keywords instead, and

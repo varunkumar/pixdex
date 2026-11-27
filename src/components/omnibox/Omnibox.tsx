@@ -1,5 +1,5 @@
 import { Box, Button, Group, Pill, PillsInput, TextInput, UnstyledButton } from '@mantine/core';
-import { useId, useImperativeHandle, useState, type KeyboardEvent, type Ref } from 'react';
+import { useEffect, useId, useImperativeHandle, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { MdAutoAwesome } from 'react-icons/md';
 import { useOmniboxData, type OmniboxSelection } from '../../hooks/useOmniboxData';
 import { removeWords, type Candidate, type CandidateKind, type Span } from '../../services/omnibox/matcher';
@@ -62,9 +62,16 @@ export default function Omnibox(props: OmniboxProps) {
   const [highlighted, setHighlighted] = useState<string | null>(null);
   // Escape closes the panel (either layout); focus, typing and ArrowDown/ArrowUp reopen it.
   const [open, setOpen] = useState(true);
+  // The span whose "+N more" was picked: its full match list replaces the chips.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const baseId = useId();
   const panelId = `${baseId}-panel`;
   const optionId = (key: string) => `${baseId}-opt-${key.replace(/[^\w-]/g, '_')}`;
+  // The full list closes on blur, so the box must hold focus (the chips outlive a blur).
+  useEffect(() => {
+    if (expanded !== null) inputRef.current?.focus();
+  }, [expanded]);
 
   const { people, known, album } = selection;
   const canAddPerson = people.length + known.length < MAX_PEOPLE_FILTER;
@@ -76,11 +83,26 @@ export default function Omnibox(props: OmniboxProps) {
     if (span) onSelection(patch, removeWords(text, [span]));
     else onSelection(patch);
     setHighlighted(null);
+    setExpanded(null);
   };
 
   // Spans are computed from the debounced text; drop any that no longer line up with the current text.
   const current = words(text);
   const liveSpans = spans.filter((s) => current.slice(s.start, s.end).join(' ') === s.words);
+
+  const spanKey = (s: Span) => `${s.start}:${s.words}`;
+  const spanItem = (s: Span, i: number) => (c: Candidate): PanelItem => ({
+    key: `${i}:${c.kind}:${c.id}`,
+    kind: c.kind,
+    label: c.label,
+    pick: () => pick(c, s),
+  });
+  const expandedIndex = liveSpans.findIndex((s) => spanKey(s) === expanded);
+
+  const expand = (s: Span) => {
+    setExpanded(spanKey(s));
+    setHighlighted(null);
+  };
 
   let layout: 'list' | 'chips' | null = null;
   let sections: PanelSection[] = [];
@@ -98,20 +120,32 @@ export default function Omnibox(props: OmniboxProps) {
       sections = [group('own', OWN_GROUP), group('known', KNOWN_GROUP), group('album', ALBUM_GROUP)];
       layout = 'list';
     }
+  } else if (expandedIndex >= 0) {
+    const span = liveSpans[expandedIndex];
+    const ok = span.matches.filter(allowed);
+    sections = [
+      {
+        key: `span${expandedIndex}`,
+        heading: `Matches for ${span.words} (${ok.length})`,
+        items: ok.map(spanItem(span, expandedIndex)),
+      },
+    ];
+    layout = 'list';
   } else {
     sections = liveSpans.map((s, i) => {
       const ok = s.matches.filter(allowed);
-      return {
-        key: `span${i}`,
-        heading: `Matches for ${s.words}`,
-        items: ok.slice(0, MAX_CHIPS_PER_SPAN).map((c) => ({
-          key: `${i}:${c.kind}:${c.id}`,
-          kind: c.kind,
-          label: c.label,
-          pick: () => pick(c, s),
-        })),
-        more: Math.max(0, ok.length - MAX_CHIPS_PER_SPAN),
-      };
+      const items = ok.slice(0, MAX_CHIPS_PER_SPAN).map(spanItem(s, i));
+      const hidden = ok.length - items.length;
+      if (hidden > 0) {
+        items.push({
+          key: `${i}:more`,
+          kind: 'more',
+          label: `+${hidden} more`,
+          ariaLabel: `+${hidden} more, show all matches for ${s.words}`,
+          pick: () => expand(s),
+        });
+      }
+      return { key: `span${i}`, heading: `Matches for ${s.words}`, items };
     });
     const bothSpans = liveSpans.filter((s) => bothCount?.ids.includes(s.matches[0]));
     if (bothCount && bothCount.total !== null && bothSpans.length >= 2) {
@@ -165,6 +199,7 @@ export default function Omnibox(props: OmniboxProps) {
       setHighlighted(items[next].key);
     } else if (e.key === 'Escape') {
       setHighlighted(null);
+      setExpanded(null);
       setOpen(false);
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -210,6 +245,7 @@ export default function Omnibox(props: OmniboxProps) {
             )}
             {date && chip('date', 'date', date, () => onSelection({ from: '', to: '', onThisDay: '' }))}
             <PillsInput.Field
+              ref={inputRef}
               role="combobox"
               aria-label="Search"
               aria-expanded={layout !== null}
@@ -221,6 +257,7 @@ export default function Omnibox(props: OmniboxProps) {
               onChange={(e) => {
                 onText(e.currentTarget.value);
                 setHighlighted(null);
+                setExpanded(null);
                 setOpen(true);
               }}
               onFocus={() => {
@@ -230,6 +267,7 @@ export default function Omnibox(props: OmniboxProps) {
               onBlur={() => {
                 setFocused(false);
                 setHighlighted(null);
+                setExpanded(null);
               }}
               onKeyDown={onKeyDown}
             />

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type MouseEvent } from 'react';
 import { Box, Group, Paper, Stack, Text, VisuallyHidden } from '@mantine/core';
 import { MdVerified } from 'react-icons/md';
 import type { CandidateKind } from '../../services/omnibox/matcher';
@@ -6,8 +6,10 @@ import { inkColor, kindColor } from '../chipStyle';
 
 export interface PanelItem {
   key: string;
-  kind: CandidateKind | 'both';
+  kind: CandidateKind | 'both' | 'more';
   label: string;
+  /** Accessible name, where the visible label alone says too little. */
+  ariaLabel?: string;
   pick: () => void;
 }
 
@@ -16,8 +18,6 @@ export interface PanelSection {
   /** Visible group heading (list layout) or an accessible name only (chips layout). */
   heading: string;
   items: PanelItem[];
-  /** Matches not shown ("+N more"). */
-  more?: number;
 }
 
 export const OWN_GROUP = 'Your people';
@@ -25,7 +25,7 @@ export const KNOWN_GROUP = 'Known personalities in your photos';
 export const ALBUM_GROUP = 'Albums';
 
 /** Label text with the non-colour signals: the known icon and hidden "(known personality)" or "(album)". */
-export function ChipLabel({ kind, label }: { kind: CandidateKind | 'both'; label: string }) {
+export function ChipLabel({ kind, label }: { kind: PanelItem['kind']; label: string }) {
   return (
     <>
       {kind === 'known' && <MdVerified aria-hidden size={12} style={{ marginRight: 4, verticalAlign: '-2px' }} />}
@@ -65,6 +65,7 @@ export default function SuggestionPanel({ id, layout, sections, highlighted, opt
         id={optionId(item.key)}
         role="option"
         aria-selected={active}
+        aria-label={item.ariaLabel}
         onMouseDown={(e) => e.preventDefault()}
         onClick={item.pick}
         px={layout === 'chips' ? 'sm' : 'xs'}
@@ -89,19 +90,8 @@ export default function SuggestionPanel({ id, layout, sections, highlighted, opt
     return (
       <Stack id={id} role="listbox" aria-label="Suggestions" gap={6} mt={6}>
         {sections.map((s) => (
-          <Group
-            key={s.key}
-            role="group"
-            aria-label={s.more ? `${s.heading}, ${s.more} more not shown` : s.heading}
-            gap={6}
-          >
+          <Group key={s.key} role="group" aria-label={s.heading} gap={6}>
             {s.items.map(option)}
-            {/* Visual only: the count is in the group's name, so the listbox holds nothing but options. */}
-            {s.more ? (
-              <Text size="xs" c="dimmed" aria-hidden>
-                +{s.more} more
-              </Text>
-            ) : null}
           </Group>
         ))}
       </Stack>
@@ -122,6 +112,8 @@ export default function SuggestionPanel({ id, layout, sections, highlighted, opt
       mt={4}
       mah={320}
       style={{ overflowY: 'auto', zIndex: 200 }}
+      // Pressing a heading or the padding must not blur the input, which would close the list.
+      onMouseDown={(e: MouseEvent) => e.preventDefault()}
     >
       {sections.map((s) => (
         <Box key={s.key} role="group" aria-labelledby={`${id}-${s.key}`} mb="xs">
