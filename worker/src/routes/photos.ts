@@ -3,6 +3,7 @@ import * as z from 'zod/mini';
 import type { Env } from '../types';
 import { albumRole, userOf } from '../access';
 import { canEditPhoto, photoAccess, visibleAlbumsSql } from '../db/visibility';
+import { parseFraming } from '../db/framing';
 import { primaryTextForRow, serializePhoto, searchTextForRow, type PhotoRow } from '../db/photos';
 
 export async function getPhotoRoute(c: Context<{ Bindings: Env }>) {
@@ -27,6 +28,7 @@ interface AlbumRow {
   latest_date: string | null;
   owner_email: string | null;
   shared_with: string | null;
+  cover_framing: string | null;
 }
 
 // Whitelisted ORDER BY clauses; the sort query param never reaches SQL directly.
@@ -142,7 +144,7 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
   // are already worked out per album, so a page reads at most one row per album and never touches photos.
   const [rows, totalRow] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT name, photo_count, cover_photo_id, content_hash, latest_date, owner_email, shared_with FROM albums
+      `SELECT name, photo_count, cover_photo_id, content_hash, latest_date, owner_email, shared_with, cover_framing FROM albums
        ${only ? 'WHERE name = ?' : ''}${only ? filter.and : filter.where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
     )
       .bind(...(only ? [only] : []), ...filter.params, limit, offset)
@@ -162,6 +164,7 @@ export async function getAlbumsRoute(c: Context<{ Bindings: Env }>) {
         coverPhotoId: r.cover_photo_id,
         coverThumbnailUrl: r.content_hash ? `/thumbnails/${r.content_hash}` : null,
         latestDate: r.latest_date ?? null,
+        coverFraming: parseFraming(r.cover_framing, r.content_hash),
         role: owns ? ('owner' as const) : ('viewer' as const),
         ...(owns ? { sharedWith: parseShared(r.shared_with) } : { ownerEmail: r.owner_email }),
       };

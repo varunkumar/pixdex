@@ -228,8 +228,39 @@ body {
   object-position: center;
 }
 .pdx-hero-blur {
+  /* Larger than the banner, so the soft edge the blur leaves stays out of sight wherever the framing anchors it. */
+  inset: -36px;
+  width: calc(100% + 72px);
+  height: calc(100% + 72px);
+  max-width: none;
   filter: blur(18px);
-  transform: scale(1.1); /* hides the soft edge the blur leaves */
+}
+.pdx-hero-reposition {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+/* Edit mode: drags and pinches on the picture are ours, so the page does not scroll or zoom. */
+.pdx-hero-surface {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+  border-radius: inherit;
+}
+.pdx-hero-surface:active {
+  cursor: grabbing;
+}
+.pdx-hero-surface:focus-visible {
+  outline: 3px solid var(--mantine-primary-color-filled);
+  outline-offset: -3px;
+}
+.pdx-hero-zoom {
+  flex: 1 1 220px;
+  max-width: 420px;
 }
 .pdx-hero-text {
   position: absolute;

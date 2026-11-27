@@ -355,13 +355,44 @@ describe('AlbumPhotos hero', () => {
     expect(screen.getByRole('button', { name: 'Alphabetical' })).toBeInTheDocument();
   });
 
+  it.each(['owner', 'viewer'] as const)('loads the hero for the album cover (%s)', async (role) => {
+    withCover(role);
+    renderAlbum();
+    await waitFor(() => expect(loadHero).toHaveBeenCalledWith('Kanha', HASH, 'cov'));
+  });
+
   it.each([
     ['owner', true],
     ['viewer', false],
-  ] as const)('lets only the owner create the hero (%s)', async (role, canCreate) => {
-    withCover(role);
-    renderAlbum();
-    await waitFor(() => expect(loadHero).toHaveBeenCalledWith(HASH, 'cov', canCreate));
+  ] as const)('applies the saved framing and offers Reposition to the owner only (%s)', async (role, offered) => {
+    vi.mocked(workerApiClient.getAlbumsPage).mockResolvedValue({
+      albums: [
+        {
+          name: 'Kanha',
+          photoCount: 128,
+          coverPhotoId: 'cov',
+          coverThumbnailUrl: `/thumbnails/${HASH}`,
+          coverFraming: { x: 20, y: 70, zoom: 1.5 },
+          latestDate: null,
+          role,
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(loadHero).mockResolvedValue(new Blob(['x'], { type: 'image/jpeg' }));
+    const { createObjectURL, revokeObjectURL } = URL;
+    // jsdom has no object URLs.
+    Object.assign(URL, { createObjectURL: () => 'blob:hero', revokeObjectURL: () => {} });
+    try {
+      const { unmount } = renderAlbum();
+      const img = await screen.findByRole('img', { name: 'Cover photo of Kanha' });
+      expect(img.style.objectPosition).toBe('20% 70%');
+      fireEvent.load(img);
+      expect(screen.queryByRole('button', { name: 'Reposition' }) !== null).toBe(offered);
+      unmount();
+    } finally {
+      Object.assign(URL, { createObjectURL, revokeObjectURL });
+    }
   });
 
   it('keeps the filtered total in the row while a filter is active', async () => {

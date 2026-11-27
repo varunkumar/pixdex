@@ -18,6 +18,7 @@ import type {
   TimelineResponse,
   TimelineZoom,
 } from '../../types/api';
+import type { Framing } from '../framing';
 
 export type PhotoSort = 'date' | 'name' | 'rating';
 export type AlbumSort = 'date' | 'name' | 'count' | 'rating';
@@ -59,6 +60,16 @@ function reloadOncePerWindow(): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** A write that did not happen; `status` is the Worker's answer, absent when none arrived. */
+export class SaveError extends Error {
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
   }
 }
 
@@ -212,6 +223,11 @@ export class WorkerApiClient {
     if (!response.ok) throw new Error(`Could not set cover: ${response.status}`);
   }
 
+  /** Saves where the album's cover sits in the banner; refused (409) once the cover is another photo. */
+  async setAlbumFraming(album: string, contentHash: string, framing: Framing): Promise<void> {
+    await this.sendJson('PUT', '/albums/framing', { album, contentHash, ...framing });
+  }
+
   private async sendJson(method: string, path: string, body?: unknown): Promise<Response> {
     let response: Response;
     try {
@@ -221,9 +237,9 @@ export class WorkerApiClient {
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch (err) {
-      throw new Error(`Could not save: ${err instanceof Error ? err.message : 'network error'}`);
+      throw new SaveError(`Could not save: ${err instanceof Error ? err.message : 'network error'}`);
     }
-    if (!response.ok) throw new Error(`Could not save: ${response.status}`);
+    if (!response.ok) throw new SaveError(`Could not save: ${response.status}`, response.status);
     return response;
   }
 
