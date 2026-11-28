@@ -1,4 +1,4 @@
-import { CAMERA_OFFSET_MINUTES, datedCte, ownedSql } from './common';
+import { CAMERA_OFFSET_MINUTES, ownedSql } from './common';
 import type { Fact, TopicBuilder } from './types';
 
 const MIN_SPECIES = 5;
@@ -10,26 +10,39 @@ const ENTRIES = (column: string) => `json_each(CASE WHEN json_valid(${column}) T
 /** One entry's name; NULL for an entry that is not an object. */
 const NAME = `CASE WHEN j.type = 'object' THEN json_extract(j.value, '$.common') END`;
 
+/** The camera time of a photo. */
+const CAMERA_TIME = `datetime(date_time, '+${CAMERA_OFFSET_MINUTES} minutes')`;
+
 /**
- * One row for each species: the photos that show it and the first believable year (NULL when no photo of it has
- * one). Binds the owner email, then today.
+ * One row for each species, month and 2-hour slot (month and slot are NULL for photos with no believable date).
+ * Both facts come from these rows, so the photos are read once. A photo counts once for each species it shows.
+ * Binds today, then the owner email.
  */
 const SPECIES_SQL = `WITH o AS (
-  SELECT id, species, datetime(date_time, '+${CAMERA_OFFSET_MINUTES} minutes') AS t FROM photos WHERE ${ownedSql('album')} AND species <> '[]'
+  SELECT id, species, CASE WHEN ${CAMERA_TIME} >= '1990-01-01' AND ${CAMERA_TIME} < date(?, '+2 days') THEN ${CAMERA_TIME} END AS t
+  FROM photos WHERE ${ownedSql('album')} AND species <> '[]'
 )
-SELECT ${NAME} AS name, COUNT(DISTINCT o.id) AS photos,
-  MIN(CASE WHEN o.t >= '1990-01-01' AND o.t < date(?, '+2 days') THEN CAST(strftime('%Y', o.t) AS INTEGER) END) AS first
+SELECT ${NAME} AS name, CAST(strftime('%m', o.t) AS INTEGER) AS month, CAST(strftime('%H', o.t) AS INTEGER) / 2 * 2 AS slot,
+  COUNT(DISTINCT o.id) AS photos, MIN(CAST(strftime('%Y', o.t) AS INTEGER)) AS first
 FROM o, ${ENTRIES('o.species')} AS j
-WHERE name IS NOT NULL GROUP BY name ORDER BY photos DESC, name`;
+WHERE name IS NOT NULL GROUP BY name, month, slot ORDER BY name, month, slot`;
 
-/** The dated photos of one species by month and 2-hour slot. Binds the owner email, today, then the name. */
-const CHANCE_SQL = `${datedCte('species')}
-SELECT CAST(strftime('%m', t) AS INTEGER) AS month, CAST(strftime('%H', t) AS INTEGER) / 2 * 2 AS slot, COUNT(*) AS photos
-FROM d WHERE species <> '[]' AND EXISTS (SELECT 1 FROM ${ENTRIES('d.species')} AS j WHERE ${NAME} = ?)
-GROUP BY month, slot ORDER BY month, slot`;
-
+type Row = { name: string; month: number | null; slot: number | null; photos: number; first: number | null };
 type SpeciesRow = { name: string; photos: number; first: number | null };
 type ChanceRow = { month: number; slot: number; photos: number };
+
+/** Each species with its photos and first believable year, most photographed first. */
+function toSpecies(rows: Row[]): SpeciesRow[] {
+  const found = new Map<string, SpeciesRow>();
+  for (const r of rows) {
+    const s = found.get(r.name) ?? { name: r.name, photos: 0, first: null };
+    s.photos += r.photos;
+    if (r.first !== null && (s.first === null || r.first < s.first)) s.first = r.first;
+    found.set(r.name, s);
+  }
+  // The rows come in name order, and the sort keeps it for equal counts.
+  return [...found.values()].sort((a, b) => b.photos - a.photos);
+}
 
 function lifeList(species: SpeciesRow[], today: string): Fact[] {
   if (species.length < MIN_SPECIES) return [];
@@ -64,13 +77,14 @@ function bestChance(species: SpeciesRow, rows: ChanceRow[]): Fact[] {
   return [{ id: 'best-chance', data: { species: species.name, photos: species.photos, month, slot, slots } }];
 }
 
-/** Two passes over the owner's photos that have species; the Worker handles one row for each species. */
+/** One pass over the owner's photos that have species. */
 export const wildlifeFacts: TopicBuilder = async (db, email, today) => {
-  const species = (await db.prepare(SPECIES_SQL).bind(email, today).all<SpeciesRow>()).results;
+  const rows = (await db.prepare(SPECIES_SQL).bind(today, email).all<Row>()).results;
+  const species = toSpecies(rows);
   const top = species[0];
   const chance =
     top && top.photos >= MIN_BEST_CHANCE_PHOTOS
-      ? bestChance(top, (await db.prepare(CHANCE_SQL).bind(email, today, top.name).all<ChanceRow>()).results)
+      ? bestChance(top, rows.filter((r): r is Row & ChanceRow => r.name === top.name && r.month !== null))
       : [];
   return [...lifeList(species, today), ...chance];
 };

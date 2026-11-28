@@ -12,7 +12,7 @@ import { CHOOSE_REFERENCES_SQL, DROP_REFERENCES_SQL } from '../src/people/refere
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
 import { ON_THIS_DAY_SQL } from '../src/insights/onThisDay';
-import { TOGETHER_SQL } from '../src/insights/people';
+import { PEOPLE_SQL } from '../src/insights/people';
 import { ZOOM_SQL } from '../src/insights/gear';
 
 const U = { email: 'owner@example.com' };
@@ -295,15 +295,16 @@ describe('insight query plans', () => {
   });
 
   it("the zoom bins read the caller's albums through the album index, never the whole photos table", async () => {
-    const p = await plan(ZOOM_SQL, U.email, U.email);
-    expect(p).toMatch(/SEARCH p USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
+    const p = await plan(ZOOM_SQL, 150, 600, U.email, 'Lens');
+    expect(p).toMatch(/SEARCH photos USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
     expect(p).not.toMatch(/SCAN (p|photos)\b/);
   });
 
-  it('pairs of people find the second face by its photo and never scan faces', async () => {
-    const p = await plan(TOGETHER_SQL, U.email, U.email, U.email);
-    expect(p).toMatch(/SEARCH g USING INDEX idx_faces_photo_id \(photo_id=\?\)/);
-    expect(p).not.toMatch(/SCAN (f|g|faces)\b/);
+  it("people start from the caller's persons and never scan faces or photos", async () => {
+    const p = await plan(PEOPLE_SQL, '2026-11-28', U.email, U.email);
+    expect(p).toMatch(/SEARCH f USING (COVERING )?INDEX idx_faces_person\w* \(person_id=\?/);
+    expect(p).toMatch(/SEARCH ph USING (COVERING )?INDEX sqlite_autoindex_photos_\d \(id=\?\)/);
+    expect(p).not.toMatch(/SCAN (f|ph|faces|photos)\b/);
   });
 });
 

@@ -1,5 +1,5 @@
 import { Button, Group, Text, Title } from '@mantine/core';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { workerApiClient } from '../../services/api/WorkerApiClient';
 import type { InsightTopic } from '../../types/api';
@@ -34,6 +34,21 @@ const InsightsSection = () => {
     })),
   });
 
+  const queryClient = useQueryClient();
+  const refresh = useMutation({
+    mutationFn: () => workerApiClient.refreshInsights(),
+    // Waits for the new facts, so that the button keeps its loading state until they show.
+    onSuccess: ({ removed }) =>
+      removed > 0
+        ? Promise.all([['insights'], ['on-this-day']].map((queryKey) => queryClient.invalidateQueries({ queryKey })))
+        : undefined,
+  });
+  const notice = refresh.isError
+    ? 'Could not refresh the facts.'
+    : refresh.data?.removed === 0
+      ? 'These facts are less than 5 minutes old.'
+      : null;
+
   const loaded = TOPICS.map((topic, i) => ({ topic, query: topics[i], facts: topics[i].data?.facts ?? [] }));
   const withFacts = loaded.filter((t) => t.facts.length > 0);
   const wanted = loaded.find((t) => t.topic === params.get('topic'));
@@ -56,9 +71,19 @@ const InsightsSection = () => {
       {onThisDay.data && onThisDay.data.years.length > 0 && <OnThisDay data={onThisDay.data} />}
       {(withFacts.length > 0 || failed.length > 0) && (
         <section>
-          <Title order={2} size="h4" mb="sm">
-            Your photo habits
-          </Title>
+          <Group justify="space-between" mb="sm">
+            <Title order={2} size="h4">
+              Your photo habits
+            </Title>
+            <Button size="compact-sm" variant="default" loading={refresh.isPending} onClick={() => refresh.mutate()}>
+              Refresh facts
+            </Button>
+          </Group>
+          {notice && (
+            <Text size="sm" c={refresh.isError ? 'red' : 'dimmed'} mb="sm" role="status">
+              {notice}
+            </Text>
+          )}
           {withFacts.length > 0 && (
             <Group gap="xs" mb="sm" role="group" aria-label="Topic">
               {[null, ...withFacts.map((t) => t.topic)].map((topic) => (

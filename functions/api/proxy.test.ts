@@ -163,6 +163,22 @@ describe('Pages Function identity', () => {
       expect(h.get('authorization')).toBe('Bearer secret-token');
     });
 
+    it.each([
+      ['insights/refresh', 200],
+      ['insights/time', 404],
+    ])('answers POST %s with %i', async (path, status) => {
+      const res = await onRequestPost({
+        request: new Request(`https://pixdex.example.dev/api/${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'Cf-Access-Jwt-Assertion': await signJwt(key, validClaims({ email: 'friend@example.com' })) },
+          body: '{}',
+        }),
+        env,
+      });
+      expect(res.status).toBe(status);
+      expect(upstreamCalls().map(([u]) => String(u))).toEqual(status === 200 ? ['https://worker.example.dev/insights/refresh'] : []);
+    });
+
     it.each(['insights/time', 'insights/on-this-day?date=2026-11-28'])('forwards GET %s', async (path) => {
       const res = await get(`/api/${path}`, 'friend@example.com');
       expect(res.status).toBe(200);

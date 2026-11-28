@@ -487,6 +487,7 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     return sendJson(res, 200, { request: found });
   }
   if (method === 'PUT' && path === '/albums/framing') return putFraming(req, res);
+  if (method === 'POST' && path === '/insights/refresh') return sendJson(res, 200, { removed: 6 });
   const flip = /^\/faces\/(ignore|restore)$/.exec(path);
   if (method === 'POST' && flip) {
     let raw = '';

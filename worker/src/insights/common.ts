@@ -1,5 +1,8 @@
 /** Raise this when a fact definition or a cached shape changes: older cache rows are then recalculated. */
-export const INSIGHTS_VERSION = 2;
+export const INSIGHTS_VERSION = 3;
+/** A tile topic is calculated again when its cycle of this many India days ends. */
+export const CYCLE_DAYS = 30;
+const DAY_MS = 86_400_000;
 /**
  * `date_time` holds the camera clock read as India time and saved as UTC (all indexing used a machine set to
  * India time), so adding this gives the camera clock again.
@@ -29,13 +32,33 @@ export const datedCte = (columns: string): string =>
 d AS (SELECT * FROM o WHERE t >= '1990-01-01' AND t < date(?, '+2 days'))`;
 
 /**
- * The cached value for (user, topic) when it was built for `day` with the current version, else `build()`, which
- * then replaces the row. One primary-key read; one upsert on a miss. Two first requests may both build.
+ * The first India day of the cycle that holds `today`. `offset` (days) moves the cycle, so that topics with
+ * different offsets are calculated on different days.
  */
-export async function cached<T>(db: D1Database, email: string, topic: string, day: string, build: () => Promise<T>): Promise<T> {
+export function periodStart(today: string, offset: number): string {
+  const day = Date.parse(`${today}T00:00:00Z`) / DAY_MS;
+  const into = (((day - offset) % CYCLE_DAYS) + CYCLE_DAYS) % CYCLE_DAYS;
+  return new Date((day - into) * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * The cached value for (user, topic) when it was built for `period` with the current version, else `build()`, which
+ * then replaces the row. A value that `isEmpty` accepts is kept for `today` only (stored as `empty:<today>`), so a
+ * new library does not wait a whole period. One primary-key read; one upsert on a miss. Two first requests may both
+ * build.
+ */
+export async function cached<T>(
+  db: D1Database,
+  email: string,
+  topic: string,
+  period: string,
+  today: string,
+  build: () => Promise<T>,
+  isEmpty: (value: T) => boolean
+): Promise<T> {
   const row = await db
-    .prepare('SELECT data FROM insights_cache WHERE email = ? AND topic = ? AND day = ? AND version = ?')
-    .bind(email, topic, day, INSIGHTS_VERSION)
+    .prepare('SELECT data FROM insights_cache WHERE email = ? AND topic = ? AND day IN (?, ?) AND version = ?')
+    .bind(email, topic, period, `empty:${today}`, INSIGHTS_VERSION)
     .first<{ data: string }>();
   if (row) return JSON.parse(row.data) as T;
   const value = await build();
@@ -44,7 +67,7 @@ export async function cached<T>(db: D1Database, email: string, topic: string, da
       `INSERT INTO insights_cache (email, topic, day, version, data, computed_at) VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(email, topic) DO UPDATE SET day = excluded.day, version = excluded.version, data = excluded.data, computed_at = excluded.computed_at`
     )
-    .bind(email, topic, day, INSIGHTS_VERSION, JSON.stringify(value), new Date().toISOString())
+    .bind(email, topic, isEmpty(value) ? `empty:${today}` : period, INSIGHTS_VERSION, JSON.stringify(value), new Date().toISOString())
     .run();
   return value;
 }

@@ -103,8 +103,6 @@ describe("insights read only the caller's photos", () => {
       const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...params).all<{ detail: string }>();
       const text = plan.results.map((r) => r.detail).join('\n');
       expect(text, `${path}: ${sql.slice(0, 80)}`).not.toMatch(/SCAN (photos|p|ph|f|faces)\b/);
-      // `g` is the second face in the pairs query, and only a sub-query name elsewhere.
-      if (sql.includes('faces g')) expect(text, path).not.toMatch(/SCAN g\b/);
     }
   });
 

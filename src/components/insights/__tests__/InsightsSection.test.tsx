@@ -7,7 +7,7 @@ import type { Fact, InsightTopic } from '../../../types/api';
 import InsightsSection from '../InsightsSection';
 
 vi.mock('../../../services/api/WorkerApiClient', () => ({
-  workerApiClient: { getInsights: vi.fn(), getOnThisDay: vi.fn(), thumbnailUrl: () => '/api/thumbnails/h1' },
+  workerApiClient: { getInsights: vi.fn(), getOnThisDay: vi.fn(), refreshInsights: vi.fn(), thumbnailUrl: () => '/api/thumbnails/h1' },
 }));
 
 const api = vi.mocked(workerApiClient);
@@ -103,6 +103,34 @@ describe('InsightsSection', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(within(container).queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByRole('heading')).toBeNull();
+  });
+
+  it('refreshes the facts and On this day on request', async () => {
+    api.refreshInsights.mockResolvedValue({ removed: 6 });
+    show();
+    await tile(/Top weekday/);
+    api.getInsights.mockClear();
+    api.getOnThisDay.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh facts' }));
+    await vi.waitFor(() => expect(api.getInsights).toHaveBeenCalledTimes(5));
+    expect(api.getOnThisDay).toHaveBeenCalled();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('says that new facts are not due yet', async () => {
+    api.refreshInsights.mockResolvedValue({ removed: 0 });
+    show();
+    await tile(/Top weekday/);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh facts' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('These facts are less than 5 minutes old.');
+  });
+
+  it('says when a refresh fails', async () => {
+    api.refreshInsights.mockRejectedValue(new Error('boom'));
+    show();
+    await tile(/Top weekday/);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh facts' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Could not refresh the facts.');
   });
 
   it('offers a retry for a failed topic and still shows the others', async () => {

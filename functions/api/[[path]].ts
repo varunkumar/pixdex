@@ -174,6 +174,8 @@ const WRITE_PATHS: Record<'PUT' | 'POST' | 'PATCH' | 'DELETE', RegExp[]> = {
   PUT: [/^albums\/cover$/, /^albums\/shares$/, /^albums\/framing$/, /^people\/[^/]+\/label$/],
   // Creating people, assigning faces to people, and face review.
   POST: [
+    // Forgetting the viewer's own cached dashboard facts, so that they are calculated again.
+    /^insights\/refresh$/,
     /^people$/,
     /^people\/[^/]+\/faces$/,
     /^people\/[^/]+\/match$/,

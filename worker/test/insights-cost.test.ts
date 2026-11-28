@@ -6,18 +6,20 @@ import { readHeaders } from './helpers';
 import { clearInsights } from './insights-helpers';
 
 const PHOTOS = 2000;
-/** The spec limit: 600,000 rows for 15,700 photos on the first visit of a day. */
-const ROWS_PER_PHOTO = 38;
+/** The spec limit: 300,000 rows for 15,700 photos when every topic is calculated. */
+const ROWS_PER_PHOTO = 20;
 const TOPICS = ['time', 'gear', 'wildlife', 'people', 'places'];
 
-type Statement = { sql: string; rows: number };
+type Statement = { path: string; sql: string; rows: number };
+/** Rows each topic may read for the 2,000 photos and 500 faces below. */
+const LIMITS: Record<string, number> = { time: 4_100, gear: 19_000, wildlife: 3_500, people: 2_600, places: 2_500 };
 
 /** env.DB that records `meta.rows_read` of every statement (`first` is served by `all` so that it has a meta). */
-function counting(db: D1Database, log: Statement[]): D1Database {
+function counting(db: D1Database, path: () => string, log: Statement[]): D1Database {
   const wrap = (sql: string, statement: D1PreparedStatement): any => {
     const all = async () => {
       const result = await statement.all();
-      log.push({ sql, rows: result.meta.rows_read });
+      log.push({ path: path(), sql, rows: result.meta.rows_read });
       return result;
     };
     return {
@@ -32,10 +34,12 @@ function counting(db: D1Database, log: Statement[]): D1Database {
 
 async function visit(): Promise<{ log: Statement[]; hydrated: number }> {
   const log: Statement[] = [];
-  const bindings = { ...env, DB: counting(env.DB, log) };
+  let current = '';
+  const bindings = { ...env, DB: counting(env.DB, () => current, log) };
   const date = indiaDate(new Date());
   let hydrated = 0;
   for (const path of [...TOPICS.map((t) => `/insights/${t}`), `/insights/on-this-day?date=${date}`]) {
+    current = path;
     const res = await app.request(`https://example.com${path}`, { headers: readHeaders() }, bindings);
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
@@ -79,12 +83,17 @@ describe('insight cost on D1', () => {
     }
   }, 60_000);
 
-  it('reads at most 38 rows per photo on the first visit of a day, then almost nothing', async () => {
+  it('reads at most 20 rows per photo when it calculates every topic, then almost nothing', async () => {
     const first = await visit();
     const rows = first.log.reduce((n, s) => n + s.rows, 0);
     console.log(`insights first visit: ${rows} rows for ${PHOTOS} photos (${(rows / PHOTOS).toFixed(1)} per photo)`);
     for (const s of first.log) console.log(`  ${s.rows}\t${s.sql.replace(/\s+/g, ' ').slice(0, 90)}`);
     expect(rows).toBeLessThanOrEqual(ROWS_PER_PHOTO * PHOTOS);
+    for (const topic of TOPICS) {
+      const used = first.log.filter((s) => s.path === `/insights/${topic}`).reduce((n, s) => n + s.rows, 0);
+      console.log(`  ${topic}: ${used}`);
+      expect.soft(used, topic).toBeLessThanOrEqual(LIMITS[topic]);
+    }
 
     const second = await visit();
     const cachedRows = second.log.reduce((n, s) => n + s.rows, 0);

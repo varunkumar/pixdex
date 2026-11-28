@@ -408,6 +408,12 @@ export class WorkerApiClient {
     return this.getJson<OnThisDayResponse>(`/insights/on-this-day?date=${date}`);
   }
 
+  /** Forgets the viewer's cached facts. `removed` is 0 when all of them are only a few minutes old. */
+  async refreshInsights(): Promise<{ removed: number }> {
+    const response = await this.sendJson('POST', '/insights/refresh', {});
+    return (await response.json()) as { removed: number };
+  }
+
   thumbnailUrl(photo: Pick<SerializedPhoto, 'thumbnailUrl'>): string {
     if (!photo.thumbnailUrl) return '';
     // Same-origin proxy URL: the Pages Function adds the read token server-side.
