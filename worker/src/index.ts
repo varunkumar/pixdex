@@ -12,6 +12,7 @@ import { getKnownGalleryRoute, knownGalleryStatusRoute, putKnownGalleryRoute } f
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestSpeciesRoute, pendingSpeciesRoute, speciesSummaryRoute } from './routes/ingest-species';
 import { ingestPhotoRoute } from './routes/ingest-photo';
+import { ingestPlacesRoute, pendingPlacesRoute } from './routes/ingest-places';
 import { ingestRelocateRoute } from './routes/ingest-relocate';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { albumContentsRoute } from './routes/album-contents';
@@ -73,6 +74,8 @@ app.post('/ingest/rating', ingestRatingRoute);
 app.post('/ingest/species', ingestSpeciesRoute);
 app.post('/ingest/species/pending', pendingSpeciesRoute);
 app.post('/ingest/species/summary', speciesSummaryRoute);
+app.post('/ingest/places', ingestPlacesRoute);
+app.post('/ingest/places/pending', pendingPlacesRoute);
 app.post('/ingest/known-people', upsertKnownPeopleRoute);
 app.put('/ingest/known-gallery', putKnownGalleryRoute);
 app.get('/ingest/known-gallery', getKnownGalleryRoute);

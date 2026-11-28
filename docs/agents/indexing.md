@@ -51,3 +51,9 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   must be in the same frame as the photo's thumbnail (the UI draws them over it): `scanFaces(..., { boxFrame })` is `upright` from `processFile` and `raw`
   (the default) from `backfill-faces`, so a post-change photo whose scan was missed at index time gets raw boxes from `backfill-faces` (wrong for a rotated
   photo; re-index it instead). Agent-only: no Worker route, CPU or D1 change; one extra in-memory rotate per thumbnail.
+- Photo places (migration `0025_photo_place.sql`, `photos.place`: NULL until resolved, `''` when no town is near, not
+  searchable). Ingest-token routes, out of the proxy allowlist: `POST /ingest/places/pending` (`{ cursor?, limit }`,
+  at most 100, photos with GPS and `place IS NULL`, rowid paging) and `POST /ingest/places` (up to 100 by content hash).
+  `POST /ingest/photo` takes an optional `place`; absent keeps it only while the GPS position is the same.
+  `POST /ingest/exif` clears it when the position changes. Performance: one full `pending` pass reads each photo row
+  once; each stored place is one row write plus the FTS rewrite of that photo.

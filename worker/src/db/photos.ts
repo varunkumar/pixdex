@@ -16,6 +16,9 @@ export const exifFieldsSchema = z.object({
 
 export type ExifFields = z.infer<typeof exifFieldsSchema>;
 
+/** "Town, CC", or '' when no town is near the position. */
+export const placeSchema = z.string().check(z.maxLength(120));
+
 /** One animal found in a photo by the agent's species model. box is [x0, y0, x1, y1] as fractions of the image. */
 export const speciesEntrySchema = z.object({
   common: z.string().check(z.minLength(1), z.maxLength(200)),
@@ -62,6 +65,8 @@ export const ingestPhotoSchema = z.extend(z.object({
   // Species found by the agent's model; absent keeps what the photo already has.
   species: z.optional(speciesListSchema),
   speciesModel: z.optional(speciesModelSchema),
+  // Town nearest to the GPS position; absent keeps the stored one while the position is unchanged.
+  place: z.optional(placeSchema),
 }), exifFieldsSchema.shape);
 
 export type IngestPhotoInput = z.infer<typeof ingestPhotoSchema>;
