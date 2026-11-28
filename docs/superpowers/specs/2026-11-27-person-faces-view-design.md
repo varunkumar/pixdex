@@ -35,6 +35,8 @@ The view must agree with the existing design.
 
 - Small square tiles like "Review auto matches": 96 px, medium radius and spacing. A phone shows 3 across, 8 px apart.
   (Changed during the build, at the owner's request. The first design used larger tiles that filled the width.)
+- Changed on 2026-11-28, at the owner's request: tiles are 96 px or more, in even rows that fill the width. Row counts
+  differ by one at most. A single row has tiles of 192 px at most.
 - Faces follow the photo order. Two faces in one photo show as two tiles, left to right.
 - A tile opens the photo. Its accessible name includes the photo caption.
 - Show confirmed and auto faces only.

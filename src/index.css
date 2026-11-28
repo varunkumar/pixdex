@@ -55,8 +55,8 @@ body {
   object-fit: cover; /* the tile only differs from the photo by a pixel gap: crop, never letterbox */
 }
 
-/* Face grid (person page, Faces tab): small faces like the "Review auto matches" grid. 96px with the same spacing;
-   phones fit three across in slightly smaller columns. */
+/* Face grid (person page, Faces tab): `FaceGrid` measures the width and sets the faces of each row (`faceRows`), so the
+   rows are even and fill the width. The fixed columns below apply only until it has a width. */
 .pdx-faces-wrap {
   container: pdx-faces / inline-size;
 }
@@ -77,6 +77,18 @@ body {
     grid-template-columns: repeat(auto-fill, 96px);
     gap: var(--mantine-spacing-md);
   }
+}
+.pdx-faces[data-rows] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pdx-face-gap);
+}
+.pdx-faces[data-rows] > * {
+  /* The 0.01px keeps rounding from pushing the last face of a row to the next one. */
+  flex: 0 0 calc((100% - (var(--pdx-per-row) - 1) * var(--pdx-face-gap)) / var(--pdx-per-row) - 0.01px);
+}
+.pdx-faces[data-single] > * {
+  max-width: 192px; /* the size of a face crop: a few faces must not become very large */
 }
 .pdx-tile.pdx-face {
   flex: none; /* a square: a caption line in a taller row must not stretch it */
