@@ -411,7 +411,10 @@ const PersonPage = () => {
         )}
         <Tabs.Panel value="photos">
           <Stack gap="lg">
-            {faces.isError && <FacesError message="Could not load photo actions" onRetry={() => void faces.refetch()} />}
+            {/* A viewer has no photo actions. Their failed Faces request stays in the query after a tab change. */}
+            {person?.canEdit && faces.isError && (
+              <FacesError message="Could not load photo actions" onRetry={() => void faces.refetch()} />
+            )}
             {photos && photos.length > 0 && (
               <PhotoGrid
                 photos={photos}

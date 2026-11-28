@@ -597,6 +597,17 @@ describe('PersonPage', () => {
       expect(await screen.findByTestId('face-cut')).toBeInTheDocument();
     });
 
+    it('shows a viewer no photo actions error on Photos after the faces fail', async () => {
+      personIs({ canEdit: false });
+      vi.mocked(workerApiClient.getPersonFaces).mockRejectedValue(new Error('boom'));
+      showFaces();
+      await screen.findByText('Could not load faces');
+      fireEvent.click(screen.getByRole('tab', { name: 'Photos' }));
+      expect((await screen.findAllByText('A leopard in a tree.')).length).toBeGreaterThan(0);
+      expect(screen.queryByText('Could not load photo actions')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    });
+
     it('says when the page has no faces', async () => {
       twoPhotos();
       showFaces();

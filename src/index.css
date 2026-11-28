@@ -64,6 +64,7 @@ body {
 }
 .pdx-faces > * {
   min-width: 0; /* a long caption must not widen its column */
+  container-type: inline-size;
 }
 @media (min-width: 36em) {
   .pdx-faces {
@@ -78,6 +79,13 @@ body {
 }
 .pdx-face .pdx-tile-line {
   flex-wrap: wrap; /* a face tile is narrow: the date goes under the title when both do not fit */
+}
+/* Under 88px (phones under about 345px wide) the Cover badge and the menu do not fit side by side. */
+@container (max-width: 87px) {
+  .pdx-face .pdx-tile-badges {
+    top: auto;
+    bottom: 6px;
+  }
 }
 .pdx-face-cut {
   width: 100%;
