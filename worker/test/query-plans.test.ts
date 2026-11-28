@@ -301,7 +301,7 @@ describe('insight query plans', () => {
   });
 
   it("people start from the caller's persons and never scan faces or photos", async () => {
-    const p = await plan(PEOPLE_SQL, '2026-11-28', U.email, U.email);
+    const p = await plan(PEOPLE_SQL, '2026-11-28', U.email, U.email, '2026-11-28');
     expect(p).toMatch(/SEARCH f USING (COVERING )?INDEX idx_faces_person\w* \(person_id=\?/);
     expect(p).toMatch(/SEARCH ph USING (COVERING )?INDEX sqlite_autoindex_photos_\d \(id=\?\)/);
     expect(p).not.toMatch(/SCAN (f|ph|faces|photos)\b/);

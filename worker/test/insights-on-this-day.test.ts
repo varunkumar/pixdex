@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { indiaDate } from '../src/insights/common';
 import { blockStart, onThisDayBlock, onThisDayIds, onThisDayRanges } from '../src/insights/onThisDay';
 import { clearInsights, getJson, seedPhoto } from './insights-helpers';
@@ -40,6 +40,19 @@ describe('seven-day block', () => {
     expect(blockStart(shift(start, 6))).toBe(start);
     expect(blockStart(shift(start, 7))).toBe(shift(start, 7));
     expect(blockStart(shift(start, -1))).toBe(shift(start, -7));
+  });
+
+  // Worker CPU: a date text costs much more than a day number. Build only the texts that the query binds.
+  it.each(['2026-11-28', '2026-12-31'])('builds few date texts for the block of %s', async (date) => {
+    await seedPhoto({ dt: '2025-11-28T06:30:00.000Z' });
+    const spy = vi.spyOn(Date.prototype, 'toISOString');
+    try {
+      await onThisDayBlock(env.DB, 'owner@example.com', blockStart(date));
+      // At most two calendar years, 37 earlier years each, two bounds each, and the seven dates.
+      expect(spy.mock.calls.length).toBeLessThanOrEqual(160);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   // Blocks that cross New Year and hold the leap day of a leap year and of another year.

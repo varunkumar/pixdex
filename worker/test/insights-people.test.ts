@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { peopleFacts } from '../src/insights/people';
 import { clearInsights, getJson, seedPhoto } from './insights-helpers';
 
@@ -81,6 +81,49 @@ describe('people facts', () => {
     await together(20, ['d'], '2023-03-01T06:00:00.000Z');
     expect(await fact('missed')).toEqual({ person: 'd', lastDate: '2023-03-01', photos: 20 });
   });
+
+  it('matches a direct calculation, and the Worker gets at most 4 rows', async () => {
+    const people = ['a', 'b', 'c', 'd', 'e', 'f'];
+    for (const id of ['e', 'f']) await person(id);
+    // 180 photos with different sets of people. f is only on old photos, e is on some photos with no date.
+    const photos: { ids: string[]; day: string | null }[] = [];
+    for (let i = 0; i < 180; i++) {
+      const old = i % 3 === 0;
+      const ids = people.filter((id, k) => (id !== 'f' || old) && (i * (k + 3) + k) % 5 < 2);
+      const day = i % 11 === 0 ? null : old ? `2021-0${1 + (i % 9)}-15` : `2026-0${1 + (i % 9)}-15`;
+      await together(1, ids, day === null ? (null as any) : `${day}T06:00:00.000Z`);
+      photos.push({ ids, day });
+    }
+    const pairs = people.flatMap((a, i) => people.slice(i + 1).map((b) => ({ a, b, photos: photos.filter((p) => p.ids.includes(a) && p.ids.includes(b)).length })));
+    const top = pairs.filter((p) => p.photos >= 10).sort((x, y) => y.photos - x.photos || x.a.localeCompare(y.a) || x.b.localeCompare(y.b)).slice(0, 3);
+    const longest = people
+      .map((id) => {
+        const mine = photos.filter((p) => p.ids.includes(id));
+        return { person: id, lastDate: mine.map((p) => p.day ?? '').sort().at(-1)!, photos: mine.length };
+      })
+      .filter((p) => p.photos >= 20 && p.lastDate !== '' && p.lastDate < '2025-11-28')
+      .sort((x, y) => x.lastDate.localeCompare(y.lastDate) || x.person.localeCompare(y.person))[0];
+    expect(top.length).toBe(3);
+    expect(longest?.person).toBe('f');
+
+    let returned = 0;
+    const counting = {
+      prepare: (sql: string) => {
+        const statement = env.DB.prepare(sql);
+        return {
+          bind: (...values: unknown[]) => {
+            const bound = statement.bind(...values);
+            return { all: async () => { const r = await bound.all(); returned += r.results.length; return r; } };
+          },
+        };
+      },
+    } as unknown as D1Database;
+    expect(await peopleFacts(counting, OWNER, TODAY)).toEqual([
+      { id: 'together', data: { pairs: top } },
+      { id: 'missed', data: longest },
+    ]);
+    expect(returned).toBeLessThanOrEqual(4);
+  }, 60_000);
 
   it('shows current names and drops deleted people from a cached answer', async () => {
     await together(20, ['a', 'b'], '2020-01-05T06:00:00.000Z');
