@@ -17,10 +17,15 @@ export interface DayRange {
 const cameraMidnight = (year: number, month: number, day: number, days: number) =>
   new Date(Date.UTC(year, month - 1, day + days) - CAMERA_OFFSET_MINUTES * 60_000).toISOString().slice(0, 19);
 
-/** One window of date ±2 days for each year before the year of `date` (YYYY-MM-DD). 29 February counts as the 28th. */
+/** The year, month and day of `date` (YYYY-MM-DD). 29 February counts as the 28th. */
+function middle(date: string): [number, number, number] {
+  const [year, month, day] = date.split('-').map(Number);
+  return [year, month, month === 2 && day === 29 ? 28 : day];
+}
+
+/** One window of date ±2 days for each year before the year of `date`. */
 export function onThisDayRanges(date: string): DayRange[] {
-  const [year, month, rawDay] = date.split('-').map(Number);
-  const day = month === 2 && rawDay === 29 ? 28 : rawDay;
+  const [year, month, day] = middle(date);
   const ranges: DayRange[] = [];
   for (let y = FIRST_YEAR; y < year; y++) {
     ranges.push({
@@ -64,10 +69,28 @@ export const ON_THIS_DAY_SQL = `SELECT day, id FROM (
 
 export type YearIds = { year: number; ids: string[] };
 
-/** Overlapping windows joined, so that SQLite reads each photo once. */
-function joined(windows: DayRange[]): { from: string; to: string }[] {
+/**
+ * One range for each earlier year that covers the windows of all of `dates`. The dates follow each other, so for each
+ * calendar year the range runs from the window of its first date to the window of its last date. Only those two dates
+ * need date texts.
+ */
+function blockRanges(dates: string[]): { from: string; to: string }[] {
+  const ends = new Map<string, [string, string]>();
+  for (const date of dates) {
+    const year = date.slice(0, 4);
+    ends.set(year, [ends.get(year)?.[0] ?? date, date]);
+  }
+  const all = [...ends.values()].flatMap(([first, last]) => {
+    const [year, month, day] = middle(first);
+    const [, lastMonth, lastDay] = middle(last);
+    return Array.from({ length: year - FIRST_YEAR }, (_, i) => ({
+      from: cameraMidnight(FIRST_YEAR + i, month, day, -ON_THIS_DAY_SPREAD),
+      to: cameraMidnight(FIRST_YEAR + i, lastMonth, lastDay, ON_THIS_DAY_SPREAD + 1),
+    }));
+  });
+  // Two calendar years in one block give ranges that can touch. Joined, SQLite reads each photo once.
   const out: { from: string; to: string }[] = [];
-  for (const { from, to } of [...windows].sort((a, b) => (a.from < b.from ? -1 : 1))) {
+  for (const { from, to } of all.sort((a, b) => (a.from < b.from ? -1 : 1))) {
     const last = out[out.length - 1];
     if (last && from <= last.to) last.to = to > last.to ? to : last.to;
     else out.push({ from, to });
@@ -75,41 +98,50 @@ function joined(windows: DayRange[]): { from: string; to: string }[] {
   return out;
 }
 
-/** The camera date on which a window starts. */
-const firstDay = (from: string) => new Date(Date.parse(`${from}Z`) + CAMERA_OFFSET_MINUTES * 60_000).toISOString().slice(0, 10);
+/** Days since 1970-01-01. */
+const dayNumber = (year: number, month: number, day: number) => Date.UTC(year, month - 1, day) / DAY_MS;
 
 /**
  * For each date of the block that starts on `start`: the photo ids of each earlier year with photos, newest year
  * first. The best 12 of a window are among the best 12 of its days, so one statement serves all seven dates. The
- * Worker handles at most 12 rows for each camera day (about 11 days for each year).
+ * Worker handles at most 12 rows for each camera day (about 11 days for each year). It matches rows to windows by day
+ * number, and only for the years near a returned row: date texts for every year and date cost too much CPU.
  */
 export async function onThisDayBlock(db: D1Database, email: string, start: string): Promise<Record<string, YearIds[]>> {
   const dates = Array.from({ length: BLOCK_DAYS }, (_, i) => addDays(start, i));
-  const windows = dates.map((date) => ({ date, ranges: onThisDayRanges(date) }));
-  // Camera day to the lists (one for each date and year) that take its photos.
-  const takers = new Map<string, string[][]>();
-  const lists = windows.map(({ date, ranges }) => ({
-    date,
-    years: ranges.map(({ year, from }) => {
-      const ids: string[] = [];
-      const first = firstDay(from);
-      for (let i = 0; i <= 2 * ON_THIS_DAY_SPREAD; i++) {
-        const day = addDays(first, i);
-        const known = takers.get(day);
-        if (known) known.push(ids);
-        else takers.set(day, [ids]);
-      }
-      return { year, ids };
-    }),
-  }));
-  const rows = await db
-    .prepare(ON_THIS_DAY_SQL)
-    .bind(JSON.stringify(joined(windows.flatMap((w) => w.ranges))), email)
-    .all<{ day: string; id: string }>();
-  for (const { day, id } of rows.results) {
-    for (const ids of takers.get(day) ?? []) if (ids.length < ON_THIS_DAY_PER_YEAR) ids.push(id);
+  const rows = await db.prepare(ON_THIS_DAY_SQL).bind(JSON.stringify(blockRanges(dates)), email).all<{ day: string; id: string }>();
+  // A window can cross New Year, so a photo can belong to the window year before or after its own year.
+  const near = new Set<number>();
+  for (const { day } of rows.results) {
+    const year = Number(day.slice(0, 4));
+    near.add(year - 1).add(year).add(year + 1);
   }
-  return Object.fromEntries(lists.map(({ date, years }) => [date, years.filter((y) => y.ids.length > 0).reverse()]));
+  const years = [...near].filter((y) => y >= FIRST_YEAR).sort((a, b) => b - a);
+  // Day number to the lists (one for each date and year) that take the photos of that day.
+  const takers = new Map<number, string[][]>();
+  const lists = dates.map((date) => {
+    const [dateYear, month, day] = middle(date);
+    return {
+      date,
+      years: years
+        .filter((year) => year < dateYear)
+        .map((year) => {
+          const ids: string[] = [];
+          const centre = dayNumber(year, month, day);
+          for (let n = centre - ON_THIS_DAY_SPREAD; n <= centre + ON_THIS_DAY_SPREAD; n++) {
+            const known = takers.get(n);
+            if (known) known.push(ids);
+            else takers.set(n, [ids]);
+          }
+          return { year, ids };
+        }),
+    };
+  });
+  for (const { day, id } of rows.results) {
+    const n = dayNumber(Number(day.slice(0, 4)), Number(day.slice(5, 7)), Number(day.slice(8, 10)));
+    for (const ids of takers.get(n) ?? []) if (ids.length < ON_THIS_DAY_PER_YEAR) ids.push(id);
+  }
+  return Object.fromEntries(lists.map(({ date, years }) => [date, years.filter((y) => y.ids.length > 0)]));
 }
 
 /** The photo ids of one date, calculated now. */

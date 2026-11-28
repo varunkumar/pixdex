@@ -39,6 +39,9 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   29 February counts as 28 February. One calculation covers a 7-day block (`blockStart`): `ON_THIS_DAY_SQL` gives the
   12 best photos of each camera day, and the Worker gives them to the seven dates. The statement must search the
   `(album, date_time)` index for each owned album and range (pinned in `worker/test/query-plans.test.ts`).
+- Do not make date texts for each year and date in "On this day": that used about 2,000 date operations. The query
+  needs two texts for each earlier year and calendar year of the block (`blockRanges`). The Worker matches rows by
+  day number (`dayNumber`). A test limits the number of date texts.
 
 ## Topics
 
@@ -58,10 +61,11 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
   species, else the year before), `best-chance` (30 photos of the most photographed species; the slot is within its
   busiest month). Bad `species` text counts as none.
 
-- `people` (`insights/people.ts`, 1 statement, one row for each set of people): `together` (top 3 pairs with 10 shared photos), `missed` (20
+- `people` (`insights/people.ts`, 1 statement that returns at most 4 rows): `together` (top 3 pairs with 10 shared photos), `missed` (20
   photos, last one over 365 days ago, the oldest). Only the caller's own people; auto and confirmed faces; never
   ignored ones. The cache holds person ids. `hydrateFacts` resolves names with `PERSON_NAME_SQL` on each read and
-  drops deleted people. `PEOPLE_SQL` starts from the caller's persons (plan pinned).
+  drops deleted people. `PEOPLE_SQL` starts from the caller's persons (plan pinned). It groups pairs and people in
+  SQL, from one materialized row for each set of people. Do not move this grouping to the Worker (CPU).
 
 - `places` (`insights/places.ts`, 1 statement): `travel` (100 photos with GPS; from the 0.1 degree cell with the most
   days to the farthest cell), `places` (20 photos with a place; places new in the current year, else the year before;
@@ -70,8 +74,8 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
 ## Cost
 
 - One pass over the photos without a sort reads about 1 row for each photo. A `GROUP BY` reads 2. The burst window
-  reads 5. Give each topic as few statements as possible. A `MATERIALIZED` CTE that is grouped twice costs more than
-  two statements.
+  reads 5. Give each topic as few statements as possible. A `MATERIALIZED` CTE with a row for each photo, grouped
+  twice, costs more than two statements. A small one (People: one row for each set of people) does not.
 - Live, before the 30-day cycle (2026-11-28, 15,768 photos): 447,641 rows for every visit of a new day. Gear 218,126,
   People 97,747, Wildlife 44,281, Places 36,504, Time 31,938, "On this day" 19,045. CPU on one visit: Gear 10 ms,
   "On this day" 8 ms, other topics 4 to 5 ms.
@@ -86,6 +90,11 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
 - A cached full visit reads 266 rows for 77 shown photos. Each calculation writes one cache row.
 - "On this day" reads one row for each owned album and range, plus about 5 rows for each photo inside the 11-day
   ranges, once in 7 days. This is the price of read isolation.
-- Worker CPU: the Worker groups the rows of People (one for each set of people), Places (at most one for each photo
-  with GPS), Wildlife (species, month and slot), Gear (lens, camera and year) and "On this day" (12 for each camera
-  day). The new CPU times are not measured. Check `cpuTime` with `wrangler tail` after a release.
+- Worker CPU: the Worker groups the rows of Places (at most one for each photo with GPS), Wildlife (species, month
+  and slot), Gear (lens, camera and year) and "On this day" (12 for each camera day). People does no grouping.
+- Live CPU after the 30-day cycle (2026-11-28, one or two samples): "On this day" 17 to 21 ms (before: 8), People 10
+  to 14 ms (before: 4). Cause: date operations in "On this day" and grouping in the Worker in People.
+- Local first call after the fix for both (Node, stub database, median of 41 processes): "On this day" 3.2 to 1.5 ms
+  (one date, before the cycle: 1.0), People 2.2 to 0.1 ms (before the cycle: 0.1). Live CPU after the fix is not
+  measured. Check `cpuTime` with `wrangler tail` after a release.
+- The People fix adds D1 rows. Local, 281 sets and 6,582 faces: 18,084 to 24,421 rows, in the same SQL time.
