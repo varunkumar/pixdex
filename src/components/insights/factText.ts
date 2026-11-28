@@ -36,6 +36,12 @@ const peak = (values: number[]) => values.indexOf(Math.max(...values));
 const columns = (values: number[], labels: string[], highlight = peak(values)): Chart => ({ type: 'columns', values, labels, highlight });
 const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
 
+/** The most used camera of each year that has one: context for a change in hit rate, never a stated cause. */
+function cameraNote(years: { year: number; camera: string | null }[]): string {
+  const named = years.filter((y) => y.camera).map((y) => `${y.camera} in ${y.year}`);
+  return named.length ? `Main camera: ${named.join(', ')}` : '';
+}
+
 /** All the words and the chart of one fact. */
 export function describeFact(fact: Fact): FactText {
   switch (fact.id) {
@@ -124,7 +130,7 @@ export function describeFact(fact: Fact): FactText {
       return {
         topic: 'gear', label: 'Hit rate by year', value: `${pct(first.hits, first.photos)}→${pct(last.hits, last.photos)}`,
         headline: `Your 8+ share went from ${pct(first.hits, first.photos)} to ${pct(last.hits, last.photos)}`,
-        note: last.camera ? `Main camera in ${last.year}: ${last.camera}` : '',
+        note: cameraNote([first, last]),
         chart: columns(years.map((y) => share(y.hits, y.photos)), years.map((y) => `’${String(y.year).slice(2)}`), years.length - 1),
       };
     }

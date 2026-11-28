@@ -13,6 +13,7 @@ import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/inges
 
 import { ON_THIS_DAY_SQL } from '../src/insights/onThisDay';
 import { TOGETHER_SQL } from '../src/insights/people';
+import { ZOOM_SQL } from '../src/insights/gear';
 
 const U = { email: 'owner@example.com' };
 
@@ -289,6 +290,12 @@ describe('insight query plans', () => {
   it('On this day searches the date index once for each year window', async () => {
     const p = await plan(ON_THIS_DAY_SQL, '[]', U.email);
     expect(p).toMatch(/SEARCH photos USING INDEX idx_photos_date_time \(date_time>\? AND date_time<\?\)/);
+  });
+
+  it("the zoom bins read the caller's albums through the album index, never the whole photos table", async () => {
+    const p = await plan(ZOOM_SQL, U.email, U.email);
+    expect(p).toMatch(/SEARCH p USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
+    expect(p).not.toMatch(/SCAN (p|photos)\b/);
   });
 
   it('pairs of people find the second face by its photo and never scan faces', async () => {

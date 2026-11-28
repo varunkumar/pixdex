@@ -26,7 +26,7 @@ SELECT CAST(strftime('%w', t) AS INTEGER) AS weekday, CAST(strftime('%H', t) AS 
 FROM d WHERE focal_length > 0 GROUP BY weekday, slot, focal`;
 
 /** The most used lens that zooms (observed longest focal length 1.5 times the shortest), in equal bins. Binds email twice. */
-const ZOOM_SQL = `WITH z AS MATERIALIZED (
+export const ZOOM_SQL = `WITH z AS MATERIALIZED (
   SELECT lens_model AS lens, MIN(focal_length) AS mn, MAX(focal_length) AS mx, COUNT(*) AS n
   FROM photos WHERE ${ownedSql('album')} AND lens_model <> '' AND focal_length > 0
   GROUP BY lens_model HAVING mx >= 1.5 * mn AND n >= ${MIN_ZOOM_PHOTOS} ORDER BY n DESC, lens LIMIT 1
@@ -34,7 +34,7 @@ const ZOOM_SQL = `WITH z AS MATERIALIZED (
 SELECT z.lens, z.mn, z.mx, z.n, MIN(${ZOOM_BUCKETS - 1}, CAST((p.focal_length - z.mn) * ${ZOOM_BUCKETS} / (z.mx - z.mn) AS INTEGER)) AS bin,
   COUNT(*) AS photos, SUM(p.focal_length >= 0.95 * z.mx) AS at_max
 FROM z CROSS JOIN photos p ON p.lens_model = z.lens
-WHERE ${ownedSql('+p.album')} AND p.focal_length > 0 GROUP BY bin`;
+WHERE ${ownedSql('p.album')} AND p.focal_length > 0 GROUP BY bin`;
 
 const BURST_SQL = `${datedCte('camera_model')},
 s AS (SELECT camera_model AS camera, CAST(strftime('%Y', t) AS INTEGER) AS year, unixepoch(t) AS sec FROM d WHERE camera_model <> ''),

@@ -154,7 +154,8 @@ D1 (estimates, not measured):
 - First visit of a day: about 200,000 to 600,000 rows read per user, 5 to 6 rows written. This is higher than the first
   estimate given in the discussion (150,000 to 300,000).
 - On this day: about a few hundred rows.
-- Later visits: under 100 rows for each full page load.
+- Later visits: under 100 rows for each full page load, plus a few rows for each "On this day" photo shown (measured
+  265 rows for 77 photos).
 - Combine facts that group the same rows into one statement. Do not add an index without measurements.
 - Use `INDEXED BY` and `+ignored_at` rules from `docs/agents/people.md`. Check each query with `EXPLAIN QUERY PLAN`.
 - Measure on local D1 before merge. If a first visit is above 600,000 rows, tell the owner before release.

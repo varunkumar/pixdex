@@ -43,7 +43,7 @@ const CASES: [Fact, { topic: string; label: string; value: string; headline: str
   ],
   [
     { id: 'progress', data: { years: [{ year: 2021, photos: 100, hits: 9, camera: 'Old' }, { year: 2025, photos: 200, hits: 42, camera: 'New' }] } },
-    { topic: 'gear', label: 'Hit rate by year', value: '9%→21%', headline: 'Your 8+ share went from 9% to 21%', note: 'Main camera in 2025: New' },
+    { topic: 'gear', label: 'Hit rate by year', value: '9%→21%', headline: 'Your 8+ share went from 9% to 21%', note: 'Main camera: Old in 2021, New in 2025' },
   ],
   [
     { id: 'cameras', data: { total: 38, cameras: [{ camera: 'One', first: '2005-01-01', last: '2010-01-01', photos: 30 }, { camera: 'Two', first: '2010-01-01', last: '2025-01-01', photos: 40 }] } },
@@ -88,9 +88,13 @@ describe('describeFact', () => {
     expect(describeFact(fact)).toMatchObject(text);
   });
 
-  it('omits the camera sentence when the latest year has no camera', () => {
-    const fact: Fact = { id: 'progress', data: { years: [{ year: 2021, photos: 100, hits: 9, camera: 'Old' }, { year: 2025, photos: 100, hits: 9, camera: null }] } };
-    expect(describeFact(fact).note).toBe('');
+  it('names only the years that have a camera, and none when neither has one', () => {
+    const progress = (first: string | null, last: string | null): Fact => ({
+      id: 'progress',
+      data: { years: [{ year: 2021, photos: 100, hits: 9, camera: first }, { year: 2025, photos: 100, hits: 9, camera: last }] },
+    });
+    expect(describeFact(progress('Old', null)).note).toBe('Main camera: Old in 2021');
+    expect(describeFact(progress(null, null)).note).toBe('');
   });
 
   it('highlights the top column and places camera spans on one scale', () => {
