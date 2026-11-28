@@ -33,7 +33,8 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
 - An empty answer is stored as `empty:<day>` and is valid for that day only. The `gear-recipe` row (no route of its
   own) uses this when there are too few photos for any recipe.
 - The cache holds ids and numbers, never photo rows or names. Each read loads them again and checks ownership. A new
-  share or owner edit shows in the facts at the next refresh. A deleted photo or person drops out at once.
+  share or owner edit shows in the facts at the next refresh. A deleted person, and a deleted photo in
+  "On this day", drop out at once. Counts and place names in the tiles stay until the next refresh.
 - "On this day": one window of date ±2 days for each year from 1990, 12 photos for each year by combined score.
   29 February counts as 28 February. One calculation covers a 7-day block (`blockStart`): `ON_THIS_DAY_SQL` gives the
   12 best photos of each camera day, and the Worker gives them to the seven dates. The statement must search the
@@ -78,7 +79,8 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
   (before: 51,422). Gear 18,181 (31,029), Time 4,059, Wildlife 2,859 (5,326), People 1,543 (4,326), Places 2,282
   (4,569). The test holds a limit for each topic.
 - Estimates for the live library, not measured: about 260,000 to 290,000 rows when every part is calculated, about
-  11,000 to 14,000 rows for each user and day on average, and about 140,000 on the most costly day (Gear).
+  11,000 to 14,000 rows for each user and day on average, and about 140,000 on the Gear day (about 170,000 when that
+  day also starts an "On this day" block).
 - A refresh calculates every part in one visit (about 260,000 to 290,000 rows, estimated, about 5% of the free
   daily limit). The 5-minute limit stops repeated clicks. Gear then calculates both parts in one request.
 - A cached full visit reads 266 rows for 77 shown photos. Each calculation writes one cache row.

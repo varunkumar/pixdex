@@ -3,7 +3,8 @@
 Status: approved on 2026-11-28.
 
 Changed during the work: Gear cannot reach 110,000 rows without more Worker CPU. Its cache has two parts (`gear` and
-`gear-recipe`) that refresh on different days. So six cycles start 5 days apart, not five cycles 6 days apart.
+`gear-recipe`) that refresh on different days. So six cycles start 5 days apart, not five cycles 6 days apart. The
+worst day can reach about 170,000 rows, not 130,000.
 
 ## Intent
 
