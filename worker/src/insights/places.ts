@@ -7,18 +7,51 @@ const MIN_PLACE_PHOTOS = 20;
 /** GPS 0,0 is what some cameras write with no fix. */
 const WITH_GPS = `latitude IS NOT NULL AND longitude IS NOT NULL AND NOT (latitude = 0 AND longitude = 0)`;
 
-/** One row for each 0.1 degree cell: its average position, shooting days and latest day. Binds the email, then today. */
-const CELLS_SQL = `${datedCte('latitude, longitude, place')}
-SELECT AVG(latitude) AS lat, AVG(longitude) AS lon, COUNT(*) AS photos, COUNT(DISTINCT date(t)) AS days,
-  MAX(date(t)) AS last, MAX(NULLIF(place, '')) AS place
-FROM d WHERE ${WITH_GPS} GROUP BY round(latitude, 1), round(longitude, 1)`;
+/**
+ * One row for each 0.1 degree cell, place and shooting day, in cell order. Both facts come from these rows, so the
+ * photos are read once. Binds the email, then today.
+ */
+const GPS_SQL = `${datedCte('latitude, longitude, place')}
+SELECT round(latitude, 1) AS a, round(longitude, 1) AS o, place, date(t) AS day, COUNT(*) AS photos,
+  SUM(latitude) AS lat, SUM(longitude) AS lon
+FROM d WHERE ${WITH_GPS} GROUP BY a, o, place, day`;
 
-const PLACES_SQL = `${datedCte('latitude, longitude, place')}
-SELECT place, COUNT(*) AS photos, COUNT(DISTINCT date(t)) AS days, CAST(strftime('%Y', MIN(t)) AS INTEGER) AS first
-FROM d WHERE ${WITH_GPS} AND place <> '' GROUP BY place ORDER BY days DESC, photos DESC, place`;
-
+type GpsRow = { a: number; o: number; place: string | null; day: string; photos: number; lat: number; lon: number };
 type CellRow = { lat: number; lon: number; photos: number; days: number; last: string; place: string | null };
 type PlaceRow = { place: string; photos: number; days: number; first: number };
+
+/** Each cell's average position, shooting days, latest day and one place name. */
+function toCells(rows: GpsRow[]): CellRow[] {
+  const cells = new Map<string, { lat: number; lon: number; photos: number; days: Set<string>; last: string; place: string | null }>();
+  for (const r of rows) {
+    const key = `${r.a},${r.o}`;
+    const c = cells.get(key) ?? { lat: 0, lon: 0, photos: 0, days: new Set<string>(), last: '', place: null };
+    c.lat += r.lat;
+    c.lon += r.lon;
+    c.photos += r.photos;
+    c.days.add(r.day);
+    if (r.day > c.last) c.last = r.day;
+    if (r.place && (c.place === null || r.place > c.place)) c.place = r.place;
+    cells.set(key, c);
+  }
+  return [...cells.values()].map((c) => ({ ...c, lat: c.lat / c.photos, lon: c.lon / c.photos, days: c.days.size }));
+}
+
+/** The named places, most shooting days first. */
+function toPlaces(rows: GpsRow[]): PlaceRow[] {
+  const found = new Map<string, { photos: number; days: Set<string>; first: string }>();
+  for (const r of rows) {
+    if (!r.place) continue;
+    const p = found.get(r.place) ?? { photos: 0, days: new Set<string>(), first: r.day };
+    p.photos += r.photos;
+    p.days.add(r.day);
+    if (r.day < p.first) p.first = r.day;
+    found.set(r.place, p);
+  }
+  return [...found]
+    .map(([place, p]) => ({ place, photos: p.photos, days: p.days.size, first: Number(p.first.slice(0, 4)) }))
+    .sort((x, y) => y.days - x.days || y.photos - x.photos || (x.place < y.place ? -1 : 1));
+}
 
 function distanceKm(a: CellRow, b: CellRow): number {
   const rad = Math.PI / 180;
@@ -51,13 +84,10 @@ function places(rows: PlaceRow[], gpsPhotos: number, today: string): Fact[] {
   return [{ id: 'places', data: { year, newCount: rows.filter((r) => r.first === year).length, top, gpsPhotos } }];
 }
 
-/** Two passes over the owner's photos; the Worker measures grouped cells only. */
+/** One pass over the owner's photos; the Worker handles at most one row for each photo with GPS. */
 export const placesFacts: TopicBuilder = async (db, email, today) => {
-  const [cells, named] = await Promise.all([
-    db.prepare(CELLS_SQL).bind(email, today).all<CellRow>(),
-    db.prepare(PLACES_SQL).bind(email, today).all<PlaceRow>(),
-  ]);
-  const gpsPhotos = cells.results.reduce((n, c) => n + c.photos, 0);
+  const { results } = await db.prepare(GPS_SQL).bind(email, today).all<GpsRow>();
+  const gpsPhotos = results.reduce((n, r) => n + r.photos, 0);
   if (gpsPhotos === 0) return [];
-  return [...travel(cells.results, gpsPhotos), ...places(named.results, gpsPhotos, today)];
+  return [...travel(toCells(results), gpsPhotos), ...places(toPlaces(results), gpsPhotos, today)];
 };

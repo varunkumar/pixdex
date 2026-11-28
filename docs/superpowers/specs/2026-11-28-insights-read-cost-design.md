@@ -1,6 +1,9 @@
 # Design: lower the D1 reads of the dashboard
 
-Status: waiting for approval.
+Status: approved on 2026-11-28.
+
+Changed during the work: Gear cannot reach 110,000 rows without more Worker CPU. Its cache has two parts (`gear` and
+`gear-recipe`) that refresh on different days. So six cycles start 5 days apart, not five cycles 6 days apart.
 
 ## Intent
 

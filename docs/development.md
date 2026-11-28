@@ -220,7 +220,9 @@ Rules learned from that:
 
 ### Dashboard insights cost
 
-See "Cost" in [the insights notes](agents/insights.md) for local numbers. After a release, measure production:
+See "Cost" in [the insights notes](agents/insights.md) for the numbers. After a release, measure production. Facts are
+cached for up to 30 days, so only a part that is due is calculated. `wrangler d1 insights` is sampled: its totals are
+not exact. For exact rows, run a query with `wrangler d1 execute` and read `meta.rows_read`.
 
 ```bash
 cd worker

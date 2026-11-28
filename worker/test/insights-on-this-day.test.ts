@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { indiaDate } from '../src/insights/common';
-import { onThisDayIds, onThisDayRanges } from '../src/insights/onThisDay';
+import { blockStart, onThisDayBlock, onThisDayIds, onThisDayRanges } from '../src/insights/onThisDay';
 import { clearInsights, getJson, seedPhoto } from './insights-helpers';
 
 const today = indiaDate(new Date());
@@ -29,6 +29,49 @@ describe('on this day windows', () => {
     expect(indiaDate(new Date('2026-11-27T18:29:59Z'))).toBe('2026-11-27');
     expect(indiaDate(new Date('2026-11-27T18:30:00Z'))).toBe('2026-11-28');
   });
+});
+
+describe('seven-day block', () => {
+  beforeEach(clearInsights);
+
+  it('starts on the same day for seven dates in a row', () => {
+    const start = blockStart('2026-11-28');
+    expect(blockStart(start)).toBe(start);
+    expect(blockStart(shift(start, 6))).toBe(start);
+    expect(blockStart(shift(start, 7))).toBe(shift(start, 7));
+    expect(blockStart(shift(start, -1))).toBe(shift(start, -7));
+  });
+
+  // Blocks that cross New Year and hold the leap day of a leap year and of another year.
+  it.each(['2026-12-31', '2028-02-29', '2027-02-28', '2026-11-28'])('gives each date of the block of %s its own 12 best photos', async (date) => {
+    const start = blockStart(date);
+    const dates = Array.from({ length: 7 }, (_, i) => shift(start, i));
+    // Two earlier years, every day from five days before the block to five days after it, with mixed scores.
+    let n = 0;
+    for (const back of [1, 4]) {
+      for (let d = -5; d < 12; d++) {
+        const [, m, day] = shift(start, d).split('-');
+        const year = Number(shift(start, d).slice(0, 4)) - back;
+        for (let i = 0; i < 4; i++, n++) {
+          const dt = new Date(Date.UTC(year, Number(m) - 1, Number(day), 1 + i * 5)).toISOString();
+          await seedPhoto({ id: `b${String(n).padStart(4, '0')}`, dt, score: n % 7 === 0 ? null : (n * 13) % 10 });
+        }
+      }
+    }
+    const all = (await env.DB.prepare('SELECT id, date_time AS dt, aesthetic_score AS score FROM photos').all<{ id: string; dt: string; score: number | null }>()).results;
+    const best = (a: (typeof all)[number], b: (typeof all)[number]) =>
+      (b.score ?? -1) - (a.score ?? -1) || (a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : 0) || (a.id < b.id ? -1 : 1);
+    const block = await onThisDayBlock(env.DB, 'owner@example.com', start);
+    expect(Object.keys(block)).toEqual(dates);
+    for (const d of dates) {
+      const expected = onThisDayRanges(d)
+        .reverse()
+        .map(({ year, from, to }) => ({ year, ids: all.filter((p) => p.dt >= from && p.dt < to).sort(best).slice(0, 12).map((p) => p.id) }))
+        .filter((y) => y.ids.length > 0);
+      expect(expected.length, d).toBeGreaterThan(0);
+      expect(block[d], d).toEqual(expected);
+    }
+  }, 60_000);
 });
 
 describe('GET /insights/on-this-day', () => {
@@ -74,7 +117,7 @@ describe('GET /insights/on-this-day', () => {
     expect((await get(shift(today, 2))).status).toBe(200);
   });
 
-  it('calculates once for each date and version', async () => {
+  it('calculates once for each seven-day block and version', async () => {
     const first = await seedPhoto({ dt: ago(1) });
     expect(ids((await get()).body)).toEqual([first]);
     const second = await seedPhoto({ dt: ago(1), score: 9 });
@@ -82,9 +125,10 @@ describe('GET /insights/on-this-day', () => {
     await env.DB.prepare('UPDATE insights_cache SET version = 0').run();
     expect(ids((await get()).body)).toEqual([second, first]);
     const third = await seedPhoto({ dt: ago(1), score: 10 });
-    expect(ids((await get(shift(today, 1))).body)).toContain(third);
-    const rows = await env.DB.prepare('SELECT COUNT(*) AS n FROM insights_cache').first<{ n: number }>();
-    expect(rows!.n).toBe(1);
+    await env.DB.prepare(`UPDATE insights_cache SET day = '2000-01-06'`).run();
+    expect(ids((await get()).body)).toEqual([third, second, first]);
+    const row = await env.DB.prepare('SELECT COUNT(*) AS n, MAX(day) AS day FROM insights_cache').first<{ n: number; day: string }>();
+    expect(row).toEqual({ n: 1, day: blockStart(today) });
   });
 
   it('drops a cached photo that is deleted or no longer owned', async () => {
