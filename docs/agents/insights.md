@@ -79,22 +79,41 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
 - Live, before the 30-day cycle (2026-11-28, 15,768 photos): 447,641 rows for every visit of a new day. Gear 218,126,
   People 97,747, Wildlife 44,281, Places 36,504, Time 31,938, "On this day" 19,045. CPU on one visit: Gear 10 ms,
   "On this day" 8 ms, other topics 4 to 5 ms.
+- Plan: on 2026-11-28 the account used the Workers Paid plan. The free limits (10 ms CPU, 5M rows read each day)
+  apply if it returns to the free plan.
 - Local D1 now (`worker/test/insights-cost.test.ts`, 2,000 photos, 500 faces): all parts together read 31,225 rows
   (before: 51,422). Gear 18,181 (31,029), Time 4,059, Wildlife 2,859 (5,326), People 1,543 (4,326), Places 2,282
   (4,569). The test holds a limit for each topic.
-- Estimates for the live library, not measured: about 260,000 to 290,000 rows when every part is calculated, about
-  11,000 to 14,000 rows for each user and day on average, and about 140,000 on the Gear day (about 170,000 when that
-  day also starts an "On this day" block).
-- A refresh calculates every part in one visit (about 260,000 to 290,000 rows, estimated, about 5% of the free
-  daily limit). The 5-minute limit stops repeated clicks. Gear then calculates both parts in one request.
+- Live, one calculation of every part (2026-11-28, 15,796 photos, `wrangler d1 execute`): 269,035 rows. Gear
+  143,851 (main 95,591, zoom 16,572, recipe 31,688), Time 31,992, People 31,194, Wildlife 23,734, "On this day"
+  20,008 (one week), Places 18,256.
+- These live rows are from before the People CPU fix. People now reads more rows: about 37,000 live, estimated, so
+  about 275,000 for all parts.
+- Derived from the live rows, for each user: about 11,200 rows for each day on average, about 112,000 on the Gear
+  day (about 132,000 when that day also starts an "On this day" block).
+- A refresh calculates every part in one visit (about 275,000 rows, estimated). The 5-minute limit stops repeated
+  clicks. Gear then calculates both parts in one request.
 - A cached full visit reads 266 rows for 77 shown photos. Each calculation writes one cache row.
 - "On this day" reads one row for each owned album and range, plus about 5 rows for each photo inside the 11-day
   ranges, once in 7 days. This is the price of read isolation.
 - Worker CPU: the Worker groups the rows of Places (at most one for each photo with GPS), Wildlife (species, month
   and slot), Gear (lens, camera and year) and "On this day" (12 for each camera day). People does no grouping.
-- Live CPU after the 30-day cycle (2026-11-28, one or two samples): "On this day" 17 to 21 ms (before: 8), People 10
-  to 14 ms (before: 4). Cause: date operations in "On this day" and grouping in the Worker in People.
-- Local first call after the fix for both (Node, stub database, median of 41 processes): "On this day" 3.2 to 1.5 ms
-  (one date, before the cycle: 1.0), People 2.2 to 0.1 ms (before the cycle: 0.1). Live CPU after the fix is not
-  measured. Check `cpuTime` with `wrangler tail` after a release.
+- Live CPU (2026-11-28, `wrangler tail`, milliseconds, one calculation of each part). "Cycle" is the 30-day
+  release, "CPU fix" is the release after it:
+
+  | Part | Before the cycle | Cycle: first run, refresh | CPU fix: refresh |
+  |---|---|---|---|
+  | On this day | 8 | 21, 17 | 5 |
+  | People | 4 | 14, 10 | 3 |
+  | Gear | 10 | 12, 11 | 8 |
+  | Wildlife | 5 | 8, 9 | 5 |
+  | Places | 5 | 8, 5 | 3 |
+  | Time | 5 | 7, 5 | 3 |
+
+  The refresh request used 0 to 3 ms. Cached reads used 1 to 6 ms (one `time` read used 11 ms). These are single
+  samples.
+- Cause of the high "cycle" values: date operations in "On this day" and grouping in the Worker in People. The fix
+  changed only these two parts.
+- Local first call (Node, stub database, median of 41 processes): "On this day" 3.2 to 1.5 ms with the fix (one date,
+  before the cycle: 1.0), People 2.2 to 0.1 ms (before the cycle: 0.1).
 - The People fix adds D1 rows. Local, 281 sets and 6,582 faces: 18,084 to 24,421 rows, in the same SQL time.

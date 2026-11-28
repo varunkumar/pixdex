@@ -193,6 +193,8 @@ Behaviour to know:
 
 ## D1 read budget
 
+On 2026-11-28 the account used the Workers Paid plan. The free limits below apply if it returns to the free plan.
+
 The free tier allows 5M rows read per day and every route past the limit returns 500 (`D1_ERROR: ... exceeded
 D1's free tier daily row read limit`, resets at midnight UTC). See what is spending it with
 `cd worker && npx wrangler d1 insights pixdex --timePeriod 1d --sort-type sum --sort-by reads --limit 12 --json`,
