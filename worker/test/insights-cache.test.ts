@@ -1,6 +1,7 @@
-import { env } from 'cloudflare:test';
+import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { indiaDate, periodStart } from '../src/insights/common';
+import { readHeaders } from './helpers';
 import { clearInsights, getJson, seedMany, seedPhoto } from './insights-helpers';
 
 const today = indiaDate(new Date());
@@ -62,5 +63,52 @@ describe('cached tile topics', () => {
 
   it('has no gear-recipe route', async () => {
     expect((await getJson('/insights/gear-recipe')).status).toBe(404);
+  });
+});
+
+describe('POST /insights/refresh', () => {
+  beforeEach(clearInsights);
+
+  const refresh = async (email?: string) => {
+    const r = await SELF.fetch('https://example.com/insights/refresh', {
+      method: 'POST',
+      headers: { ...readHeaders(email), 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    return { status: r.status, body: r.status === 200 ? ((await r.json()) as { removed: number }) : null };
+  };
+  const age = (minutes: number) =>
+    env.DB.prepare('UPDATE insights_cache SET computed_at = ?').bind(new Date(Date.now() - minutes * 60_000).toISOString()).run();
+
+  it('removes the cached parts, so that the next visit calculates them again', async () => {
+    await seedMany(100, dated);
+    expect((await facts('time'))[0].data.total).toBe(100);
+    await seedPhoto(dated());
+    await age(6);
+    expect(await refresh()).toEqual({ status: 200, body: { removed: 1 } });
+    expect((await facts('time'))[0].data.total).toBe(101);
+  });
+
+  it('keeps a part that was calculated less than 5 minutes ago', async () => {
+    await seedMany(100, dated);
+    await facts('time');
+    await age(4);
+    expect((await refresh()).body).toEqual({ removed: 0 });
+    expect(await row('time')).not.toBeNull();
+  });
+
+  it("removes only the caller's rows", async () => {
+    await seedMany(100, dated);
+    await facts('time');
+    await getJson('/insights/time', 'friend@example.com');
+    await age(6);
+    expect((await refresh('friend@example.com')).body).toEqual({ removed: 1 });
+    const left = await env.DB.prepare('SELECT email FROM insights_cache').all<{ email: string }>();
+    expect(left.results).toEqual([{ email: 'owner@example.com' }]);
+  });
+
+  it('needs the read token and a viewer', async () => {
+    const r = await SELF.fetch('https://example.com/insights/refresh', { method: 'POST', body: '{}' });
+    expect(r.status).toBe(401);
   });
 });

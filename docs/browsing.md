@@ -72,6 +72,8 @@ Rules for the facts:
 - They count only albums that you own.
 - Each topic of "Your photo habits" is calculated again every 30 days. A change shows after that.
 - A topic with no facts is calculated again on the next day.
+- Select **Refresh facts** to calculate all facts and "On this day" again now. Use it after you index a full album.
+  It does nothing for facts that are less than 5 minutes old.
 - "On this day" changes each day. A new photo can take up to 7 days to show there.
 - A fact shows only when it has enough photos.
 - A high-scoring photo has a score of 7 or more. See "Rate and correct".

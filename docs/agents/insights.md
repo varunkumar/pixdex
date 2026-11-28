@@ -9,7 +9,9 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   unknown topic gives 404.
 - `GET /insights/on-this-day?date=YYYY-MM-DD` returns `{ date, years: [{ year, photos }] }`. The date must be within
   two days of the India date, else 400.
-- Both use `requireReadToken` and are in the proxy allowlist.
+- `POST /insights/refresh` (body `{}`) deletes the caller's cached rows that are older than 5 minutes and returns
+  `{ removed }`. The next reads calculate them again. It writes only the caller's rows, so any viewer may call it.
+- All use `requireReadToken` and are in the proxy allowlist. The POST is in the write allowlist.
 
 ## Rules
 
@@ -77,6 +79,8 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
   (4,569). The test holds a limit for each topic.
 - Estimates for the live library, not measured: about 260,000 to 290,000 rows when every part is calculated, about
   11,000 to 14,000 rows for each user and day on average, and about 140,000 on the most costly day (Gear).
+- A refresh calculates every part in one visit (about 260,000 to 290,000 rows, estimated, about 5% of the free
+  daily limit). The 5-minute limit stops repeated clicks. Gear then calculates both parts in one request.
 - A cached full visit reads 266 rows for 77 shown photos. Each calculation writes one cache row.
 - "On this day" reads one row for each owned album and range, plus about 5 rows for each photo inside the 11-day
   ranges, once in 7 days. This is the price of read isolation.

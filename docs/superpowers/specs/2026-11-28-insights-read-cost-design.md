@@ -58,6 +58,11 @@ All numbers for A, B and C are estimates.
 - Read isolation stays: queries start from the caller's albums or persons.
 - Gear CPU must not go up.
 
+### Refresh on demand (added on 2026-11-28)
+
+The owner indexes old photos and does not want old facts for 30 days. A **Refresh facts** button calculates all
+parts and "On this day" again. A part that is less than 5 minutes old stays. The 30-day cycle stays for other visits.
+
 ## Goals
 
 - Average: about 11,000 rows per user per day.

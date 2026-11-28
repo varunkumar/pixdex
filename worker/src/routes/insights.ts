@@ -43,6 +43,20 @@ export async function insightsRoute(c: Context<{ Bindings: Env }>) {
   return c.json({ day, facts: await hydrateFacts(db, email, facts) });
 }
 
+/** A part that is newer than this stays: repeated clicks cannot spend the daily read budget. */
+const REFRESH_AFTER_MINUTES = 5;
+
+/**
+ * `POST /insights/refresh`: forgets the caller's cached parts, so that the next reads calculate them again. It
+ * touches only the caller's own rows (primary key prefix), so any viewer may call it. One delete.
+ */
+export async function refreshInsightsRoute(c: Context<{ Bindings: Env }>) {
+  const { email } = userOf(c);
+  const before = new Date(Date.now() - REFRESH_AFTER_MINUTES * 60_000).toISOString();
+  const result = await c.env.DB.prepare('DELETE FROM insights_cache WHERE email = ? AND computed_at < ?').bind(email, before).run();
+  return c.json({ removed: result.meta.changes });
+}
+
 function acceptedDate(date: string, today: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   const t = Date.parse(`${date}T00:00:00Z`);
