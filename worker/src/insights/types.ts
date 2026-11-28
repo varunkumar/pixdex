@@ -15,7 +15,19 @@ export type TimeFact =
   | { id: 'records'; data: { busiest: { date: string; count: number }; gap: { days: number; from: string; to: string } } }
   | { id: 'shifts'; data: { older: YearSpan; newer: YearSpan } };
 
+export type FocalGroup = 'under-35' | '35-69' | '70-199' | '200-399' | '400-plus';
+
+export type GearFact =
+  | { id: 'top-lens'; data: { lens: string; hits: number; photos: number; knownLensPhotos: number } }
+  | { id: 'hit-rate'; data: { lenses: { lens: string; hits: number; photos: number }[] } }
+  /** slot: the first hour of a 2-hour slot (0, 2, ... 22). */
+  | { id: 'recipe'; data: { weekday: number; slot: number; focal: FocalGroup; hits: number; photos: number; allHits: number; allPhotos: number } }
+  | { id: 'zoom'; data: { lens: string; min: number; max: number; atMax: number; photos: number; buckets: { from: number; to: number; photos: number }[] } }
+  | { id: 'burst'; data: { years: { year: number; photos: number; moments: number }[] } }
+  | { id: 'progress'; data: { years: { year: number; photos: number; hits: number; camera: string | null }[] } }
+  | { id: 'cameras'; data: { total: number; cameras: { camera: string; first: string; last: string; photos: number }[] } };
+
 /** One dashboard fact: `id` names it, `data` is typed per id. The frontend writes all text. */
-export type Fact = TimeFact;
+export type Fact = TimeFact | GearFact;
 
 export type TopicBuilder = (db: D1Database, email: string, today: string) => Promise<Fact[]>;

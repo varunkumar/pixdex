@@ -34,6 +34,11 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
 - `time` (`insights/time.ts`, 3 statements): `top-month`, `top-weekday` (100 dated photos), `records` (10 shooting
   days), `shifts` (4 years of 100 photos; the newer half takes the extra year; absent when the peak month is equal).
 
+- `gear` (`insights/gear.ts`, 5 statements): `top-lens` (20 hits), `hit-rate` (2 lenses of 50, top 4), `recipe`
+  (weekday, 2-hour slot and focal group of 50, above the average), `zoom` (most used lens with max >= 1.5 x min and 100
+  photos), `burst` (a new moment after 2 s for each camera; 2 years of 100), `progress` (2 years of 100; the camera is
+  context, not a cause), `cameras` (2 with 20 photos, top 6). A hit is a combined score of `HIT_SCORE` (8) or more.
+
 ## Cost
 
 - Cached request: one cache row, plus the hydrated photos by primary key.
