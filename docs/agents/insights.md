@@ -27,6 +27,13 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   29 February counts as 28 February. `ON_THIS_DAY_SQL` must search `idx_photos_date_time` (pinned in
   `worker/test/query-plans.test.ts`).
 
+## Topics
+
+A fact below its minimum is not returned. Definitions and minimums are in the code of each builder.
+
+- `time` (`insights/time.ts`, 3 statements): `top-month`, `top-weekday` (100 dated photos), `records` (10 shooting
+  days), `shifts` (4 years of 100 photos; the newer half takes the extra year; absent when the peak month is equal).
+
 ## Cost
 
 - Cached request: one cache row, plus the hydrated photos by primary key.
