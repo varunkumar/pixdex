@@ -4,6 +4,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { processFile } from '../src/processFile';
+import { parseGazetteer } from '../src/places/gazetteer';
 import type { AgentConfig } from '../src/config';
 
 const SAMPLE_RESPONSE = `SUBJECTS: leopard, big cat
@@ -76,6 +77,31 @@ describe('processFile', () => {
     expect(payload.driveFileId).toBeUndefined();
     expect(payload.modelProvider).toBe('ollama');
     expect(payload.subjects).toEqual(['leopard', 'big cat']);
+  });
+
+  it('sends the town name only with a town list and a GPS position', async () => {
+    const gazetteer = parseGazetteer(['1', 'Gundlupet', 'Gundlupet', '', '11.81', '76.69', 'P', 'PPL', 'IN'].join('\t'));
+    const withGps = path.join(dir, 'gps.jpg');
+    await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 3, g: 2, b: 1 } } })
+      .jpeg()
+      .withExif({ IFD3: { GPSLatitudeRef: 'N', GPSLatitude: '11/1 40/1 12/1', GPSLongitudeRef: 'E', GPSLongitude: '76/1 37/1 48/1' } })
+      .toFile(withGps);
+    const send = async (localPath: string, town: boolean) => {
+      const cloudflareClient = { uploadThumbnail: vi.fn(), ingestPhoto: vi.fn() };
+      await processFile(
+        { localPath, contentHash: 'b'.repeat(64), source: 'local', sourcePath: localPath, filename: 'gps.jpg' },
+        {
+          cloudflareClient: cloudflareClient as any,
+          ollamaClient: { chat: vi.fn().mockResolvedValue(SAMPLE_RESPONSE) } as any,
+          config,
+          gazetteer: town ? gazetteer : undefined,
+        }
+      );
+      return cloudflareClient.ingestPhoto.mock.calls[0][0];
+    };
+    expect((await send(withGps, true)).place).toBe('Gundlupet, IN');
+    expect(await send(withGps, false)).not.toHaveProperty('place');
+    expect(await send(filePath, true)).not.toHaveProperty('place');
   });
 
   it('returns per-stage timings, with the model stages measured and absent stages at 0', async () => {

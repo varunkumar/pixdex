@@ -74,6 +74,9 @@ Notes:
   merge: no backfill, no Time Travel bookmark needed. From then on a non-owner no longer receives the owner's person names.
 - Migration `0022_album_framing.sql` (the nullable `albums.cover_framing` column) is additive and auto-applies on merge. See
   "After deploying the browser-stored album hero" below.
+- Migration `0024_insights_cache.sql` (the empty `insights_cache` table) is additive and auto-applies on merge.
+- Migration `0025_photo_place.sql` (the nullable `photos.place` column) is additive and auto-applies on merge. Then run
+  `backfill-places` on the agent computer (see [indexing](indexing.md)).
 - The agent is not deployed; it runs on your Mac.
 
 ### After deploying the browser-stored album hero
@@ -214,6 +217,16 @@ Rules learned from that:
   regenerate the triggers in a new numbered migration (triggers are `IF NOT EXISTS`, so drop and recreate them).
   Filtered searches still `COUNT(*)`. `idx_photos_last_indexed` serves the unfiltered newest-first list.
 - The frontend keeps list data fresh for two minutes (`staleTime`), mutations invalidate what they change.
+
+### Dashboard insights cost
+
+See "Cost" in [the insights notes](agents/insights.md) for local numbers. After a release, measure production:
+
+```bash
+cd worker
+npx wrangler tail pixdex-worker --format json      # open the dashboard; read cpuTime of each /insights/ request
+npx wrangler d1 insights pixdex --timePeriod 1d    # rows read of the insight statements
+```
 
 ## Keeping docs current
 

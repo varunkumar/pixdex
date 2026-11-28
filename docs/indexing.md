@@ -38,6 +38,32 @@ For each photo, the agent:
 4. Finds faces and species, if the sidecars are on.
 5. Sends the metadata, thumbnail and face crops to the Worker.
 
+## Places from GPS
+
+PixdeX can give the name of the nearest town (50 km at most) to each photo that has a GPS position. It uses a list on
+your computer. No position goes to an outside service. The list is
+[GeoNames](https://www.geonames.org/) `cities500`, licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
+1. Download the list one time. Run these commands in `agent/`:
+
+   ```bash
+   mkdir -p .index-state/geonames
+   curl -fL https://download.geonames.org/export/dump/cities500.zip -o .index-state/geonames/cities500.zip
+   unzip -o .index-state/geonames/cities500.zip -d .index-state/geonames
+   ```
+
+2. Add places to the photos that are already indexed:
+
+   ```bash
+   npm run dev -- backfill-places --dry-run   # count only
+   npm run dev -- backfill-places
+   ```
+
+- When the list is there, indexing also adds the place to new photos. Restart an indexing run that is in progress.
+- Set `GEONAMES_FILE` to keep the list in a different location.
+- A forest or park shows the name of the nearest town.
+
 ## Models
 
 | Task | Model | Notes |

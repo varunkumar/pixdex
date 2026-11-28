@@ -33,7 +33,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
-  matching), Dashboard,
+  matching), Dashboard (counts, On this day, insight tiles from `components/insights/`, recently indexed),
   DailySuggestion, Lightbox, PhotoGrid/PhotoTile/MasonryGrid (masonry, see Photo grids below), AlbumCard (the classic card), SortIcons, ColumnsToggle, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
 - Photo grids (frontend only, no Worker or D1 cost): `components/MasonryGrid.tsx` deals tiles into the shortest of N columns from each photo's
   `width / height` (`components/masonry.ts`: `photoRatio` falls back to 4/3 and clamps to 0.4 to 3, `assignColumns`); N is 2 below 576px
@@ -129,7 +129,7 @@ Viewers get `path` and `driveFileId` as null in photo responses (the owner's loc
 Same-origin read proxy. Verifies the Access identity first (above). Adds `READ_TOKEN` server-side so it never ships in the
 bundle. Only an allowlist of read routes is forwarded (`search`, `timeline`, `timeline/buckets`, `albums`,
 `daily-pick`, `photos/:id`, `photos/:id/faces`, `thumbnails/:hash`, `faces/:id/crop`, `people`,
-`people/groups`, `people/ignored`, `people/review-queue`, `people/:id/auto-faces`, `people/:id/faces`, `people/known`, `albums/contents`, `me`, `admin/requests`) plus `originals/:id`, which goes
+`people/groups`, `people/ignored`, `people/review-queue`, `people/:id/auto-faces`, `people/:id/faces`, `people/known`, `albums/contents`, `insights/:name`, `me`, `admin/requests`) plus `originals/:id`, which goes
 to the agent through the tunnel. `/ingest/*` is deliberately not reachable. The public
 `functions/enroll.ts` and `functions/api/enroll.ts` sit beside it and skip the Access JWT check (see Identity above).
 Thumbnails are cached immutably (content-hash addressed); originals and face crops are cached

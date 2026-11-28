@@ -57,8 +57,8 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          suggested_hashtags, model_provider, model_name, search_text, search_primary, last_indexed,
          camera_make, camera_model, lens_model, focal_length, f_number,
          exposure_time, iso, latitude, longitude, has_watermark,
-         aesthetic_score, short_caption, species, species_model
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         aesthetic_score, short_caption, species, species_model, place
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          content_hash = excluded.content_hash,
          source = excluded.source,
@@ -98,7 +98,11 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
          aesthetic_score = excluded.aesthetic_score,
          short_caption = excluded.short_caption,
          species = excluded.species,
-         species_model = excluded.species_model`
+         species_model = excluded.species_model,
+         place = CASE
+           WHEN excluded.place IS NOT NULL THEN excluded.place
+           WHEN photos.latitude IS excluded.latitude AND photos.longitude IS excluded.longitude THEN photos.place
+         END`
     )
       .bind(
         p.id, p.contentHash, p.source, p.path ?? null, p.driveFileId ?? null, p.filename,
@@ -113,7 +117,7 @@ export async function ingestPhotoRoute(c: Context<{ Bindings: Env }>) {
         p.hasWatermark === undefined ? null : p.hasWatermark ? 1 : 0,
         p.aestheticScore ?? null,
         p.shortCaption ?? null,
-        JSON.stringify(species), speciesModel
+        JSON.stringify(species), speciesModel, p.place ?? null
       )
       .run();
   } catch (err) {

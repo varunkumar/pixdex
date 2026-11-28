@@ -29,6 +29,8 @@ export async function ingestExifRoute(c: Context<{ Bindings: Env }>) {
     `UPDATE photos SET
        camera_make = ?, camera_model = ?, lens_model = ?, focal_length = ?,
        f_number = ?, exposure_time = ?, iso = ?, latitude = ?, longitude = ?,
+       -- Compared with the old position: a moved photo needs its place resolved again.
+       place = CASE WHEN latitude IS ? AND longitude IS ? THEN place END,
        search_text = CASE
          WHEN ? = '' OR instr(search_text, ?) > 0 THEN search_text
          ELSE search_text || ' ' || ?
@@ -38,6 +40,7 @@ export async function ingestExifRoute(c: Context<{ Bindings: Env }>) {
     .bind(
       p.cameraMake ?? null, p.cameraModel ?? null, p.lensModel ?? null, p.focalLength ?? null,
       p.fNumber ?? null, p.exposureTime ?? null, p.iso ?? null, p.latitude ?? null, p.longitude ?? null,
+      p.latitude ?? null, p.longitude ?? null,
       searchTerms, searchTerms, searchTerms,
       p.contentHash
     )

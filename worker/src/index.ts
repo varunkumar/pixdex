@@ -12,6 +12,7 @@ import { getKnownGalleryRoute, knownGalleryStatusRoute, putKnownGalleryRoute } f
 import { ingestRatingRoute } from './routes/ingest-rating';
 import { ingestSpeciesRoute, pendingSpeciesRoute, speciesSummaryRoute } from './routes/ingest-species';
 import { ingestPhotoRoute } from './routes/ingest-photo';
+import { ingestPlacesRoute, pendingPlacesRoute } from './routes/ingest-places';
 import { ingestRelocateRoute } from './routes/ingest-relocate';
 import { getThumbnailRoute, putThumbnailRoute } from './routes/ingest-thumbnail';
 import { albumContentsRoute } from './routes/album-contents';
@@ -36,6 +37,7 @@ import {
 import { searchRoute } from './routes/search';
 import { bucketsRoute, timelineRoute } from './routes/timeline';
 import { dailyPickRoute } from './routes/daily-pick';
+import { insightsRoute, onThisDayRoute } from './routes/insights';
 import { accessPhotoRoute, meRoute, putAlbumSharesRoute } from './routes/shares';
 import { putAlbumFramingRoute } from './routes/framing';
 import type { Env } from './types';
@@ -72,6 +74,8 @@ app.post('/ingest/rating', ingestRatingRoute);
 app.post('/ingest/species', ingestSpeciesRoute);
 app.post('/ingest/species/pending', pendingSpeciesRoute);
 app.post('/ingest/species/summary', speciesSummaryRoute);
+app.post('/ingest/places', ingestPlacesRoute);
+app.post('/ingest/places/pending', pendingPlacesRoute);
 app.post('/ingest/known-people', upsertKnownPeopleRoute);
 app.put('/ingest/known-gallery', putKnownGalleryRoute);
 app.get('/ingest/known-gallery', getKnownGalleryRoute);
@@ -155,5 +159,10 @@ guardedWrite('POST', '/admin/requests/:id/revoke', revokeRoute);
 
 app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);
+
+app.use('/insights/*', requireReadToken);
+// The static path first: :topic would take it otherwise. Both GETs write only the caller's own cache row.
+app.get('/insights/on-this-day', onThisDayRoute);
+app.get('/insights/:topic', insightsRoute);
 
 export default app;

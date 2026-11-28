@@ -13,6 +13,7 @@ import type { Gallery } from './known/gallery';
 import type { FaceSidecarClient } from './faces/sidecarClient';
 import { detectSpecies, type SpeciesDeps } from './species/identify';
 import { decideSpecies } from './species/decide';
+import { nearestTown, type Gazetteer } from './places/gazetteer';
 
 export interface ProcessFileInput {
   localPath: string;
@@ -33,6 +34,8 @@ export interface ProcessFileDeps {
   knownGallery?: Gallery;
   /** Species identification runs before ingest when set; a failure never fails the photo (backfill-species picks it up). */
   species?: SpeciesDeps;
+  /** Town list for GPS positions; without it no place is sent (backfill-places adds it later). */
+  gazetteer?: Gazetteer;
 }
 
 /** Milliseconds spent in each stage of one photo, for measuring where indexing time goes. */
@@ -101,6 +104,10 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     }
   }
 
+  const { latitude, longitude } = exif.camera;
+  const place =
+    deps.gazetteer && latitude !== undefined && longitude !== undefined ? nearestTown(deps.gazetteer, latitude, longitude) : undefined;
+
   const payload: IngestPhotoPayload = {
     id: randomUUID(),
     ownerEmail,
@@ -131,6 +138,7 @@ export async function processFile(input: ProcessFileInput, deps: ProcessFileDeps
     aestheticScore: rating.score ?? undefined,
     shortCaption: rating.caption ?? undefined,
     ...(found && { species: found.species, speciesModel: found.model }),
+    ...(place !== undefined && { place }),
   };
 
   // Upload the thumbnail before creating the D1 row: the thumbnail PUT is

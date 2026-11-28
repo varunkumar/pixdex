@@ -6,7 +6,13 @@ import { renderWithProviders } from '../../test/renderWithProviders';
 import Dashboard from '../Dashboard';
 
 vi.mock('../../services/api/WorkerApiClient', () => ({
-  workerApiClient: { getAlbumsPage: vi.fn(), searchPage: vi.fn(), thumbnailUrl: vi.fn(() => '/api/thumbnails/h1') },
+  workerApiClient: {
+    getAlbumsPage: vi.fn(),
+    searchPage: vi.fn(),
+    getInsights: vi.fn(async () => ({ day: '2026-11-28', facts: [] })),
+    getOnThisDay: vi.fn(async () => ({ date: '2026-11-28', years: [] })),
+    thumbnailUrl: vi.fn(() => '/api/thumbnails/h1'),
+  },
 }));
 
 describe('Dashboard', () => {
@@ -19,7 +25,7 @@ describe('Dashboard', () => {
     });
   });
 
-  it('shows the album count and links to Search/Albums/Daily pick, with no indexing controls', async () => {
+  it('links each count to its page, with no link cards and no indexing controls', async () => {
     renderWithProviders(<Dashboard />);
 
     expect(await screen.findByText('2')).toBeInTheDocument(); // album count
@@ -28,9 +34,9 @@ describe('Dashboard', () => {
       'src',
       '/api/thumbnails/h1'
     );
-    expect(screen.getByRole('link', { name: 'Search' })).toHaveAttribute('href', '/search');
-    expect(screen.getByRole('link', { name: 'Albums' })).toHaveAttribute('href', '/albums');
-    expect(screen.getByRole('link', { name: 'Daily pick' })).toHaveAttribute('href', '/daily');
+    expect(screen.getByRole('link', { name: /photos 57/i })).toHaveAttribute('href', '/search');
+    expect(screen.getByRole('link', { name: /albums 2/i })).toHaveAttribute('href', '/albums');
+    for (const name of ['Search', 'Albums', 'Daily pick']) expect(screen.queryByRole('link', { name })).toBeNull();
     expect(screen.queryByRole('button', { name: /index photos/i })).not.toBeInTheDocument();
   });
 

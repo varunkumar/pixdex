@@ -4,6 +4,9 @@ import type {
   AlbumsResponse,
   DailyPickResponse,
   FaceGroupsResponse,
+  InsightsResponse,
+  InsightTopic,
+  OnThisDayResponse,
   KnownPersonSummary,
   AccessRequest,
   AccessRequestsResponse,
@@ -394,6 +397,15 @@ export class WorkerApiClient {
 
   async getDailyPick(): Promise<DailyPickResponse> {
     return this.getJson<DailyPickResponse>('/daily-pick');
+  }
+
+  getInsights(topic: InsightTopic): Promise<InsightsResponse> {
+    return this.getJson<InsightsResponse>(`/insights/${topic}`);
+  }
+
+  /** `date` is the browser's local day, YYYY-MM-DD. */
+  getOnThisDay(date: string): Promise<OnThisDayResponse> {
+    return this.getJson<OnThisDayResponse>(`/insights/on-this-day?date=${date}`);
   }
 
   thumbnailUrl(photo: Pick<SerializedPhoto, 'thumbnailUrl'>): string {

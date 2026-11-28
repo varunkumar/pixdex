@@ -22,7 +22,7 @@ vi.mock('../../services/api/WorkerApiClient', () => {
   const names = [
     'getMe', 'getAlbumsPage', 'searchPage', 'getAlbums', 'getAlbumContents', 'getTimeline', 'getTimelineBuckets',
     'getPeople', 'getKnownPeople', 'getFaceGroups', 'getReviewQueue', 'getAutoFaces', 'getPersonFaces', 'getPhoto',
-    'getPhotoFaces', 'getDailyPick', 'listAccessRequests',
+    'getPhotoFaces', 'getDailyPick', 'listAccessRequests', 'getInsights', 'getOnThisDay',
   ];
   return {
     workerApiClient: {
@@ -114,6 +114,8 @@ describe('page titles and headings', () => {
     api.getDailyPick.mockResolvedValue({ photo, reason: 'Sharp.', suggestedCaption: 'Dusk.', suggestedHashtags: [] });
     api.listAccessRequests.mockResolvedValue({ requests: [], pendingCount: 0, queueFull: false });
     vi.mocked(loadHero).mockResolvedValue(null);
+    api.getInsights.mockResolvedValue({ day: '2026-11-28', facts: [{ id: 'top-weekday', data: { counts: [0, 0, 0, 100, 0, 0, 0], total: 100 } }] });
+    api.getOnThisDay.mockResolvedValue({ date: '2026-11-28', years: [{ year: 2023, photos: [photo] }] });
   });
 
   it.each([

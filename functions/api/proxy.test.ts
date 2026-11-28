@@ -163,6 +163,12 @@ describe('Pages Function identity', () => {
       expect(h.get('authorization')).toBe('Bearer secret-token');
     });
 
+    it.each(['insights/time', 'insights/on-this-day?date=2026-11-28'])('forwards GET %s', async (path) => {
+      const res = await get(`/api/${path}`, 'friend@example.com');
+      expect(res.status).toBe(200);
+      expect(String(upstreamCalls()[0][0])).toBe(`https://worker.example.dev/${path}`);
+    });
+
     it('forwards known= on search and timeline', async () => {
       await get('/api/search?q=a&known=1', 'friend@example.com');
       await get('/api/timeline?known=1', 'friend@example.com');

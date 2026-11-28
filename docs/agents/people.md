@@ -23,6 +23,8 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   `idx_faces_ignored`, `idx_faces_open_status` and `idx_faces_known_shown` are for the new queries only: groups and the known
   list and filter pin theirs with `INDEXED BY`, and every other `ignored_at` test is written `+ignored_at` so a partial index
   cannot take over its plan.
+- Dashboard insights read faces too (`worker/src/insights/people.ts`, see [insights](insights.md)): they skip ignored
+  faces and use only the caller's own people.
 - People are per owner: `persons.owner_email` is the creator. Rename, delete, cover, assign, match and name uniqueness
   (`idx_persons_owner_name_lower`, case-insensitive per owner) are owner-only (404 not visible, 403 visible but not theirs). Face
   assign, reject, unassign and adding faces need the face's album to be the caller's (`faceRoles`) and the named person to be theirs.

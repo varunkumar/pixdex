@@ -56,6 +56,25 @@ The album page shows a large cover with the album name and photo count.
 - A page has the number of photos that you select.
 - The People page and photo grids have sort icons.
 
+## Dashboard
+
+The home page shows these parts:
+
+- The number of photos and albums.
+- **On this day:** your photos from today, plus or minus two days, in earlier years. Each year shows at most 12
+  photos, best score first. Select a photo to open it.
+- **Your photo habits:** facts about your own photos, as tiles. Select a tile to see its chart. Select a topic to
+  filter the tiles.
+- Recently indexed photos.
+
+Rules for the facts:
+
+- They count only albums that you own.
+- They are calculated at your first visit of each day. A change shows the next day.
+- A fact shows only when it has enough photos.
+- A high-scoring photo has a score of 7 or more. See "Rate and correct".
+- PixdeX reads camera times as India time. A camera clock that was not changed for a trip keeps its own time.
+
 ## Daily pick
 
 The home page shows one nature or wildlife photo each day, without people. PixdeX

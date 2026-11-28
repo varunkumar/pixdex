@@ -12,6 +12,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import type {
   AccessRequest,
+  Fact,
   KnownPersonSummary,
   PersonSummary,
   SerializedFace,
@@ -429,6 +430,47 @@ function sendJson(res: ServerResponse, status: number, body: unknown): true {
   return true;
 }
 
+/** Invented dashboard facts, one list for each topic. */
+const INSIGHTS: Record<string, Fact[]> = {
+  time: [
+    { id: 'top-month', data: { counts: [30, 28, 60, 45, 52, 110, 40, 35, 48, 55, 38, 70], total: 611 } },
+    { id: 'top-weekday', data: { counts: [90, 60, 55, 130, 70, 80, 126], total: 611 } },
+    { id: 'records', data: { busiest: { date: '2025-03-12', count: 96 }, gap: { days: 74, from: '2024-07-01', to: '2024-09-13' } } },
+    { id: 'shifts', data: { older: { from: 2018, to: 2021, month: 12 }, newer: { from: 2022, to: 2025, month: 3 } } },
+  ],
+  gear: [
+    { id: 'top-lens', data: { lens: 'Demo 150-600mm', hits: 64, photos: 240, knownLensPhotos: 480 } },
+    { id: 'hit-rate', data: { lenses: [{ lens: 'Demo 150-600mm', hits: 64, photos: 240 }, { lens: 'Demo 70-200mm', hits: 21, photos: 140 }, { lens: 'Demo 18-55mm', hits: 8, photos: 100 }] } },
+    { id: 'recipe', data: { weekday: 0, slot: 6, focal: '400-plus', hits: 31, photos: 100, allHits: 80, allPhotos: 611 } },
+    { id: 'zoom', data: { lens: 'Demo 150-600mm', min: 150, max: 600, atMax: 149, photos: 240, buckets: [{ from: 150, to: 240, photos: 40 }, { from: 240, to: 330, photos: 14 }, { from: 330, to: 420, photos: 18 }, { from: 420, to: 510, photos: 19 }, { from: 510, to: 600, photos: 149 }] } },
+    { id: 'burst', data: { years: [{ year: 2022, photos: 120, moments: 60 }, { year: 2023, photos: 150, moments: 50 }, { year: 2025, photos: 300, moments: 50 }] } },
+    { id: 'progress', data: { years: [{ year: 2022, photos: 120, hits: 11, camera: 'Demo One' }, { year: 2023, photos: 150, hits: 18, camera: 'Demo One' }, { year: 2025, photos: 300, hits: 63, camera: 'Demo Two' }] } },
+    { id: 'cameras', data: { total: 5, cameras: [{ camera: 'Demo Compact', first: '2015-02-01', last: '2018-06-01', photos: 80 }, { camera: 'Demo One', first: '2018-01-01', last: '2024-01-01', photos: 270 }, { camera: 'Demo Two', first: '2024-02-01', last: '2025-12-01', photos: 300 }] } },
+  ],
+  wildlife: [
+    { id: 'life-list', data: { total: 84, year: 2025, newInYear: 12, once: 19, byYear: [{ year: 2021, total: 22 }, { year: 2022, total: 40 }, { year: 2023, total: 55 }, { year: 2024, total: 72 }, { year: 2025, total: 84 }] } },
+    { id: 'best-chance', data: { species: 'Sandpiper', photos: 41, month: 3, slot: 6, slots: [{ slot: 6, photos: 12 }, { slot: 8, photos: 7 }, { slot: 16, photos: 4 }] } },
+  ],
+  people: [
+    { id: 'together', data: { pairs: [{ a: { id: 'own-asha', name: 'Asha Rao' }, b: { id: 'own-ravi', name: 'Ravi Menon' }, photos: 18 }, { a: { id: 'own-asha', name: 'Asha Rao' }, b: { id: 'own-meera', name: 'Meera Iyer' }, photos: 12 }] } },
+    { id: 'missed', data: { person: { id: 'own-meera', name: 'Meera Iyer' }, lastDate: '2024-08-02', photos: 22 } },
+  ],
+  places: [
+    { id: 'travel', data: { km: 1380, place: 'Demo Harbor, IN', date: '2019-05-02', gpsPhotos: 66 } },
+    { id: 'places', data: { year: 2025, newCount: 3, top: [{ place: 'Demo Town, IN', days: 31, photos: 200 }, { place: 'Demo Hills, IN', days: 9, photos: 48 }, { place: 'Demo Lake, IN', days: 5, photos: 20 }], gpsPhotos: 66 } },
+  ],
+};
+
+/** Two invented earlier years made of library photos, dated around `date`. */
+function onThisDay(date: string) {
+  const [year, rest] = [Number(date.slice(0, 4)), date.slice(4)];
+  const pick = (back: number, from: number, count: number) => ({
+    year: year - back,
+    photos: LIBRARY.slice(from, from + count).map((m) => ({ ...m.photo, dateTime: `${year - back}${rest}T06:00:00.000Z` })),
+  });
+  return { date, years: [pick(2, 0, 7), pick(6, 8, 4)] };
+}
+
 /** Answers one `/api/*` request; returns false only for paths outside `/api`. */
 export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
   const url = new URL(req.url ?? '/', 'http://mock.local');
@@ -571,6 +613,9 @@ export function handleMock(req: IncomingMessage, res: ServerResponse): boolean {
     });
     return sendJson(res, 200, { people, known, species });
   }
+  if (path === '/insights/on-this-day') return sendJson(res, 200, onThisDay(url.searchParams.get('date') ?? ''));
+  const insight = /^\/insights\/([^/]+)$/.exec(path);
+  if (insight) return sendJson(res, 200, { day: new Date().toISOString().slice(0, 10), facts: INSIGHTS[insight[1]] ?? [] });
   if (path === '/search') return sendJson(res, 200, search(url.searchParams));
   // One page of month groups from the dummy library, whatever the zoom, so the Timeline has something to lay out.
   if (path === '/timeline') return sendJson(res, 200, { groups: timelineMonths().slice(0, 6), nextCursor: null });
