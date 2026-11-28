@@ -47,7 +47,8 @@ These agree with photo tiles:
 - Hover shows the photo title and date.
 - A touch screen shows the date under the face (the caption if there is no date) and keeps the controls visible.
 - An auto match has the sparkle mark.
-- The person's creator gets "Set as cover" and, for an auto face, "Confirm X" and "Not X". Each acts on that face.
+- The person's creator gets one "Face actions" menu: "Set as cover" and, for an auto face, "Confirm X" and "Not X".
+  Each acts on that face. (Changed after the web guide review: two 44 px touch targets do not fit on a small tile.)
 - "Confirm X" needs `canEdit` on the photo.
 - The cover face has `CoverBadge`.
 

@@ -54,7 +54,10 @@ const AutoMark = () => (
   </Tooltip>
 );
 
-/** Per photo or face tile: set the person's cover, and for an automatic match a menu to confirm or reject it. */
+/**
+ * Per photo or face tile: set the person's cover, and for an automatic match a menu to confirm or reject it. A face
+ * tile is small, so with `single` it has one menu that holds all of these.
+ */
 const PersonFaceActions = ({
   personId,
   auto,
@@ -63,6 +66,7 @@ const PersonFaceActions = ({
   label,
   canConfirm,
   onChanged,
+  single = false,
 }: {
   personId: string;
   auto: SerializedFace | undefined;
@@ -73,6 +77,7 @@ const PersonFaceActions = ({
   /** The caller owns the photo's album, which confirming requires. */
   canConfirm: boolean;
   onChanged: () => void;
+  single?: boolean;
 }) => {
   // The menu closes on click, so a failure is reported as a notification, not inside the dropdown.
   const onError = (error: unknown) => notifications.show({ color: 'red', message: errorMessage(error, false) });
@@ -98,30 +103,35 @@ const PersonFaceActions = ({
     onSuccess: onChanged,
     onError,
   });
-  if (!candidate) return null;
+  if (!candidate || (single && isCover && !auto)) return null;
   return (
     <>
-      {!isCover && (
+      {!single && !isCover && (
         <SetCoverButton label={label} loading={setCover.isPending} onClick={() => setCover.mutate(candidate.id)} />
       )}
-      {auto && (
+      {(single || auto) && (
         <Menu position="bottom-end" withinPortal>
           <Menu.Target>
             <ActionIcon
               variant="filled"
               color="dark"
               size="md"
-              aria-label={`Photo actions for ${label}`}
-              loading={reject.isPending || confirm.isPending}
+              aria-label={`${single ? 'Face' : 'Photo'} actions for ${label}`}
+              loading={reject.isPending || confirm.isPending || (single && setCover.isPending)}
             >
               <TbDotsVertical aria-hidden />
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
-            {canConfirm && <Menu.Item onClick={() => confirm.mutate(auto.id)}>Confirm {auto.personName}</Menu.Item>}
-            <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
-              Not {auto.personName}
-            </Menu.Item>
+            {single && !isCover && <Menu.Item onClick={() => setCover.mutate(candidate.id)}>Set as cover</Menu.Item>}
+            {auto && canConfirm && (
+              <Menu.Item onClick={() => confirm.mutate(auto.id)}>Confirm {auto.personName}</Menu.Item>
+            )}
+            {auto && (
+              <Menu.Item color="red" onClick={() => reject.mutate(auto.id)}>
+                Not {auto.personName}
+              </Menu.Item>
+            )}
           </Menu.Dropdown>
         </Menu>
       )}
@@ -131,7 +141,7 @@ const PersonFaceActions = ({
 
 const FacesError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
   <Group gap="xs">
-    <Text size="sm" c="red">
+    <Text size="sm" c="red" role="alert">
       {message}
     </Text>
     <Button size="xs" variant="light" onClick={onRetry}>
@@ -402,9 +412,15 @@ const PersonPage = () => {
           {tab === 'photos' && <ColumnsToggle />}
         </Group>
       )}
-      <Tabs value={tab} keepMounted={false} onChange={(v) => update({ tab: v === 'faces' ? 'faces' : null })}>
+      {/* A tab change adds a history entry, so arrow keys only move focus; Enter or Space selects. */}
+      <Tabs
+        value={tab}
+        keepMounted={false}
+        activateTabWithKeyboard={false}
+        onChange={(v) => update({ tab: v === 'faces' ? 'faces' : null })}
+      >
         {person && person.photoCount > 0 && (
-          <Tabs.List mb="lg">
+          <Tabs.List mb="lg" aria-label="Person views">
             <Tabs.Tab value="photos">Photos</Tabs.Tab>
             <Tabs.Tab value="faces">Faces ({person.faceCount})</Tabs.Tab>
           </Tabs.List>
@@ -455,6 +471,7 @@ const PersonPage = () => {
                 actions={(item) =>
                   person?.canEdit ? (
                     <PersonFaceActions
+                      single
                       personId={id}
                       auto={item.face.status === 'auto' ? item.face : undefined}
                       candidate={item.face}

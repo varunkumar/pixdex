@@ -25,7 +25,8 @@ The timeline has the same people filter as [Search](search.md).
 - "← All albums" returns to the same page and sort of the list.
 - The owner selects a cover with the "Set as cover" icon on a photo. The current
   cover has a blue "Cover" badge.
-- Each album page has Photos, People and Species tabs.
+- Each album page has Photos, People and Species tabs. With a keyboard, use the
+  arrow keys to move between tabs. Press Enter to select one.
 - Select a person, known personality or species to see only those photos. Only one
   filter is active at a time. Remove its chip to clear it.
 - For a person that you created, a link opens all photos of that person.

@@ -484,6 +484,17 @@ describe('PersonPage', () => {
       expect(screen.getByRole('button', { name: 'Best rated' })).toBeInTheDocument();
     });
 
+    it('names the tab list, and arrow keys move focus without selecting', async () => {
+      show();
+      const photos = await screen.findByRole('tab', { name: 'Photos' });
+      expect(screen.getByRole('tablist', { name: 'Person views' })).toBeInTheDocument();
+      photos.focus();
+      fireEvent.keyDown(photos, { key: 'ArrowRight' });
+      const faces = screen.getByRole('tab', { name: 'Faces (3)' });
+      expect(faces).toHaveFocus();
+      expect(faces).toHaveAttribute('aria-selected', 'false');
+    });
+
     it('keeps the page and sort when the tab changes', async () => {
       vi.mocked(workerApiClient.searchPage).mockResolvedValue({ results: [makePhoto({ id: 'p1' })], total: 48 });
       renderWithProviders(<PersonPage />, { route: '/people/pe1?page=2&sort=rating', path: '/people/:id' });
@@ -499,7 +510,8 @@ describe('PersonPage', () => {
       vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
       showFaces();
       await screen.findByTestId('face-cut');
-      fireEvent.click(await screen.findByRole('button', { name: 'Set as cover: A leopard in a tree.' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Face actions for A leopard in a tree.' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as cover' }));
       await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'f1'));
       expect(screen.getByLabelText('Matched automatically').closest('.pdx-tile-line')).not.toBeNull();
     });
@@ -516,7 +528,7 @@ describe('PersonPage', () => {
       vi.mocked(workerApiClient.reviewAutoFaces).mockResolvedValue({ confirmed: ['f1'], rejected: [] });
       showFaces();
       await screen.findByTestId('face-cut');
-      fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /^face actions/i }));
       fireEvent.click(await screen.findByRole('menuitem', { name: item }));
       await waitFor(check);
     });
@@ -528,7 +540,8 @@ describe('PersonPage', () => {
       ]);
       vi.mocked(workerApiClient.setPersonCover).mockResolvedValue(undefined);
       showFaces();
-      fireEvent.click(await screen.findByRole('button', { name: /^set as cover: .*, face 2$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /^face actions for .*, face 2$/i }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Set as cover' }));
       await waitFor(() => expect(workerApiClient.setPersonCover).toHaveBeenCalledWith('pe1', 'small'));
     });
 
@@ -538,7 +551,8 @@ describe('PersonPage', () => {
       showFaces();
       expect((await screen.findByText('Cover')).closest('.pdx-tile-badges')).not.toBeNull();
       expect(screen.getAllByText('Cover')).toHaveLength(1);
-      expect(screen.getAllByRole('button', { name: /^set as cover/i })).toHaveLength(1);
+      // The confirmed cover face has nothing to do, so it has no menu.
+      expect(screen.getAllByRole('button', { name: /^face actions/i })).toHaveLength(1);
     });
 
     it('shows a viewer the faces with no controls or sparkle', async () => {
@@ -547,7 +561,7 @@ describe('PersonPage', () => {
       showFaces();
       expect(await screen.findByTestId('face-cut')).toBeInTheDocument();
       expect(workerApiClient.getPersonFaces).toHaveBeenCalledWith('pe1', ['p1']);
-      expect(screen.queryByRole('button', { name: /^(set as cover|photo actions)/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^(set as cover|face actions)/i })).toBeNull();
       expect(screen.queryByLabelText('Matched automatically')).toBeNull();
       expect(screen.queryByText('Cover')).toBeNull();
     });
@@ -579,7 +593,9 @@ describe('PersonPage', () => {
       );
       vi.mocked(workerApiClient.rejectFace).mockResolvedValue(undefined as never);
       showFaces();
-      fireEvent.click(await screen.findByRole('button', { name: /^photo actions/i }));
+      // The second tile is the automatic match.
+      await waitFor(() => expect(screen.getAllByRole('button', { name: /^face actions/i })).toHaveLength(2));
+      fireEvent.click(screen.getAllByRole('button', { name: /^face actions/i })[1]);
       fireEvent.click(screen.getByRole('menuitem', { name: 'Not Asha' }));
       await waitFor(() => expect(workerApiClient.getPersonFaces).toHaveBeenLastCalledWith('pe1', ['p1']));
       expect(screen.getAllByTestId('face-cut')).toHaveLength(1);
@@ -589,7 +605,7 @@ describe('PersonPage', () => {
     it('offers Try again when the faces fail on the Faces tab', async () => {
       vi.mocked(workerApiClient.getPersonFaces).mockRejectedValue(new Error('boom'));
       showFaces();
-      expect(await screen.findByText('Could not load faces')).toBeInTheDocument();
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not load faces');
       expect(screen.queryByText('No faces on this page.')).toBeNull();
       expect(screen.queryByRole('progressbar', { name: 'Loading faces' })).toBeNull();
       vi.mocked(workerApiClient.getPersonFaces).mockResolvedValue([mine('c1')]);

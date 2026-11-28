@@ -57,25 +57,46 @@ describe('faceItems', () => {
 });
 
 describe('FaceGrid', () => {
-  it('shows the crop as a lazy picture in a link to the photo', () => {
+  it('shows the crop in a link to the photo', () => {
     renderWithProviders(<FaceGrid items={gridOf([face('f1', 'p1', { cropUrl: '/faces/f1/crop' })])} />);
     const link = screen.getByRole('link', { name: /leopard/i });
     expect(link).toHaveAttribute('href', '/photos/p1');
     expect(link.querySelector('img')).toHaveAttribute('src', '/api/faces/f1/crop');
-    expect(link.querySelector('img')).toHaveAttribute('loading', 'lazy');
   });
 
   it('cuts a face without a crop out of the thumbnail', () => {
     renderWithProviders(<FaceGrid items={gridOf([face('f1', 'p1', { bbox: { x: 0.1, y: 0.2, w: 0.5, h: 0.4 } })])} />);
-    const cut = screen.getByTestId('face-cut');
-    expect(cut.style.backgroundImage).toContain('/api/thumbnails/h1');
-    expect(cut.style.backgroundSize).toBe('200% 250%');
-    expect(cut.style.backgroundPosition).toBe('20% 33.333%');
+    const img = screen.getByTestId('face-cut').querySelector('img')!;
+    expect(img).toHaveAttribute('src', '/api/thumbnails/h1');
+    expect(img.style.width).toBe('200%');
+    expect(img.style.height).toBe('250%');
+    expect(img.style.left).toBe('-20%');
+    expect(img.style.top).toBe('-50%');
   });
 
   it('stays finite for a box as large as the photo', () => {
     renderWithProviders(<FaceGrid items={gridOf([face('f1', 'p1', { bbox: { x: 0, y: 0, w: 1, h: 1 } })])} />);
-    expect(screen.getByTestId('face-cut').style.backgroundPosition).toBe('0% 0%');
+    const { width, left, top } = screen.getByTestId('face-cut').querySelector('img')!.style;
+    expect([width, left, top]).toEqual(['100%', '0%', '0%']);
+  });
+
+  it('is a list with one item per face', () => {
+    renderWithProviders(<FaceGrid items={gridOf([face('a', 'p1'), face('b', 'p1', { bbox: box(0.6) })])} />);
+    expect(screen.getByRole('list')).toContainElement(screen.getAllByRole('listitem')[0]);
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it.each([
+    ['crop', { cropUrl: '/faces/f/crop' }],
+    ['cut', {}],
+  ])('loads the first 8 faces at once and the rest lazily (%s)', (_name, extra) => {
+    const faces = Array.from({ length: 10 }, (_, i) => face(`f${i}`, 'p1', { ...extra, bbox: box(i / 20) }));
+    const { container } = renderWithProviders(<FaceGrid items={gridOf(faces)} />);
+    expect([...container.querySelectorAll('img')].map((i) => i.getAttribute('loading'))).toEqual([
+      ...Array(8).fill('eager'),
+      'lazy',
+      'lazy',
+    ]);
   });
 
   it('shows only the date under a small face, and the file caption when there is no date', () => {

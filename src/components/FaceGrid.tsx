@@ -7,33 +7,41 @@ import type { FaceItem } from '../services/faces';
 import { photoCaption } from '../services/text';
 import type { SerializedFace } from '../types/api';
 
-/** CSS percentage that puts a box starting at `start` and `length` long (both 0 to 1) in view. */
-const position = (start: number, length: number) =>
-  length < 1 ? Math.round((start / (1 - length)) * 100_000) / 1000 : 0;
-const scale = (length: number) => (length > 0 ? Math.round(100_000 / length) / 1000 : 100);
+/** A percentage of the tile, rounded to three places. */
+const percent = (value: number) => Math.round(value * 100_000) / 1000;
 
-/** The sharp crop when the face has one, else the face cut out of the photo thumbnail by its bbox, at any tile size. */
-const FacePicture = ({ face, label }: { face: SerializedFace; label: string }) => {
+/** About the first rows of a page: these load at once, the others lazily. */
+const EAGER_FACES = 8;
+
+/** The sharp crop when the face has one, else the photo thumbnail enlarged and moved so the bbox fills the tile. */
+const FacePicture = ({ face, label, eager }: { face: SerializedFace; label: string; eager: boolean }) => {
+  const loading = eager ? 'eager' : 'lazy';
   if (face.cropUrl)
     return (
       <img
         src={workerApiClient.thumbnailUrl({ thumbnailUrl: face.cropUrl })}
         alt={label}
-        loading="lazy"
+        loading={loading}
         className="pdx-tile-img"
       />
     );
   const { x, y, w, h } = face.bbox;
+  const width = w > 0 ? 1 / w : 1;
+  const height = h > 0 ? 1 / h : 1;
   return (
-    <div
-      className="pdx-face-cut"
-      data-testid="face-cut"
-      style={{
-        backgroundImage: `url("${workerApiClient.thumbnailUrl(face)}")`,
-        backgroundSize: `${scale(w)}% ${scale(h)}%`,
-        backgroundPosition: `${position(x, w)}% ${position(y, h)}%`,
-      }}
-    />
+    <div className="pdx-face-cut" data-testid="face-cut">
+      <img
+        src={workerApiClient.thumbnailUrl(face)}
+        alt={label}
+        loading={loading}
+        style={{
+          width: `${percent(width)}%`,
+          height: `${percent(height)}%`,
+          left: `${percent(-x * width)}%`,
+          top: `${percent(-y * height)}%`,
+        }}
+      />
+    </div>
   );
 };
 
@@ -49,18 +57,20 @@ interface FaceGridProps {
 
 /** Small square face tiles, sized like the "Review auto matches" grid, with the photo tile's overlay, caption line and control places (see `PhotoTile`). */
 const FaceGrid = ({ items, badges, mark, actions }: FaceGridProps) => (
-  <div className="pdx-faces">
-    {items.map((item) => {
+  <div className="pdx-faces-wrap">
+    {/* Safari drops the list meaning of a list that is a grid, so the role is explicit. */}
+    <ul className="pdx-faces" role="list">
+    {items.map((item, index) => {
       const { face, photo, label } = item;
       const date = formatPhotoDate(photo.dateTime);
       const marker = mark?.(item);
       const badge = badges?.(item);
       const controls = actions?.(item);
       return (
-        <div className="pdx-tile-item" key={face.id}>
+        <li className="pdx-tile-item" key={face.id}>
           <div className="pdx-tile pdx-face">
             <Link to={`/photos/${photo.id}`} className="pdx-tile-link" aria-label={date ? `${label}, ${date}` : label}>
-              <FacePicture face={face} label={label} />
+              <FacePicture face={face} label={label} eager={index < EAGER_FACES} />
             </Link>
             <div className="pdx-tile-overlay">
               <div className="pdx-tile-info">
@@ -79,9 +89,10 @@ const FaceGrid = ({ items, badges, mark, actions }: FaceGridProps) => (
             {/* A small tile has room for one short thing; the caption is in the link's name. */}
             <span>{date || photoCaption(photo)}</span>
           </div>
-        </div>
+        </li>
       );
     })}
+    </ul>
   </div>
 );
 
