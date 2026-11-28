@@ -86,6 +86,24 @@ describe('FaceGrid', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
+  it('gives each face its share of its row once the width is known', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+    const faces = Array.from({ length: 11 }, (_, i) => face(`f${i}`, 'p1', { bbox: box(i / 20) }));
+    renderWithProviders(<FaceGrid items={gridOf(faces)} />);
+    // 11 faces: a row of 6 and a row of 5, each as wide as the grid.
+    const widths = screen.getAllByRole('listitem').map((li) => li.style.getPropertyValue('--pdx-per-row'));
+    expect(widths).toEqual([...Array(6).fill('6'), ...Array(5).fill('5')]);
+    expect(screen.getByRole('list')).toHaveAttribute('data-rows', 'true');
+    width.mockRestore();
+  });
+
+  it('caps the face size only when all faces share one row', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
+    renderWithProviders(<FaceGrid items={gridOf([face('a', 'p1'), face('b', 'p1', { bbox: box(0.6) })])} />);
+    expect(screen.getByRole('list')).toHaveAttribute('data-single', 'true');
+    width.mockRestore();
+  });
+
   it.each([
     ['crop', { cropUrl: '/faces/f/crop' }],
     ['cut', {}],
