@@ -170,9 +170,15 @@ const AlbumPhotos = () => {
         </Group>
       </Group>
       {contentsError && <Text c="dimmed">Could not load people and species.</Text>}
-      <Tabs value={tab} keepMounted={false} onChange={(v) => update({ tab: v === 'photos' ? null : v })}>
+      {/* A tab change adds a history entry, so arrow keys only move focus; Enter or Space selects. */}
+      <Tabs
+        value={tab}
+        keepMounted={false}
+        activateTabWithKeyboard={false}
+        onChange={(v) => update({ tab: v === 'photos' ? null : v })}
+      >
         {(peopleCount > 0 || species.length > 0) && (
-          <Tabs.List mb="lg">
+          <Tabs.List mb="lg" aria-label="Album views">
             <Tabs.Tab value="photos">Photos</Tabs.Tab>
             {peopleCount > 0 && <Tabs.Tab value="people">People ({peopleCount})</Tabs.Tab>}
             {species.length > 0 && <Tabs.Tab value="species">Species ({species.length})</Tabs.Tab>}

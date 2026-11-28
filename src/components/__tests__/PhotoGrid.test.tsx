@@ -45,6 +45,18 @@ describe('PhotoGrid', () => {
     expect(screen.getAllByText('Goa').length).toBeGreaterThanOrEqual(3);
   });
 
+  it('loads the top tile of each column at once and the rest lazily', () => {
+    const many = Array.from({ length: 12 }, (_, i) => makePhoto({ id: `m${i}`, width: 1200, height: 800 }));
+    renderWithProviders(<PhotoGrid photos={many} />);
+    const columns = screen.getAllByTestId('masonry-column');
+    expect(columns.length).toBeGreaterThan(0);
+    for (const column of columns) {
+      const [top, ...rest] = [...column.querySelectorAll('img')].map((i) => i.getAttribute('loading'));
+      expect(top).toBe('eager');
+      expect(rest.every((l) => l === 'lazy')).toBe(true);
+    }
+  });
+
   it('calls badges per photo', () => {
     renderWithProviders(<PhotoGrid photos={photos} badges={(p) => <span>badge-{p.id}</span>} />);
     expect(screen.getByText('badge-a')).toBeInTheDocument();

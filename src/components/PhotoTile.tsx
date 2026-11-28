@@ -19,6 +19,8 @@ interface PhotoTileProps {
   actions?: ReactNode;
   /** The shape to lay the tile out in; defaults to the photo's stored size. */
   ratio?: number;
+  /** Load the thumbnail at once: for a tile in the first row, which is on screen when the page opens. */
+  eager?: boolean;
   /** Called with the thumbnail's real size once it has loaded. */
   onThumbnailSize?: (width: number, height: number) => void;
   /** Extra one-line explanation (AI results), shown in the overlay and replacing the caption line tail. */
@@ -32,7 +34,7 @@ interface PhotoTileProps {
  * its date on one line and a single row of tags (or the AI note) at the bottom; touch devices get one caption line
  * under the image. Both are always in the DOM, CSS (`@media (hover: ...)`) picks which one is visible.
  */
-const PhotoTile = ({ photo, badges, mark, actions, ratio, onThumbnailSize, note, showAlbum = false }: PhotoTileProps) => {
+const PhotoTile = ({ photo, badges, mark, actions, ratio, eager = false, onThumbnailSize, note, showAlbum = false }: PhotoTileProps) => {
   const caption = photoCaption(photo);
   const date = formatPhotoDate(photo.dateTime);
   const album = showAlbum ? photo.album : null;
@@ -46,7 +48,7 @@ const PhotoTile = ({ photo, badges, mark, actions, ratio, onThumbnailSize, note,
           <img
             src={workerApiClient.thumbnailUrl(photo)}
             alt={caption}
-            loading="lazy"
+            loading={eager ? 'eager' : 'lazy'}
             className="pdx-tile-img"
             onLoad={(e) => onThumbnailSize?.(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight)}
           />

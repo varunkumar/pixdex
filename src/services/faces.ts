@@ -1,4 +1,5 @@
-import type { SerializedFace } from '../types/api';
+import type { SerializedFace, SerializedPhoto } from '../types/api';
+import { photoCaption } from './text';
 
 // Mirrors MIN_DET_SCORE and MIN_FACE_SIDE in worker/src/people/matching.ts: smaller or less certain faces never
 // appear in the People page's unnamed groups and are never matched to anyone.
@@ -31,4 +32,22 @@ export function splitFaces(faces: SerializedFace[], canEdit: boolean, open: Open
   }
   const shown = [...listed, ...(open.other ? other : []), ...(open.ignored ? ignored : [])];
   return { other, ignored, shown };
+}
+
+export interface FaceItem {
+  face: SerializedFace;
+  photo: SerializedPhoto;
+  /** The photo's caption, numbered when the photo has more than one face here, so each control has its own name. */
+  label: string;
+}
+
+/** This person's confirmed and auto faces, in photo order, then left to right. */
+export function faceItems(faces: SerializedFace[], photos: SerializedPhoto[], personId: string): FaceItem[] {
+  return photos.flatMap((photo) => {
+    const mine = faces
+      .filter((f) => f.photoId === photo.id && f.personId === personId && f.status !== 'unassigned')
+      .sort((a, b) => a.bbox.x - b.bbox.x || a.id.localeCompare(b.id));
+    const caption = photoCaption(photo);
+    return mine.map((face, i) => ({ face, photo, label: mine.length > 1 ? `${caption}, face ${i + 1}` : caption }));
+  });
 }

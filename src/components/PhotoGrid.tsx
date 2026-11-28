@@ -39,9 +39,10 @@ const PhotoGrid = ({ photos, badges, mark, actions, note, showAlbum }: PhotoGrid
       ratioOf={shapeOf}
       keyOf={(photo) => photo.id}
       columns={columns}
-      renderItem={(photo) => (
+      renderItem={(photo, top) => (
         <PhotoTile
           photo={photo}
+          eager={top}
           ratio={shapeOf(photo)}
           onThumbnailSize={learnShape(photo)}
           badges={badges?.(photo)}

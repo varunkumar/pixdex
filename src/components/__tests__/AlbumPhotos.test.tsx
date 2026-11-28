@@ -92,6 +92,17 @@ describe('AlbumPhotos tabs', () => {
     expect(workerApiClient.getAlbumContents).toHaveBeenCalledWith('Kanha');
   });
 
+  it('names the tab list, and arrow keys move focus without selecting', async () => {
+    renderAlbum();
+    await screen.findByRole('tab', { name: /People/ });
+    expect(screen.getByRole('tablist', { name: 'Album views' })).toBeInTheDocument();
+    const photos = screen.getByRole('tab', { name: /Photos/ });
+    photos.focus();
+    fireEvent.keyDown(photos, { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: /People/ })).toHaveFocus();
+    expect(photos).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('hides both tabs for empty contents', async () => {
     vi.mocked(workerApiClient.getAlbumContents).mockResolvedValue({ people: [], known: [], species: [] });
     renderAlbum();

@@ -5,7 +5,8 @@ interface MasonryGridProps<T> {
   items: T[];
   ratioOf: (item: T) => number;
   keyOf: (item: T) => string;
-  renderItem: (item: T) => ReactNode;
+  /** `top` is true for the first tile of each column (the first row). */
+  renderItem: (item: T, top: boolean) => ReactNode;
   columns: number;
 }
 
@@ -35,9 +36,9 @@ function MasonryGrid<T>({ items, ratioOf, keyOf, renderItem, columns }: MasonryG
     <div className="pdx-masonry" data-flush={plan.flush} style={{ '--cols': columns } as CSSProperties}>
       {assignment.map((indexes, c) => (
         <div key={c} className="pdx-masonry-col" data-testid="masonry-column" style={columnStyle(c)}>
-          {indexes.map((i) => (
+          {indexes.map((i, row) => (
             <div key={keyOf(items[i])} style={{ flexGrow: plan.flush ? 1 / ratios[i] / tileTotal(indexes) : 0 }}>
-              {renderItem(items[i])}
+              {renderItem(items[i], row === 0)}
             </div>
           ))}
         </div>

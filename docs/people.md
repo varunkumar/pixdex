@@ -11,6 +11,12 @@ photo" shows numbered boxes. Lists are in alphabetical order.
   tab open until the progress card goes away.
 - The index process also matches new faces to named people.
 - A person page sorts photos by date, rating or name.
+- The "Faces" tab shows only the faces of that person. A click on a face opens its
+  photo. The two tabs use the same sort order and pages.
+- A page shows the faces on 12, 24 or 48 photos.
+- The person's owner can set a cover, confirm or reject a face from the menu on its
+  tile. Other viewers can only look.
+- With a keyboard, use the arrow keys to move between tabs. Press Enter to select one.
 - The "Set as cover" icon on a photo selects a person's picture. The current cover
   has a blue "Cover" badge.
 - If you remove the cover face, the default returns (the largest confirmed face).
