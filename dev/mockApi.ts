@@ -455,6 +455,10 @@ const INSIGHTS: Record<string, Fact[]> = {
     { id: 'together', data: { pairs: [{ a: { id: 'own-asha', name: 'Asha Rao' }, b: { id: 'own-ravi', name: 'Ravi Menon' }, photos: 18 }, { a: { id: 'own-asha', name: 'Asha Rao' }, b: { id: 'own-meera', name: 'Meera Iyer' }, photos: 12 }] } },
     { id: 'missed', data: { person: { id: 'own-meera', name: 'Meera Iyer' }, lastDate: '2024-08-02', photos: 22 } },
   ],
+  places: [
+    { id: 'travel', data: { km: 1380, place: 'Demo Harbor, IN', date: '2019-05-02', gpsPhotos: 66 } },
+    { id: 'places', data: { year: 2025, newCount: 3, top: [{ place: 'Demo Town, IN', days: 31, photos: 200 }, { place: 'Demo Hills, IN', days: 9, photos: 48 }, { place: 'Demo Lake, IN', days: 5, photos: 20 }], gpsPhotos: 66 } },
+  ],
 };
 
 /** Two invented earlier years made of library photos, dated around `date`. */

@@ -270,7 +270,11 @@ export type PeopleFact =
   | { id: 'together'; data: { pairs: { a: FactPerson; b: FactPerson; photos: number }[] } }
   | { id: 'missed'; data: { person: FactPerson; lastDate: string; photos: number } };
 
-export type Fact = TimeFact | GearFact | WildlifeFact | PeopleFact;
+export type PlacesFact =
+  | { id: 'travel'; data: { km: number; place: string | null; date: string; gpsPhotos: number } }
+  | { id: 'places'; data: { year: number; newCount: number; top: { place: string; days: number; photos: number }[]; gpsPhotos: number } };
+
+export type Fact = TimeFact | GearFact | WildlifeFact | PeopleFact | PlacesFact;
 
 export interface InsightsResponse {
   day: string;

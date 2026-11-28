@@ -38,7 +38,11 @@ export type PeopleFact =
   | { id: 'together'; data: { pairs: { a: string; b: string; photos: number }[] } }
   | { id: 'missed'; data: { person: string; lastDate: string; photos: number } };
 
+export type PlacesFact =
+  | { id: 'travel'; data: { km: number; place: string | null; date: string; gpsPhotos: number } }
+  | { id: 'places'; data: { year: number; newCount: number; top: { place: string; days: number; photos: number }[]; gpsPhotos: number } };
+
 /** One dashboard fact: `id` names it, `data` is typed per id. The frontend writes all text. */
-export type Fact = TimeFact | GearFact | WildlifeFact | PeopleFact;
+export type Fact = TimeFact | GearFact | WildlifeFact | PeopleFact | PlacesFact;
 
 export type TopicBuilder = (db: D1Database, email: string, today: string) => Promise<Fact[]>;

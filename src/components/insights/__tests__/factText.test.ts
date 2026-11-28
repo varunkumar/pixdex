@@ -65,6 +65,14 @@ const CASES: [Fact, { topic: string; label: string; value: string; headline: str
     { id: 'missed', data: { person: { id: 'm', name: 'Meera' }, lastDate: '2024-08-02', photos: 40 } },
     { topic: 'people', label: 'Missed', value: '2 yr', headline: 'No photo of Meera for 2 years', note: 'Last seen August 2024, in your indexed photos' },
   ],
+  [
+    { id: 'travel', data: { km: 13400, place: 'Newark, US', date: '2019-05-02', gpsPhotos: 1684 } },
+    { topic: 'places', label: 'Travel', value: '13,400 km', headline: 'Your farthest photo: 13,400 km', note: 'Near Newark, US, 2 May 2019. From your usual spot. Only photos with GPS.' },
+  ],
+  [
+    { id: 'places', data: { year: 2026, newCount: 3, top: [{ place: 'Mysuru, IN', days: 31, photos: 200 }], gpsPhotos: 1684 } },
+    { topic: 'places', label: 'Places', value: '3 new', headline: '3 new places in 2026', note: 'Days with photos. Only photos with GPS.' },
+  ],
 ];
 
 describe('describeFact', () => {

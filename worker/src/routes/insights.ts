@@ -6,11 +6,12 @@ import { cached, indiaDate, ownedSql } from '../insights/common';
 import { onThisDayIds } from '../insights/onThisDay';
 import { hydrateFacts, peopleFacts } from '../insights/people';
 import { gearFacts } from '../insights/gear';
+import { placesFacts } from '../insights/places';
 import { timeFacts } from '../insights/time';
 import { wildlifeFacts } from '../insights/wildlife';
 import type { Topic, TopicBuilder } from '../insights/types';
 
-const BUILDERS: Partial<Record<Topic, TopicBuilder>> = { time: timeFacts, gear: gearFacts, wildlife: wildlifeFacts, people: peopleFacts };
+const BUILDERS: Record<Topic, TopicBuilder> = { time: timeFacts, gear: gearFacts, wildlife: wildlifeFacts, people: peopleFacts, places: placesFacts };
 
 /** How far the browser's date may be from the India date (time zones, and a page left open over midnight). */
 const MAX_DATE_DRIFT_DAYS = 2;

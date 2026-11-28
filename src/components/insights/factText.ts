@@ -183,5 +183,23 @@ export function describeFact(fact: Fact): FactText {
         note: `Last seen ${seen}, in your indexed photos`, chart: null,
       };
     }
+    case 'travel': {
+      const { km, place, date: day } = fact.data;
+      const near = place ? `Near ${place}, ${date(day)}. ` : '';
+      return {
+        topic: 'places', label: 'Travel', value: `${num(km)} km`, headline: `Your farthest photo: ${num(km)} km`,
+        note: `${near}From your usual spot. Only photos with GPS.`, chart: null,
+      };
+    }
+    case 'places': {
+      const { year, newCount, top } = fact.data;
+      const most = Math.max(...top.map((p) => p.days), 1);
+      return {
+        topic: 'places', label: 'Places', value: `${num(newCount)} new`,
+        headline: `${num(newCount)} new ${newCount === 1 ? 'place' : 'places'} in ${year}`,
+        note: 'Days with photos. Only photos with GPS.',
+        chart: { type: 'bars', rows: top.map((p) => ({ label: `Near ${p.place}`, value: share(p.days, most), text: `${num(p.days)} d` })) },
+      };
+    }
   }
 }

@@ -48,6 +48,10 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
   ignored ones. The cache holds person ids. `hydrateFacts` resolves names with `PERSON_NAME_SQL` on each read and
   drops deleted people. `TOGETHER_SQL` finds the second face through `idx_faces_photo_id` (plan pinned).
 
+- `places` (`insights/places.ts`, 2 statements): `travel` (100 photos with GPS; from the 0.1 degree cell with the most
+  days to the farthest cell), `places` (20 photos with a place; places new in the current year, else the year before;
+  top 3 by days). Dated photos only. GPS 0,0 is skipped. Place names come from the agent (`photos.place`).
+
 ## Cost
 
 - Cached request: one cache row, plus the hydrated photos by primary key.
