@@ -44,6 +44,7 @@ const ALLOWED_PATHS = [
   /^albums$/,
   /^albums\/contents$/,
   /^daily-pick$/,
+  /^insights\/[^/]+$/,
   /^photos\/[^/]+$/,
   /^thumbnails\/[^/]+$/,
   /^people$/,

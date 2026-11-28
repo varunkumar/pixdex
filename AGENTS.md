@@ -36,6 +36,7 @@ touches two areas, read both.
 | [known](docs/agents/known.md) | Known personalities: gallery, agent commands, Worker routes, `known=` |
 | [indexing](docs/agents/indexing.md) | Agent indexing, Google Drive, originals server, thumbnails, logs |
 | [species](docs/agents/species.md) | Species sidecar, backfill, species ingest and search text |
+| [insights](docs/agents/insights.md) | Dashboard facts, "On this day", `/insights/*`, their cache and camera time |
 
 ## Commands
 

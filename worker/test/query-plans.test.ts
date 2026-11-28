@@ -11,6 +11,8 @@ import { IGNORE_FACES_SQL, personPhotoFacesSql, RESTORE_FACES_SQL } from '../src
 import { CHOOSE_REFERENCES_SQL, DROP_REFERENCES_SQL } from '../src/people/referenceSelection';
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
+import { ON_THIS_DAY_SQL } from '../src/insights/onThisDay';
+
 const U = { email: 'owner@example.com' };
 
 async function plan(sql: string, ...params: unknown[]): Promise<string> {
@@ -279,6 +281,13 @@ describe('person label resolution', () => {
     const sp = await plan(SPECIES_SQL(sc.sql), 'Kanha', ...sc.params);
     expect(sp).toMatch(/SEARCH ph USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\?\)/);
     expect(sp).not.toMatch(/SCAN (ph|photos)\b/);
+  });
+});
+
+describe('insight query plans', () => {
+  it('On this day searches the date index once for each year window', async () => {
+    const p = await plan(ON_THIS_DAY_SQL, '[]', U.email);
+    expect(p).toMatch(/SEARCH photos USING INDEX idx_photos_date_time \(date_time>\? AND date_time<\?\)/);
   });
 });
 

@@ -74,6 +74,7 @@ Notes:
   merge: no backfill, no Time Travel bookmark needed. From then on a non-owner no longer receives the owner's person names.
 - Migration `0022_album_framing.sql` (the nullable `albums.cover_framing` column) is additive and auto-applies on merge. See
   "After deploying the browser-stored album hero" below.
+- Migration `0024_insights_cache.sql` (the empty `insights_cache` table) is additive and auto-applies on merge.
 - The agent is not deployed; it runs on your Mac.
 
 ### After deploying the browser-stored album hero

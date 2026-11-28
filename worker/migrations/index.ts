@@ -251,6 +251,8 @@ BEGIN SELECT RAISE(ABORT, 'emails on access_requests must be lowercase'); END;`,
   // Mirrors 0023_person_references.sql (its backfill is PERSON_REFERENCES_BACKFILL_SQL).
   'CREATE TABLE IF NOT EXISTS person_references (person_id TEXT NOT NULL, face_id TEXT NOT NULL, PRIMARY KEY (person_id, face_id)) WITHOUT ROWID;',
   'CREATE INDEX IF NOT EXISTS idx_person_references_face ON person_references (face_id);',
+  // Mirrors 0024_insights_cache.sql.
+  'CREATE TABLE IF NOT EXISTS insights_cache (email TEXT NOT NULL, topic TEXT NOT NULL, day TEXT NOT NULL, version INTEGER NOT NULL, data TEXT NOT NULL, computed_at TEXT NOT NULL, PRIMARY KEY (email, topic)) WITHOUT ROWID;',
 ];
 
 export const PHOTOS_MIGRATION_STATEMENTS = [...BASE_MIGRATION_STATEMENTS, ...EXIF_MIGRATION_STATEMENTS];

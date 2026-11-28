@@ -36,6 +36,7 @@ import {
 import { searchRoute } from './routes/search';
 import { bucketsRoute, timelineRoute } from './routes/timeline';
 import { dailyPickRoute } from './routes/daily-pick';
+import { insightsRoute, onThisDayRoute } from './routes/insights';
 import { accessPhotoRoute, meRoute, putAlbumSharesRoute } from './routes/shares';
 import { putAlbumFramingRoute } from './routes/framing';
 import type { Env } from './types';
@@ -155,5 +156,10 @@ guardedWrite('POST', '/admin/requests/:id/revoke', revokeRoute);
 
 app.use('/daily-pick', requireReadToken);
 app.get('/daily-pick', dailyPickRoute);
+
+app.use('/insights/*', requireReadToken);
+// The static path first: :topic would take it otherwise. Both GETs write only the caller's own cache row.
+app.get('/insights/on-this-day', onThisDayRoute);
+app.get('/insights/:topic', insightsRoute);
 
 export default app;
