@@ -218,6 +218,16 @@ Rules learned from that:
   Filtered searches still `COUNT(*)`. `idx_photos_last_indexed` serves the unfiltered newest-first list.
 - The frontend keeps list data fresh for two minutes (`staleTime`), mutations invalidate what they change.
 
+### Dashboard insights cost
+
+See "Cost" in [the insights notes](agents/insights.md) for local numbers. After a release, measure production:
+
+```bash
+cd worker
+npx wrangler tail pixdex-worker --format json      # open the dashboard; read cpuTime of each /insights/ request
+npx wrangler d1 insights pixdex --timePeriod 1d    # rows read of the insight statements
+```
+
 ## Keeping docs current
 
 After every feature or change, in the same commit or PR, update:

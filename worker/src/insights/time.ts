@@ -6,21 +6,28 @@ const MIN_SHOOTING_DAYS = 10;
 const MIN_YEAR_PHOTOS = 100;
 const MIN_SHIFT_YEARS = 4;
 
-const MONTHS_SQL = `${datedCte('id')}
-SELECT CAST(strftime('%Y', t) AS INTEGER) AS y, CAST(strftime('%m', t) AS INTEGER) AS m, COUNT(*) AS n FROM d GROUP BY y, m ORDER BY y, m`;
-
-const WEEKDAYS_SQL = `${datedCte('id')} SELECT CAST(strftime('%w', t) AS INTEGER) AS w, COUNT(*) AS n FROM d GROUP BY w`;
-
-// MATERIALIZED: both result rows read the same days, so the photos are read once.
-const RECORDS_SQL = `${datedCte('id')},
-days AS MATERIALIZED (SELECT date(t) AS day, COUNT(*) AS n FROM d GROUP BY day),
-gaps AS MATERIALIZED (SELECT day, n, LAG(day) OVER (ORDER BY day) AS prev, COUNT(*) OVER () AS total FROM days)
-SELECT * FROM (SELECT 'busiest' AS kind, day, n, NULL AS prev, total FROM gaps ORDER BY n DESC, day DESC LIMIT 1)
-UNION ALL
-SELECT * FROM (SELECT 'gap', day, CAST(julianday(day) - julianday(prev) AS INTEGER), prev, total FROM gaps WHERE prev IS NOT NULL ORDER BY 3 DESC, day DESC LIMIT 1)`;
+/**
+ * One row holding `[[day, photos], ...]`. Every time fact comes from the shooting days, so the photos are read
+ * once; separate statements for the records read about six times as many rows.
+ */
+const DAYS_SQL = `${datedCte('id')}
+SELECT json_group_array(json_array(day, n)) AS days FROM (SELECT date(t) AS day, COUNT(*) AS n FROM d GROUP BY day)`;
 
 type MonthRow = { y: number; m: number; n: number };
-type RecordRow = { kind: 'busiest' | 'gap'; day: string; n: number; prev: string | null; total: number };
+type Day = [day: string, photos: number];
+
+/** The day with the most photos, and the longest step between two shooting days (a later day wins a tie). */
+function records(days: Day[]): Fact[] {
+  if (days.length < MIN_SHOOTING_DAYS) return [];
+  let busiest = days[0];
+  let gap = { days: 0, from: '', to: '' };
+  for (let i = 1; i < days.length; i++) {
+    if (days[i][1] >= busiest[1]) busiest = days[i];
+    const apart = (Date.parse(days[i][0]) - Date.parse(days[i - 1][0])) / 86_400_000;
+    if (apart >= gap.days) gap = { days: apart, from: days[i - 1][0], to: days[i][0] };
+  }
+  return [{ id: 'records', data: { busiest: { date: busiest[0], count: busiest[1] }, gap } }];
+}
 
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
 
@@ -46,29 +53,26 @@ function shift(rows: MonthRow[]): Fact[] {
   return older.month === newer.month ? [] : [{ id: 'shifts', data: { older, newer } }];
 }
 
-/** Three passes over the owner's photos; the Worker handles at most a few hundred grouped rows. */
+/** One pass over the owner's photos; the Worker walks the shooting days (a few thousand at most). */
 export const timeFacts: TopicBuilder = async (db, email, today) => {
-  const [months, weekdays, records] = await Promise.all([
-    db.prepare(MONTHS_SQL).bind(email, today).all<MonthRow>(),
-    db.prepare(WEEKDAYS_SQL).bind(email, today).all<{ w: number; n: number }>(),
-    db.prepare(RECORDS_SQL).bind(email, today).all<RecordRow>(),
-  ]);
+  const row = await db.prepare(DAYS_SQL).bind(email, today).first<{ days: string }>();
+  const days = (JSON.parse(row?.days ?? '[]') as Day[]).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  const months: MonthRow[] = [];
+  const week = new Array<number>(7).fill(0);
+  for (const [day, n] of days) {
+    const date = new Date(day);
+    const [y, m] = [date.getUTCFullYear(), date.getUTCMonth() + 1];
+    week[date.getUTCDay()] += n;
+    const last = months[months.length - 1];
+    if (last?.y === y && last.m === m) last.n += n;
+    else months.push({ y, m, n });
+  }
   const facts: Fact[] = [];
-  const counts = monthCounts(months.results);
+  const counts = monthCounts(months);
   const total = sum(counts);
   if (total >= MIN_DATED) {
-    const week = new Array<number>(7).fill(0);
-    for (const r of weekdays.results) week[r.w] = r.n;
     facts.push({ id: 'top-month', data: { counts, total } }, { id: 'top-weekday', data: { counts: week, total } });
   }
-  const busiest = records.results.find((r) => r.kind === 'busiest');
-  const gap = records.results.find((r) => r.kind === 'gap');
-  if (busiest && gap && busiest.total >= MIN_SHOOTING_DAYS) {
-    facts.push({
-      id: 'records',
-      data: { busiest: { date: busiest.day, count: busiest.n }, gap: { days: gap.n, from: gap.prev!, to: gap.day } },
-    });
-  }
-  facts.push(...shift(months.results));
+  facts.push(...records(days), ...shift(months));
   return facts;
 };

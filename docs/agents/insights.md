@@ -31,7 +31,7 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
 
 A fact below its minimum is not returned. Definitions and minimums are in the code of each builder.
 
-- `time` (`insights/time.ts`, 3 statements): `top-month`, `top-weekday` (100 dated photos), `records` (10 shooting
+- `time` (`insights/time.ts`, 1 statement that returns the shooting days): `top-month`, `top-weekday` (100 dated photos), `records` (10 shooting
   days), `shifts` (4 years of 100 photos; the newer half takes the extra year; absent when the peak month is equal).
 
 - `gear` (`insights/gear.ts`, 5 statements): `top-lens` (20 hits), `hit-rate` (2 lenses of 50, top 4), `recipe`
@@ -54,5 +54,12 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
 
 ## Cost
 
-- Cached request: one cache row, plus the hydrated photos by primary key.
+- Measured on local D1 (`worker/test/insights-cost.test.ts`, 2,000 photos, 500 faces): the first visit of a day reads
+  50,015 rows, 25 for each photo. That is about 390,000 rows for 15,700 photos. The limit is 38 for each photo.
+- A cached full visit reads 265 rows for 77 shown photos.
+- First visit writes: 6 cache rows.
+- `burst` is the most costly statement (6 rows for each photo, because of its window function).
+- Do not split the time statement again: three statements read 36 rows for each photo, one reads 2.
 - On this day, first request of a date: only the photos inside the windows, plus one owner lookup, one upsert.
+- Worker CPU is not measured. Time walks the shooting days (a few thousand at most). All other topics handle grouped
+  rows. Check `cpuTime` with `wrangler tail`.
