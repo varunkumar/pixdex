@@ -57,3 +57,6 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   `POST /ingest/photo` takes an optional `place`; absent keeps it only while the GPS position is the same.
   `POST /ingest/exif` clears it when the position changes. Performance: one full `pending` pass reads each photo row
   once; each stored place is one row write plus the FTS rewrite of that photo.
+  Agent: `places/gazetteer.ts` reads `agent/.index-state/geonames/cities500.txt` (or `GEONAMES_FILE`), 50 km at most.
+  `processFile` sends `place` only when the list is loaded and the photo has GPS. `backfill-places [--dry-run]`
+  (`backfillPlaces.ts`) is driven by D1 and opens no photo file.

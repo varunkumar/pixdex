@@ -58,6 +58,8 @@ export interface IngestPhotoPayload {
   /** Species found by the species model; absent keeps what the photo already has. An empty list means scanned, nothing found. */
   species?: SpeciesEntry[];
   speciesModel?: string;
+  /** "Town, CC", or '' when none is near; absent keeps the stored one while the GPS position is the same. */
+  place?: string;
 }
 
 /** One animal found in a photo. box is [x0, y0, x1, y1] as fractions of the image. */
@@ -153,6 +155,35 @@ export class CloudflareClient {
   }
 
   /** One page (at most 100) of indexed photos, local or Google Drive, not yet species-scanned with this model. */
+  /** Photos with a GPS position and no place yet, paged by cursor. */
+  async placesPending(
+    cursor: number,
+    limit: number
+  ): Promise<{ items: { contentHash: string; latitude: number; longitude: number }[]; nextCursor: number | null }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/places/pending`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ cursor, limit }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/places/pending failed: ${response.status}`);
+    }
+    return (await response.json()) as { items: { contentHash: string; latitude: number; longitude: number }[]; nextCursor: number | null };
+  }
+
+  /** Sets the place of up to 100 indexed photos. */
+  async ingestPlaces(photos: { contentHash: string; place: string }[]): Promise<{ updated: number; unknown: number }> {
+    const response = await this.fetchFn(`${this.config.CLOUDFLARE_API_BASE_URL}/ingest/places`, {
+      method: 'POST',
+      headers: this.authHeaders('application/json'),
+      body: JSON.stringify({ photos }),
+    });
+    if (!response.ok) {
+      throw new Error(`ingest/places failed: ${response.status}`);
+    }
+    return (await response.json()) as { updated: number; unknown: number };
+  }
+
   async speciesPending(
     model: string,
     opts: { cursor?: number; album?: string; limit?: number } = {}

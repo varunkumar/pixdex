@@ -1,3 +1,4 @@
+import type { Gazetteer } from '../places/gazetteer';
 import { rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -37,6 +38,7 @@ export interface IndexGoogleDriveFolderDeps {
   faceSidecar?: FaceSidecarClient;
   species?: SpeciesDeps;
   knownGallery?: Gallery;
+  gazetteer?: Gazetteer;
   onProgress?: (message: string) => void;
   /** Structured per-file outcome, for callers that track progress durably. */
   onFile?: (event: IndexFileEvent) => void;
@@ -85,7 +87,7 @@ export async function indexGoogleDriveFolder(
   folderName: string,
   deps: IndexGoogleDriveFolderDeps
 ): Promise<IndexGoogleDriveFolderResult> {
-  const { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, onProgress, tempDir = defaultStagingDir(), retry } = deps;
+  const { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, gazetteer, onProgress, tempDir = defaultStagingDir(), retry } = deps;
   // Disk use is bounded: one photo is staged at a time and removed right after it is processed
   // (success, skip or failure), a photo bigger than the limit is refused before it is downloaded,
   // and leftovers from a killed earlier run are swept now.
@@ -279,7 +281,7 @@ export async function indexGoogleDriveFolder(
             filename: image.name,
             album: albumFromDrivePath(image.folderPath),
           },
-          { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery }
+          { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, gazetteer }
         );
         indexed++;
         const finishedAt = now();

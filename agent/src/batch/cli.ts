@@ -1,4 +1,5 @@
 import { createSpeciesDeps } from '../speciesCli';
+import { loadGazetteer } from '../places/gazetteer';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AgentConfig } from '../config';
@@ -64,6 +65,7 @@ export async function runIndexBatch(config: AgentConfig, args: string[]): Promis
   const faceSidecar = createFaceSidecar(config);
   const species = await createSpeciesDeps(config);
   const knownGallery = await loadKnownGallery();
+  const gazetteer = await loadGazetteer();
   const stamp = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 
   const stop = () => process.exit(130);
@@ -75,7 +77,7 @@ export async function runIndexBatch(config: AgentConfig, args: string[]): Promis
       { inputs, priority, retryFailed, stateFile: path.join(dir, 'queue.json'), lockFile: path.join(dir, 'batch.lock') },
       {
         indexFolder: (folder, hooks) =>
-          indexLocalFolder(folder, { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, ...hooks }),
+          indexLocalFolder(folder, { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, gazetteer, ...hooks }),
         checkHealth: async () => {
           if (!(await probe(`${config.OLLAMA_BASE_URL}/api/tags`))) return `Ollama is not reachable at ${config.OLLAMA_BASE_URL}`;
           if (!(await probe(`${config.CLOUDFLARE_API_BASE_URL}/health`))) return 'the Worker is not reachable';

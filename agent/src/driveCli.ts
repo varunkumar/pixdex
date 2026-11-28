@@ -1,4 +1,5 @@
 import { createSpeciesDeps } from './speciesCli';
+import { loadGazetteer } from './places/gazetteer';
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
 import {
@@ -146,6 +147,7 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
   const faceSidecar = createFaceSidecar(config);
   const species = await createSpeciesDeps(config);
   const knownGallery = await loadKnownGallery();
+  const gazetteer = await loadGazetteer();
 
   let failedAny = false;
   for (const folder of selected) {
@@ -157,6 +159,7 @@ async function run(config: AgentConfig, deps: RunIndexDriveDeps): Promise<number
       faceSidecar,
       species,
       knownGallery,
+      gazetteer,
       onProgress: (message) => console.log(`${new Date().toISOString()} ${message}`),
       exclude: parsed.exclude,
     });

@@ -1,3 +1,4 @@
+import type { Gazetteer } from './places/gazetteer';
 import path from 'node:path';
 import { isImageFile, scanDirectory } from './scanner';
 import { sha256ContentHash } from './hashing';
@@ -23,6 +24,7 @@ export interface IndexLocalFolderDeps {
   faceSidecar?: FaceSidecarClient;
   species?: SpeciesDeps;
   knownGallery?: Gallery;
+  gazetteer?: Gazetteer;
   onProgress?: (message: string) => void;
   /** Structured per-file outcome, for callers that track progress durably. */
   onFile?: (event: IndexFileEvent) => void;
@@ -55,7 +57,7 @@ export async function indexLocalFolder(
   folder: string,
   deps: IndexLocalFolderDeps
 ): Promise<IndexLocalFolderResult> {
-  const { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, onProgress, onFile } = deps;
+  const { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, gazetteer, onProgress, onFile } = deps;
 
   const allFiles = await scanDirectory(folder);
   const imageFiles = allFiles.filter(isImageFile);
@@ -113,7 +115,7 @@ export async function indexLocalFolder(
           filename: path.basename(file),
           album: albumFromPath(file),
         },
-        { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery }
+        { cloudflareClient, ollamaClient, config, faceSidecar, species, knownGallery, gazetteer }
       );
       indexed++;
       onProgress?.(`Indexed: ${file}`);
