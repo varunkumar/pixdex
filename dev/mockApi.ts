@@ -447,6 +447,10 @@ const INSIGHTS: Record<string, Fact[]> = {
     { id: 'progress', data: { years: [{ year: 2022, photos: 120, hits: 11, camera: 'Demo One' }, { year: 2023, photos: 150, hits: 18, camera: 'Demo One' }, { year: 2025, photos: 300, hits: 63, camera: 'Demo Two' }] } },
     { id: 'cameras', data: { total: 5, cameras: [{ camera: 'Demo Compact', first: '2015-02-01', last: '2018-06-01', photos: 80 }, { camera: 'Demo One', first: '2018-01-01', last: '2024-01-01', photos: 270 }, { camera: 'Demo Two', first: '2024-02-01', last: '2025-12-01', photos: 300 }] } },
   ],
+  wildlife: [
+    { id: 'life-list', data: { total: 84, year: 2025, newInYear: 12, once: 19, byYear: [{ year: 2021, total: 22 }, { year: 2022, total: 40 }, { year: 2023, total: 55 }, { year: 2024, total: 72 }, { year: 2025, total: 84 }] } },
+    { id: 'best-chance', data: { species: 'Sandpiper', photos: 41, month: 3, slot: 6, slots: [{ slot: 6, photos: 12 }, { slot: 8, photos: 7 }, { slot: 16, photos: 4 }] } },
+  ],
 };
 
 /** Two invented earlier years made of library photos, dated around `date`. */

@@ -49,6 +49,14 @@ const CASES: [Fact, { topic: string; label: string; value: string; headline: str
     { id: 'cameras', data: { total: 38, cameras: [{ camera: 'One', first: '2005-01-01', last: '2010-01-01', photos: 30 }, { camera: 'Two', first: '2010-01-01', last: '2025-01-01', photos: 40 }] } },
     { topic: 'gear', label: 'Camera eras', value: '38', headline: '38 cameras', note: 'First to last use, top 2 shown' },
   ],
+  [
+    { id: 'life-list', data: { total: 84, year: 2025, newInYear: 12, once: 19, byYear: [{ year: 2024, total: 72 }, { year: 2025, total: 84 }] } },
+    { topic: 'wildlife', label: 'Life list', value: '84', headline: '84 species, 12 new in 2025', note: '19 species seen only once' },
+  ],
+  [
+    { id: 'best-chance', data: { species: 'Tiger', photos: 41, month: 3, slot: 6, slots: [{ slot: 6, photos: 20 }] } },
+    { topic: 'wildlife', label: 'Best chance', value: 'Mar', headline: 'Tiger: March, 06:00 to 08:00', note: 'From 41 photos of this species' },
+  ],
 ];
 
 describe('describeFact', () => {

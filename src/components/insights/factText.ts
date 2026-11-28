@@ -145,5 +145,22 @@ export function describeFact(fact: Fact): FactText {
         },
       };
     }
+    case 'life-list': {
+      const { total, year, newInYear, once, byYear } = fact.data;
+      return {
+        topic: 'wildlife', label: 'Life list', value: num(total), headline: `${num(total)} species, ${num(newInYear)} new in ${year}`,
+        note: `${num(once)} species seen only once`,
+        chart: byYear.length ? columns(byYear.map((y) => y.total), byYear.map((y) => String(y.year)), byYear.length - 1) : null,
+      };
+    }
+    case 'best-chance': {
+      const { species, photos, month, slot, slots } = fact.data;
+      return {
+        topic: 'wildlife', label: 'Best chance', value: MONTHS[month - 1].slice(0, 3),
+        headline: `${species}: ${MONTHS[month - 1]}, ${hour(slot)} to ${hour(slot + 2)}`,
+        note: `From ${num(photos)} photos of this species`,
+        chart: columns(slots.map((s) => s.photos), slots.map((s) => hour(s.slot)), slots.findIndex((s) => s.slot === slot)),
+      };
+    }
   }
 }

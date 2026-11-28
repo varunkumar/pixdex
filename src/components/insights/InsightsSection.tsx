@@ -6,7 +6,7 @@ import type { InsightTopic } from '../../types/api';
 import FactTiles from './FactTiles';
 import OnThisDay from './OnThisDay';
 
-const TOPICS: InsightTopic[] = ['time', 'gear'];
+const TOPICS: InsightTopic[] = ['time', 'gear', 'wildlife'];
 const TOPIC_LABEL: Record<InsightTopic, string> = { time: 'Time', gear: 'Gear', wildlife: 'Wildlife', people: 'People', places: 'Places' };
 const ONE_HOUR = 60 * 60 * 1000;
 

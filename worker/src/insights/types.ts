@@ -27,7 +27,13 @@ export type GearFact =
   | { id: 'progress'; data: { years: { year: number; photos: number; hits: number; camera: string | null }[] } }
   | { id: 'cameras'; data: { total: number; cameras: { camera: string; first: string; last: string; photos: number }[] } };
 
+export type WildlifeFact =
+  /** byYear: the running species total at the end of each of the last years that added one. */
+  | { id: 'life-list'; data: { total: number; year: number; newInYear: number; once: number; byYear: { year: number; total: number }[] } }
+  /** month: 1 to 12. slots: the 2-hour slots within that month. */
+  | { id: 'best-chance'; data: { species: string; photos: number; month: number; slot: number; slots: { slot: number; photos: number }[] } };
+
 /** One dashboard fact: `id` names it, `data` is typed per id. The frontend writes all text. */
-export type Fact = TimeFact | GearFact;
+export type Fact = TimeFact | GearFact | WildlifeFact;
 
 export type TopicBuilder = (db: D1Database, email: string, today: string) => Promise<Fact[]>;

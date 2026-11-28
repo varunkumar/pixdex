@@ -39,6 +39,10 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
   photos), `burst` (a new moment after 2 s for each camera; 2 years of 100), `progress` (2 years of 100; the camera is
   context, not a cause), `cameras` (2 with 20 photos, top 6). A hit is a combined score of `HIT_SCORE` (8) or more.
 
+- `wildlife` (`insights/wildlife.ts`, 2 statements): `life-list` (5 species; the year is the current one if it added a
+  species, else the year before), `best-chance` (30 photos of the most photographed species; the slot is within its
+  busiest month). Bad `species` text counts as none.
+
 ## Cost
 
 - Cached request: one cache row, plus the hydrated photos by primary key.
