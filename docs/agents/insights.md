@@ -101,16 +101,16 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
 - Live CPU (2026-11-28, `wrangler tail`, milliseconds, one calculation of each part). "Cycle" is the 30-day
   release, "CPU fix" is the release after it:
 
-  | Part | Before the cycle | Cycle: first run, refresh | CPU fix: refresh |
+  | Part | Before the cycle | Cycle: first run, refresh | CPU fix: two refreshes |
   |---|---|---|---|
-  | On this day | 8 | 21, 17 | 5 |
-  | People | 4 | 14, 10 | 3 |
-  | Gear | 10 | 12, 11 | 8 |
-  | Wildlife | 5 | 8, 9 | 5 |
-  | Places | 5 | 8, 5 | 3 |
-  | Time | 5 | 7, 5 | 3 |
+  | On this day | 8 | 21, 17 | 5, 10 |
+  | People | 4 | 14, 10 | 3, 5 |
+  | Gear | 10 | 12, 11 | 8, 14 |
+  | Wildlife | 5 | 8, 9 | 5, 9 |
+  | Places | 5 | 8, 5 | 3, 7 |
+  | Time | 5 | 7, 5 | 3, 5 |
 
-  The refresh request used 0 to 3 ms. Cached reads used 1 to 6 ms (one `time` read used 11 ms). These are single
+  The refresh request used 0 to 9 ms. Cached reads used 1 to 6 ms (one `time` read used 11 ms). These are single
   samples.
 - Cause of the high "cycle" values: date operations in "On this day" and grouping in the Worker in People. The fix
   changed only these two parts.
