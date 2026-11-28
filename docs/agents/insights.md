@@ -14,6 +14,10 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
 ## Rules
 
 - **Scope:** only albums that the caller owns (`ownedSql`). Shared albums never count.
+- **Read isolation:** a topic reads only the caller's photos, through the album or person indexes. Do not add `+` to
+  the album column of a topic query. `worker/test/insights-isolation.test.ts` adds a second user and fails on a changed
+  answer, a table scan or more rows read. Exception: "On this day" searches the date index, so it reads other users'
+  rows inside the date windows and drops them before the answer.
 - **Camera time:** `date_time` is the camera clock read as India time and saved as UTC. Add
   `CAMERA_OFFSET_MINUTES` (330) before you group by day, weekday or hour. `datedCte` does this and drops junk dates
   (before 1990, after tomorrow, or not readable).
