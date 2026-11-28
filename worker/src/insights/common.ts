@@ -1,12 +1,15 @@
 /** Raise this when a fact definition or a cached shape changes: older cache rows are then recalculated. */
-export const INSIGHTS_VERSION = 1;
+export const INSIGHTS_VERSION = 2;
 /**
  * `date_time` holds the camera clock read as India time and saved as UTC (all indexing used a machine set to
  * India time), so adding this gives the camera clock again.
  */
 export const CAMERA_OFFSET_MINUTES = 330;
-/** A photo with this combined score or more is a "hit". */
-export const HIT_SCORE = 8;
+/**
+ * A photo with this combined score or more is a "hit". Chosen from the live library on 2026-11-28: 16% of 15,742
+ * photos score 7 or more (only 2.9% score 8 or more). The frontend writes "7+" in factText.ts: change both.
+ */
+export const HIT_SCORE = 7;
 
 /** The India date (YYYY-MM-DD) at `now`. */
 export function indiaDate(now: Date): string {

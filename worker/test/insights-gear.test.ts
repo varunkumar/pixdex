@@ -15,10 +15,10 @@ describe('gear facts', () => {
   beforeEach(clearInsights);
 
   it('names the lens with the most hits from 20 hits', async () => {
-    await lens(19, 'Long', 8);
-    await lens(5, 'Long', 7.9);
+    await lens(19, 'Long', 7);
+    await lens(5, 'Long', 6.9);
     expect(await fact('top-lens')).toBeUndefined();
-    await lens(1, 'Long', 8);
+    await lens(1, 'Long', 7);
     await lens(3, 'Short', 9);
     expect(await fact('top-lens')).toEqual({ lens: 'Long', hits: 20, photos: 25, knownLensPhotos: 28 });
   });

@@ -46,9 +46,10 @@ do not normally see. It must also show photos from the same days in earlier year
 - **Camera time:** all indexing used a computer set to India time. Use `datetime(date_time, '+330 minutes')` to get the
   camera clock time. Put the offset in one constant. Do not change stored data.
 - **Valid date:** the corrected year is 1990 or later, and the date is not after tomorrow. Time facts skip other photos.
-- **Score:** `COMBINED_SCORE_SQL`. A **hit** is a score of 8 or more.
+- **Score:** `COMBINED_SCORE_SQL`. A **hit** is a score of 7 or more.
   - Before release, count the score distribution (read-only, ask the owner). Change the threshold if hits are
     less than 5% or more than 40% of photos.
+  - Result on 2026-11-28 (15,742 photos): 2.9% score 8 or more, 16.0% score 7 or more. The limit changed from 8 to 7.
 - **Minimum sample:** a fact below its minimum is not returned. The tile is then absent. Never show an empty tile.
 - **Partial data:** a note that depends on partial data says so ("of photos with a known lens", "of photos with GPS").
 - **Owner data:** skip ignored faces. Count faces with status `auto` or `confirmed`. Only the viewer's own people.

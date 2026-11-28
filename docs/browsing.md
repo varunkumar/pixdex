@@ -72,7 +72,7 @@ Rules for the facts:
 - They count only albums that you own.
 - They are calculated at your first visit of each day. A change shows the next day.
 - A fact shows only when it has enough photos.
-- A high-scoring photo has a score of 8 or more. See "Rate and correct".
+- A high-scoring photo has a score of 7 or more. See "Rate and correct".
 - PixdeX reads camera times as India time. A camera clock that was not changed for a trip keeps its own time.
 
 ## Daily pick

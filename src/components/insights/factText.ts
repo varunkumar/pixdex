@@ -88,7 +88,7 @@ export function describeFact(fact: Fact): FactText {
       const { lenses } = fact.data;
       return {
         topic: 'gear', label: 'Hit rate by lens', value: pct(lenses[0].hits, lenses[0].photos),
-        headline: `${lenses[0].lens} wins most often`, note: 'Share that scores 8+, for photos with a known lens',
+        headline: `${lenses[0].lens} wins most often`, note: 'Share that scores 7+, for photos with a known lens',
         chart: { type: 'bars', rows: lenses.map((l) => ({ label: l.lens, value: share(l.hits, l.photos), text: pct(l.hits, l.photos) })) },
       };
     }
@@ -97,7 +97,7 @@ export function describeFact(fact: Fact): FactText {
       return {
         topic: 'gear', label: 'Winning recipe', value: `${DAYS[weekday].slice(0, 3)} ${hour(slot)}`,
         headline: `${DAYS[weekday]}, ${hour(slot)} to ${hour(slot + 2)}, ${FOCAL[focal]}`,
-        note: `${pct(hits, photos)} score 8+, against ${pct(allHits, allPhotos)} for all photos`,
+        note: `${pct(hits, photos)} score 7+, against ${pct(allHits, allPhotos)} for all photos`,
         chart: {
           type: 'bars',
           rows: [
@@ -129,7 +129,7 @@ export function describeFact(fact: Fact): FactText {
       const [first, last] = [years[0], years[years.length - 1]];
       return {
         topic: 'gear', label: 'Hit rate by year', value: `${pct(first.hits, first.photos)}→${pct(last.hits, last.photos)}`,
-        headline: `Your 8+ share went from ${pct(first.hits, first.photos)} to ${pct(last.hits, last.photos)}`,
+        headline: `Your 7+ share went from ${pct(first.hits, first.photos)} to ${pct(last.hits, last.photos)}`,
         note: cameraNote([first, last]),
         chart: columns(years.map((y) => share(y.hits, y.photos)), years.map((y) => `’${String(y.year).slice(2)}`), years.length - 1),
       };

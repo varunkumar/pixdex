@@ -27,11 +27,11 @@ const CASES: [Fact, { topic: string; label: string; value: string; headline: str
   ],
   [
     { id: 'hit-rate', data: { lenses: [{ lens: 'A', hits: 24, photos: 100 }, { lens: 'B', hits: 8, photos: 100 }] } },
-    { topic: 'gear', label: 'Hit rate by lens', value: '24%', headline: 'A wins most often', note: 'Share that scores 8+, for photos with a known lens' },
+    { topic: 'gear', label: 'Hit rate by lens', value: '24%', headline: 'A wins most often', note: 'Share that scores 7+, for photos with a known lens' },
   ],
   [
     { id: 'recipe', data: { weekday: 0, slot: 6, focal: '400-plus', hits: 31, photos: 100, allHits: 13, allPhotos: 100 } },
-    { topic: 'gear', label: 'Winning recipe', value: 'Sun 06:00', headline: 'Sunday, 06:00 to 08:00, 400 mm or more', note: '31% score 8+, against 13% for all photos' },
+    { topic: 'gear', label: 'Winning recipe', value: 'Sun 06:00', headline: 'Sunday, 06:00 to 08:00, 400 mm or more', note: '31% score 7+, against 13% for all photos' },
   ],
   [
     { id: 'zoom', data: { lens: 'Zoom', min: 150, max: 600, atMax: 62, photos: 100, buckets: [{ from: 150, to: 600, photos: 100 }] } },
@@ -43,7 +43,7 @@ const CASES: [Fact, { topic: string; label: string; value: string; headline: str
   ],
   [
     { id: 'progress', data: { years: [{ year: 2021, photos: 100, hits: 9, camera: 'Old' }, { year: 2025, photos: 200, hits: 42, camera: 'New' }] } },
-    { topic: 'gear', label: 'Hit rate by year', value: '9%→21%', headline: 'Your 8+ share went from 9% to 21%', note: 'Main camera: Old in 2021, New in 2025' },
+    { topic: 'gear', label: 'Hit rate by year', value: '9%→21%', headline: 'Your 7+ share went from 9% to 21%', note: 'Main camera: Old in 2021, New in 2025' },
   ],
   [
     { id: 'cameras', data: { total: 38, cameras: [{ camera: 'One', first: '2005-01-01', last: '2010-01-01', photos: 30 }, { camera: 'Two', first: '2010-01-01', last: '2025-01-01', photos: 40 }] } },
