@@ -261,7 +261,16 @@ export type WildlifeFact =
   /** month: 1 to 12. slots: the 2-hour slots within that month. */
   | { id: 'best-chance'; data: { species: string; photos: number; month: number; slot: number; slots: { slot: number; photos: number }[] } };
 
-export type Fact = TimeFact | GearFact | WildlifeFact;
+export interface FactPerson {
+  id: string;
+  name: string;
+}
+
+export type PeopleFact =
+  | { id: 'together'; data: { pairs: { a: FactPerson; b: FactPerson; photos: number }[] } }
+  | { id: 'missed'; data: { person: FactPerson; lastDate: string; photos: number } };
+
+export type Fact = TimeFact | GearFact | WildlifeFact | PeopleFact;
 
 export interface InsightsResponse {
   day: string;

@@ -6,7 +6,7 @@ import type { InsightTopic } from '../../types/api';
 import FactTiles from './FactTiles';
 import OnThisDay from './OnThisDay';
 
-const TOPICS: InsightTopic[] = ['time', 'gear', 'wildlife'];
+const TOPICS: InsightTopic[] = ['time', 'gear', 'wildlife', 'people'];
 const TOPIC_LABEL: Record<InsightTopic, string> = { time: 'Time', gear: 'Gear', wildlife: 'Wildlife', people: 'People', places: 'Places' };
 const ONE_HOUR = 60 * 60 * 1000;
 
@@ -29,7 +29,8 @@ const InsightsSection = () => {
     queries: TOPICS.map((topic) => ({
       queryKey: ['insights', topic],
       queryFn: () => workerApiClient.getInsights(topic),
-      staleTime: ONE_HOUR,
+      // People facts carry names, which can change on another page; the Worker answers from its cache.
+      staleTime: topic === 'people' ? 0 : ONE_HOUR,
     })),
   });
 

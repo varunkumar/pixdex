@@ -33,7 +33,12 @@ export type WildlifeFact =
   /** month: 1 to 12. slots: the 2-hour slots within that month. */
   | { id: 'best-chance'; data: { species: string; photos: number; month: number; slot: number; slots: { slot: number; photos: number }[] } };
 
+/** The cached shape holds person ids; the response replaces each with `{ id, name }` (hydrateFacts). */
+export type PeopleFact =
+  | { id: 'together'; data: { pairs: { a: string; b: string; photos: number }[] } }
+  | { id: 'missed'; data: { person: string; lastDate: string; photos: number } };
+
 /** One dashboard fact: `id` names it, `data` is typed per id. The frontend writes all text. */
-export type Fact = TimeFact | GearFact | WildlifeFact;
+export type Fact = TimeFact | GearFact | WildlifeFact | PeopleFact;
 
 export type TopicBuilder = (db: D1Database, email: string, today: string) => Promise<Fact[]>;

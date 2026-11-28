@@ -4,12 +4,13 @@ import { userOf } from '../access';
 import { serializePhoto, type PhotoRow } from '../db/photos';
 import { cached, indiaDate, ownedSql } from '../insights/common';
 import { onThisDayIds } from '../insights/onThisDay';
+import { hydrateFacts, peopleFacts } from '../insights/people';
 import { gearFacts } from '../insights/gear';
 import { timeFacts } from '../insights/time';
 import { wildlifeFacts } from '../insights/wildlife';
 import type { Topic, TopicBuilder } from '../insights/types';
 
-const BUILDERS: Partial<Record<Topic, TopicBuilder>> = { time: timeFacts, gear: gearFacts, wildlife: wildlifeFacts };
+const BUILDERS: Partial<Record<Topic, TopicBuilder>> = { time: timeFacts, gear: gearFacts, wildlife: wildlifeFacts, people: peopleFacts };
 
 /** How far the browser's date may be from the India date (time zones, and a page left open over midnight). */
 const MAX_DATE_DRIFT_DAYS = 2;
@@ -22,7 +23,7 @@ export async function insightsRoute(c: Context<{ Bindings: Env }>) {
   const { email } = userOf(c);
   const day = indiaDate(new Date());
   const facts = await cached(c.env.DB, email, topic, day, () => build(c.env.DB, email, day));
-  return c.json({ day, facts });
+  return c.json({ day, facts: await hydrateFacts(c.env.DB, email, facts) });
 }
 
 function acceptedDate(date: string, today: string): boolean {

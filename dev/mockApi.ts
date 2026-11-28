@@ -451,6 +451,10 @@ const INSIGHTS: Record<string, Fact[]> = {
     { id: 'life-list', data: { total: 84, year: 2025, newInYear: 12, once: 19, byYear: [{ year: 2021, total: 22 }, { year: 2022, total: 40 }, { year: 2023, total: 55 }, { year: 2024, total: 72 }, { year: 2025, total: 84 }] } },
     { id: 'best-chance', data: { species: 'Sandpiper', photos: 41, month: 3, slot: 6, slots: [{ slot: 6, photos: 12 }, { slot: 8, photos: 7 }, { slot: 16, photos: 4 }] } },
   ],
+  people: [
+    { id: 'together', data: { pairs: [{ a: { id: 'own-asha', name: 'Asha Rao' }, b: { id: 'own-ravi', name: 'Ravi Menon' }, photos: 18 }, { a: { id: 'own-asha', name: 'Asha Rao' }, b: { id: 'own-meera', name: 'Meera Iyer' }, photos: 12 }] } },
+    { id: 'missed', data: { person: { id: 'own-meera', name: 'Meera Iyer' }, lastDate: '2024-08-02', photos: 22 } },
+  ],
 };
 
 /** Two invented earlier years made of library photos, dated around `date`. */

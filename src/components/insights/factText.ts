@@ -162,5 +162,26 @@ export function describeFact(fact: Fact): FactText {
         chart: columns(slots.map((s) => s.photos), slots.map((s) => hour(s.slot)), slots.findIndex((s) => s.slot === slot)),
       };
     }
+    case 'together': {
+      const { pairs } = fact.data;
+      const [top] = pairs;
+      return {
+        topic: 'people', label: 'Together', value: num(top.photos), headline: `${top.a.name} and ${top.b.name} appear together most`,
+        note: 'Photos with both people',
+        chart: {
+          type: 'bars',
+          rows: pairs.map((p) => ({ label: `${p.a.name} + ${p.b.name}`, value: share(p.photos, top.photos), text: num(p.photos) })),
+        },
+      };
+    }
+    case 'missed': {
+      const { person, lastDate } = fact.data;
+      const years = Math.max(1, Math.floor((Date.now() - Date.parse(`${lastDate}T00:00:00Z`)) / (365.25 * 86_400_000)));
+      const seen = new Date(`${lastDate}T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      return {
+        topic: 'people', label: 'Missed', value: `${years} yr`, headline: `No photo of ${person.name} for ${years} ${years === 1 ? 'year' : 'years'}`,
+        note: `Last seen ${seen}, in your indexed photos`, chart: null,
+      };
+    }
   }
 }

@@ -12,6 +12,7 @@ import { CHOOSE_REFERENCES_SQL, DROP_REFERENCES_SQL } from '../src/people/refere
 import { pendingSpeciesSql, SPECIES_ROWS_BY_HASH_SQL } from '../src/routes/ingest-species';
 
 import { ON_THIS_DAY_SQL } from '../src/insights/onThisDay';
+import { TOGETHER_SQL } from '../src/insights/people';
 
 const U = { email: 'owner@example.com' };
 
@@ -288,6 +289,12 @@ describe('insight query plans', () => {
   it('On this day searches the date index once for each year window', async () => {
     const p = await plan(ON_THIS_DAY_SQL, '[]', U.email);
     expect(p).toMatch(/SEARCH photos USING INDEX idx_photos_date_time \(date_time>\? AND date_time<\?\)/);
+  });
+
+  it('pairs of people find the second face by its photo and never scan faces', async () => {
+    const p = await plan(TOGETHER_SQL, U.email, U.email, U.email);
+    expect(p).toMatch(/SEARCH g USING INDEX idx_faces_photo_id \(photo_id=\?\)/);
+    expect(p).not.toMatch(/SCAN (f|g|faces)\b/);
   });
 });
 

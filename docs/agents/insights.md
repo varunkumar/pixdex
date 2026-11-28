@@ -43,6 +43,11 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
   species, else the year before), `best-chance` (30 photos of the most photographed species; the slot is within its
   busiest month). Bad `species` text counts as none.
 
+- `people` (`insights/people.ts`, 2 statements): `together` (top 3 pairs with 10 shared photos), `missed` (20
+  photos, last one over 365 days ago, the oldest). Only the caller's own people; auto and confirmed faces; never
+  ignored ones. The cache holds person ids. `hydrateFacts` resolves names with `PERSON_NAME_SQL` on each read and
+  drops deleted people. `TOGETHER_SQL` finds the second face through `idx_faces_photo_id` (plan pinned).
+
 ## Cost
 
 - Cached request: one cache row, plus the hydrated photos by primary key.

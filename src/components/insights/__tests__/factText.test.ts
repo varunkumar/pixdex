@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Fact } from '../../../types/api';
 import { describeFact } from '../factText';
 
@@ -57,9 +57,25 @@ const CASES: [Fact, { topic: string; label: string; value: string; headline: str
     { id: 'best-chance', data: { species: 'Tiger', photos: 41, month: 3, slot: 6, slots: [{ slot: 6, photos: 20 }] } },
     { topic: 'wildlife', label: 'Best chance', value: 'Mar', headline: 'Tiger: March, 06:00 to 08:00', note: 'From 41 photos of this species' },
   ],
+  [
+    { id: 'together', data: { pairs: [{ a: { id: 'a', name: 'Asha' }, b: { id: 'b', name: 'Ravi' }, photos: 418 }] } },
+    { topic: 'people', label: 'Together', value: '418', headline: 'Asha and Ravi appear together most', note: 'Photos with both people' },
+  ],
+  [
+    { id: 'missed', data: { person: { id: 'm', name: 'Meera' }, lastDate: '2024-08-02', photos: 40 } },
+    { topic: 'people', label: 'Missed', value: '2 yr', headline: 'No photo of Meera for 2 years', note: 'Last seen August 2024, in your indexed photos' },
+  ],
 ];
 
 describe('describeFact', () => {
+  beforeAll(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-28T00:00:00Z'));
+  });
+  afterAll(() => {
+    vi.useRealTimers();
+  });
+
   it.each(CASES)('writes $0.id', (fact, text) => {
     expect(describeFact(fact)).toMatchObject(text);
   });
