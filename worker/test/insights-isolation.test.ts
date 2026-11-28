@@ -118,5 +118,6 @@ describe("insights read only the caller's photos", () => {
     }
     const day = `/insights/on-this-day?date=${indiaDate(new Date())}`;
     console.log(`on-this-day: ${rows(alone.log, day)} rows alone, ${rows(crowded.log, day)} with another user`);
+    expect(rows(crowded.log, day), 'on-this-day').toBeLessThan(rows(alone.log, day) + 20);
   });
 });

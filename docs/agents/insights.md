@@ -16,8 +16,8 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
 - **Scope:** only albums that the caller owns (`ownedSql`). Shared albums never count.
 - **Read isolation:** a topic reads only the caller's photos, through the album or person indexes. Do not add `+` to
   the album column of a topic query. `worker/test/insights-isolation.test.ts` adds a second user and fails on a changed
-  answer, a table scan or more rows read. Exception: "On this day" searches the date index, so it reads other users'
-  rows inside the date windows and drops them before the answer.
+  answer, a table scan or more rows read. "On this day" starts from the caller's albums for the same reason: do not
+  drive it from `idx_photos_date_time`, which reads every user's photos of those dates.
 - **Camera time:** `date_time` is the camera clock read as India time and saved as UTC. Add
   `CAMERA_OFFSET_MINUTES` (330) before you group by day, weekday or hour. `datedCte` does this and drops junk dates
   (before 1990, after tomorrow, or not readable).
@@ -28,8 +28,8 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
 - The cache holds ids and numbers, never photo rows or names. Each read loads them again and checks ownership. A new
   share or owner edit shows in the facts the next day.
 - "On this day": one window of date ±2 days for each year from 1990, 12 photos for each year by combined score.
-  29 February counts as 28 February. `ON_THIS_DAY_SQL` must search `idx_photos_date_time` (pinned in
-  `worker/test/query-plans.test.ts`).
+  29 February counts as 28 February. `ON_THIS_DAY_SQL` must search the `(album, date_time)` index for each owned
+  album and window (pinned in `worker/test/query-plans.test.ts`).
 
 ## Topics
 
@@ -59,11 +59,12 @@ A fact below its minimum is not returned. Definitions and minimums are in the co
 ## Cost
 
 - Measured on local D1 (`worker/test/insights-cost.test.ts`, 2,000 photos, 500 faces): the first visit of a day reads
-  50,015 rows, 25 for each photo. That is about 390,000 rows for 15,700 photos. The limit is 38 for each photo.
+  51,422 rows, 26 for each photo. That is about 405,000 rows for 15,700 photos. The limit is 38 for each photo.
 - A cached full visit reads 265 rows for 77 shown photos.
 - First visit writes: 6 cache rows.
 - `burst` is the most costly statement (6 rows for each photo, because of its window function).
 - Do not split the time statement again: three statements read 36 rows for each photo, one reads 2.
-- On this day, first request of a date: only the photos inside the windows, plus one owner lookup, one upsert.
+- On this day, first request of a date: one row for each owned album and year (about 9,000 to 10,000 for 259 albums,
+  estimated), plus the owner's photos inside the windows, and one upsert. This is the price of read isolation.
 - Worker CPU is not measured. Time walks the shooting days (a few thousand at most). All other topics handle grouped
   rows. Check `cpuTime` with `wrangler tail`.

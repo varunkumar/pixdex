@@ -87,8 +87,9 @@ Notes:
 - The browser sends its local date. The Worker accepts it only within two days of its own India date.
 - For each earlier year from 1990, take the window from date minus 2 days to date plus 2 days, in camera time.
   A window can cross New Year. Label it with the year of the middle date. Handle 29 February as 28 February.
-- Use `date_time` ranges (shifted by the offset), so that `idx_photos_date_time` serves the query. Send all ranges in
-  one statement with `json_each`. Pin the query plan in `worker/test/query-plans.test.ts`.
+- Use `date_time` ranges (shifted by the offset). Start from the viewer's albums, so that the `(album, date_time)`
+  index serves each range and no other user's photo is read. Send all ranges in one statement with `json_each`. Pin
+  the query plan in `worker/test/query-plans.test.ts`.
 - Show each year that has photos, newest first, with at most 12 photos by score.
 - Show the section only if at least one year has photos.
 - A tap opens the photo page.
@@ -153,7 +154,7 @@ D1 (estimates, not measured):
 
 - First visit of a day: about 200,000 to 600,000 rows read per user, 5 to 6 rows written. This is higher than the first
   estimate given in the discussion (150,000 to 300,000).
-- On this day: about a few hundred rows.
+- On this day: about 9,000 to 10,000 rows for 259 albums (estimated), because it reads only the viewer's albums.
 - Later visits: under 100 rows for each full page load, plus a few rows for each "On this day" photo shown (measured
   265 rows for 77 photos).
 - Combine facts that group the same rows into one statement. Do not add an index without measurements.

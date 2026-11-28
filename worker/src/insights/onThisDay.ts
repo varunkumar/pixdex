@@ -1,5 +1,5 @@
 import { COMBINED_SCORE_SQL } from '../db/rating';
-import { CAMERA_OFFSET_MINUTES, ownedSql } from './common';
+import { CAMERA_OFFSET_MINUTES } from './common';
 
 export const ON_THIS_DAY_SPREAD = 2;
 export const ON_THIS_DAY_PER_YEAR = 12;
@@ -33,16 +33,20 @@ export function onThisDayRanges(date: string): DayRange[] {
 }
 
 /**
- * The best photos of each window. json_each is the outer loop and `+photos.album` keeps the album index out, so
- * each window is one range of idx_photos_date_time (pinned in query-plans.test.ts). The dash test drops text such
- * as '2025:11:28', which sorts inside a window that crosses New Year. Binds the ranges (JSON), then the email.
+ * The best photos of each window, from the caller's albums only. The caller's albums are the outer loop, then the
+ * windows, so each (album, window) pair is one range of the (album, date_time) index and no other user's photo is
+ * read (pinned in query-plans.test.ts and insights-isolation.test.ts). It costs one albums row for each owned
+ * album and year. The dash test drops text such as '2025:11:28', which sorts inside a window that crosses New
+ * Year. Binds the ranges (JSON), then the email.
  */
 export const ON_THIS_DAY_SQL = `SELECT year, id FROM (
   SELECT year, id, ROW_NUMBER() OVER (PARTITION BY year ORDER BY score IS NULL, score DESC, date_time DESC, id) AS rn FROM (
     SELECT json_extract(r.value, '$.year') AS year, photos.id AS id, photos.date_time AS date_time, ${COMBINED_SCORE_SQL} AS score
-    FROM json_each(?) AS r
-    CROSS JOIN photos ON photos.date_time >= json_extract(r.value, '$.from') AND photos.date_time < json_extract(r.value, '$.to')
-    WHERE substr(photos.date_time, 5, 1) = '-' AND ${ownedSql('+photos.album')}
+    FROM albums AS a
+    CROSS JOIN json_each(?) AS r
+    CROSS JOIN photos ON photos.album = a.name
+      AND photos.date_time >= json_extract(r.value, '$.from') AND photos.date_time < json_extract(r.value, '$.to')
+    WHERE a.owner_email = ? AND substr(photos.date_time, 5, 1) = '-'
   )
 ) WHERE rn <= ${ON_THIS_DAY_PER_YEAR} ORDER BY year DESC, rn`;
 

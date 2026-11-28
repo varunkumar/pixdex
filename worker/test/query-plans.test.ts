@@ -287,9 +287,11 @@ describe('person label resolution', () => {
 });
 
 describe('insight query plans', () => {
-  it('On this day searches the date index once for each year window', async () => {
+  it("On this day searches each of the caller's albums by date, never all photos of a date", async () => {
     const p = await plan(ON_THIS_DAY_SQL, '[]', U.email);
-    expect(p).toMatch(/SEARCH photos USING INDEX idx_photos_date_time \(date_time>\? AND date_time<\?\)/);
+    expect(p).toMatch(/SEARCH a USING (PRIMARY KEY|COVERING INDEX idx_albums_owner_email \(owner_email=\?\))/);
+    expect(p).toMatch(/SEARCH photos USING (COVERING )?INDEX idx_photos_album(_cover)? \(album=\? AND date_time>\? AND date_time<\?\)/);
+    expect(p).not.toMatch(/idx_photos_date_time|SCAN (a|albums|photos)\b/);
   });
 
   it("the zoom bins read the caller's albums through the album index, never the whole photos table", async () => {
