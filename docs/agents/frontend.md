@@ -45,6 +45,11 @@ The core rules are in [`AGENTS.md`](../../AGENTS.md). Paths are relative to the 
   - A face row on the photo page keeps a text button with the same icon.
   - A person tile shows the "Photo actions" menu only for an automatic match ("Confirm X", "Not X").
   - Confirm a destructive action with `InlineConfirm` (delete a person, revoke access). Focus starts on Cancel.
+  - Dashboard insights (`components/insights/`): `InsightsSection` makes one query for each topic and one for On this
+    day (browser local date), one hour stale time. A failed topic shows "Retry"; the others still show. The topic chip
+    is in the address (`?topic=`), the open tile in `useHistoryState`. All words and charts come from `describeFact`
+    (`factText.ts`); the fact types in `src/types/api.ts` mirror `worker/src/insights/types.ts`. Charts are CSS only
+    (`pdx-*` in `src/index.css`). Add a new topic to `TOPICS`.
   - Show loading with `PageLoading` and a label. The photo page and Daily pick keep skeletons. Dashboard counts show "-".
   - Copy text with `copyText` (`services/copy.ts`). Write labels in sentence case.
   - Each page calls `usePageTitle` and has exactly one `h1`. To change a heading level, set `order`. Keep the look with `size`.

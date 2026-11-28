@@ -33,7 +33,7 @@ Original design rationale: `docs/superpowers/specs/2026-09-18-pixdex-local-cloud
   and AI overrides), PhotoFaces/FaceTile (name and correct faces on the photo
   page), People (`/people`: named people plus unnamed face groups to name) and
   PersonPage (`/people/:id`: photos sorted newest/best rated/alphabetical via `sort`, rename/delete, suggestion review, re-run
-  matching), Dashboard,
+  matching), Dashboard (counts, On this day, insight tiles from `components/insights/`, recently indexed),
   DailySuggestion, Lightbox, PhotoGrid/PhotoTile/MasonryGrid (masonry, see Photo grids below), AlbumCard (the classic card), SortIcons, ColumnsToggle, Layout. AdminAccess (admin only, /admin/access). Timeline keeps `PeopleFilter`.
 - Photo grids (frontend only, no Worker or D1 cost): `components/MasonryGrid.tsx` deals tiles into the shortest of N columns from each photo's
   `width / height` (`components/masonry.ts`: `photoRatio` falls back to 4/3 and clamps to 0.4 to 3, `assignColumns`); N is 2 below 576px

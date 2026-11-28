@@ -12,7 +12,7 @@ PixdeX indexes your photos with AI models on your computer. You can then search
 them from a browser. The cloud stores only metadata and thumbnails. Original
 files stay on your disk or in Google Drive.
 
-![Dashboard with library totals and recently indexed photos](docs/screenshots/home.png)
+![Dashboard with photos from the same days in earlier years and facts about your photos](docs/screenshots/home.png)
 
 *All screenshots use generated images and invented data.*
 
@@ -22,6 +22,7 @@ files stay on your disk or in Google Drive.
   See [Search](docs/search.md).
 - **Timeline:** See photos by date. Zoom between Day, Month and Year.
 - **Albums:** Each album has Photos, People and Species tabs, and a cover banner.
+- **Dashboard:** See photos from these days in earlier years, and facts about your photo habits.
 - **Daily pick:** See one of your best nature or wildlife photos each day.
 - **Review:** Give 1 to 5 stars. Correct the title, species and tags.
 - **People:** Name face groups. PixdeX then finds more photos of each person.
